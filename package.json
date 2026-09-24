@@ -1,8 +1,8 @@
 {
-  "name": "counter-strike-racer",
-  "version": "1.0.0",
+  "name": "counterstrike-air-force",
+  "version": "2.0.0",
   "private": true,
-  "description": "RIFTBREAK VELOCITY - a synthwave-noir neon canyon hyperracer built with Three.js. Thread gates, graze walls, outrun the collapsing rift.",
+  "description": "Sky Patrol, a Three.js arcade air-defense flight game with selectable aircraft.",
   "type": "module",
   "scripts": {
     "start": "node serve.js",
@@ -10,11 +10,11 @@
   },
   "keywords": [
     "three.js",
-    "webgl",
+    "arcade",
+    "flight",
+    "aircraft",
     "game",
-    "endless-runner",
-    "synthwave",
-    "procedural"
+    "webgl"
   ],
   "license": "MIT"
 }
