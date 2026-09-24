@@ -70,7 +70,7 @@ const aircraft=[
  {name:'Aegis VT',role:'ADVANCED MULTIROLE',speed:9,agility:8,shield:8,color:0xb9a6ef,accent:0x9e83ff}
 ];
 const grid=document.querySelector('#aircraftGrid');let selected=Number(localStorage.getItem('aircraftPick')||0);
-function renderCards(){grid.innerHTML=aircraft.map((a,i)=>'<button class="aircraft '+(i===selected?'selected':'')+'" data-i="'+i+'"><div class="jetIcon">✦</div><h2>'+a.name+'</h2><p>'+a.role+'</p><div class="stat">SPEED '+a.speed+' &nbsp; AGILITY '+a.agility+' &nbsp; SHIELD '+a.shield+'</div></button>').join('');grid.querySelectorAll('button').forEach(b=>b.onclick=()=>{selected=+b.dataset.i;localStorage.setItem('aircraftPick',selected);renderCards();buildPlane()})}renderCards();
+function renderCards(){grid.innerHTML=aircraft.map((a,i)=>'<button class="aircraft '+(i===selected?'selected':'')+'" data-i="'+i+'"><div class="jetIcon">➤</div><h2>'+a.name+'</h2><p>'+a.role+'</p><div class="stat">SPEED '+a.speed+' &nbsp; AGILITY '+a.agility+' &nbsp; SHIELD '+a.shield+'</div></button>').join('');grid.querySelectorAll('button').forEach(b=>b.onclick=()=>{selected=+b.dataset.i;localStorage.setItem('aircraftPick',selected);renderCards();buildPlane()})}renderCards();
 const planeRoot=new THREE.Group();scene.add(planeRoot);let plane=new THREE.Group();planeRoot.add(plane);
 function buildPlane(){planeRoot.remove(plane);plane=new THREE.Group();planeRoot.add(plane);const a=aircraft[selected],hull=mat(a.color,.72,.29),dark=mat(0x263847,.75,.36),glow=new THREE.MeshStandardMaterial({color:a.accent,emissive:a.accent,emissiveIntensity:1.8,metalness:.25,roughness:.3}),glass=new THREE.MeshPhysicalMaterial({color:0x173b50,metalness:.45,roughness:.12,clearcoat:1,transparent:true,opacity:.88});
 function add(g,m,x,y,z,sx,sy,sz,rz=0){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.rotation.z=rz;o.castShadow=true;plane.add(o);return o}
@@ -78,16 +78,23 @@ add(new THREE.ConeGeometry(.85,5.8,8),hull,0,0,-.4,1,1,1,0); // nose points +Y b
 plane.children.at(-1).rotation.x=Math.PI/2;
 add(new THREE.CylinderGeometry(.66,.78,3.8,10),hull,0,-.25,1.1,1,1,1);plane.children.at(-1).rotation.x=Math.PI/2;
 add(new THREE.SphereGeometry(.58,12,8),glass,0,.32,-.35,.78,.45,1.5);
+const span=[2.65,2.25,3.35,2.95][selected];
+const wingShape=new THREE.Shape();
+wingShape.moveTo(-.42,1.7);wingShape.lineTo(.42,1.7);wingShape.lineTo(.55,.36);wingShape.lineTo(span,-.1);wingShape.lineTo(span*.93,-1.05);wingShape.lineTo(.75,-.52);wingShape.lineTo(-.75,-.52);wingShape.lineTo(-span*.93,-1.05);wingShape.lineTo(-span,-.1);wingShape.lineTo(-.55,.36);wingShape.closePath();
+const wingGeo=new THREE.ExtrudeGeometry(wingShape,{depth:.13,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.035,bevelThickness:.025});wingGeo.rotateX(Math.PI/2);
+const mainWings=new THREE.Mesh(wingGeo,hull);mainWings.position.y=-.08;mainWings.castShadow=true;plane.add(mainWings);
+const tailShape=new THREE.Shape();tailShape.moveTo(-.22,-1.45);tailShape.lineTo(.22,-1.45);tailShape.lineTo(.28,-2.42);tailShape.lineTo(1.18,-2.78);tailShape.lineTo(1.05,-3.1);tailShape.lineTo(.24,-2.88);tailShape.lineTo(-.24,-2.88);tailShape.lineTo(-1.05,-3.1);tailShape.lineTo(-1.18,-2.78);tailShape.lineTo(-.28,-2.42);tailShape.closePath();
+const tailGeo=new THREE.ExtrudeGeometry(tailShape,{depth:.12,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.025,bevelThickness:.02});tailGeo.rotateX(Math.PI/2);const tail=new THREE.Mesh(tailGeo,dark);tail.position.y=-.04;plane.add(tail);
 for(const d of [-1,1]){
-const wing=add(new THREE.BoxGeometry(1, .15,4.2),hull,d*1.28,-.08,.52,1,1,1,d*.25);
-const tip=add(new THREE.BoxGeometry(.34,.13,1.25),dark,d*2.32,-.02,.72,1,1,1,d*.1);
-add(new THREE.CylinderGeometry(.19,.25,1.5,10),dark,d*.67,-.12,2.12,1,1,1);plane.children.at(-1).rotation.x=Math.PI/2;
-add(new THREE.SphereGeometry(.22,10,8),glow,d*.67,-.12,2.82,1,1,1);
-add(new THREE.BoxGeometry(.12,.07,1.8),glow,d*1.3,-.18,.4,1,1,1,d*.25)
+  const fin=add(new THREE.BoxGeometry(.16,.92,.72),hull,d*.55,.48,-1.72,1,1,1,d*-.24);
+  const stripe=add(new THREE.BoxGeometry(.055,.08,1.4),glow,d*(span*.72),-.005,-.44,1,1,1,d*.12);
+  const engineX=(selected===2?.72:.57)*d;
+  add(new THREE.CylinderGeometry(.24,.3,.95,12),dark,engineX,-.12,-2.15,1,1,1);plane.children.at(-1).rotation.x=Math.PI/2;
+  add(new THREE.TorusGeometry(.24,.055,8,16),glow,engineX,-.12,-2.66,1,1,1);
+  if(selected===2){add(new THREE.BoxGeometry(.16,.14,.68),dark,d*1.32,-.32,-.58,1,1,1,d*.15)}
 }
-add(new THREE.BoxGeometry(.16,.82,1.1),hull,0,.58,1.75,1,1,1);
-add(new THREE.BoxGeometry(.5,.1,1.1),hull,0,-.52,.72,1,1,1);
-add(new THREE.TorusGeometry(.65,.065,8,20),glow,0,0,2.94,1,1,1);
+add(new THREE.BoxGeometry(.14,.92,.78),hull,0,.58,-1.68,1,1,1);
+add(new THREE.BoxGeometry(.12,.08,2.6),glow,0,-.16,-.02,1,1,1);
 plane.scale.setScalar(.92);plane.rotation.x=-.08
 }buildPlane();
 const projectiles=[],drones=[],sparks=[];const boltMat=new THREE.MeshBasicMaterial({color:0x71eeff});const boltGeo=new THREE.CapsuleGeometry(.095,.65,4,8);
