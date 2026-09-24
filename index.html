@@ -1,70 +1,124 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#12002e" />
-  <title>Counter Strike Racer — Neon Canyon Hyperracer</title>
-  <link rel="stylesheet" href="./styles.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛸</text></svg>" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#071522">
+<title>Counterstrike Air Force — Sky Patrol</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%2348d9ff' d='M50 4 61 38 95 49 61 59 50 96 39 59 5 49 39 38z'/%3E%3C/svg%3E">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap');
+:root{--cyan:#62e2ff;--blue:#1586d8;--ink:#06121c;--white:#edf8ff;--muted:#91a8ba;--line:#ffffff24;--panel:#0b1c29d9}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071522;color:var(--white);font-family:'Barlow Condensed',sans-serif;touch-action:none;user-select:none}canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+#veil{position:fixed;inset:0;z-index:2;background:linear-gradient(90deg,#06121cbb,transparent 55%),linear-gradient(0deg,#06121c80,transparent 42%);pointer-events:none}
+#hud{position:fixed;inset:0;z-index:4;pointer-events:none;display:none}
+.hudTop{display:flex;justify-content:space-between;padding:22px 28px}.readout{min-width:130px}.eyebrow,.mono{font:11px 'DM Mono',monospace;letter-spacing:.16em;color:#9cb7c8;text-transform:uppercase}.value{font-size:34px;font-weight:800;line-height:1.1}.right{text-align:right}.status{display:flex;align-items:center;gap:8px;margin-top:6px;font:11px 'DM Mono',monospace;letter-spacing:.08em;color:#b9cedb}.dot{width:7px;height:7px;border-radius:50%;background:#7dffcf;box-shadow:0 0 10px #7dffcf}
+#centerMark{position:absolute;left:50%;top:46%;width:48px;height:48px;transform:translate(-50%,-50%);border:1px solid #c1f4ff99;border-radius:50%;box-shadow:0 0 20px #55d8ff33}
+#centerMark:before,#centerMark:after{content:'';position:absolute;background:#c1f4ff99}#centerMark:before{width:1px;height:70px;left:23px;top:-12px}#centerMark:after{height:1px;width:70px;left:-12px;top:23px}
+#centerMark i{position:absolute;width:4px;height:4px;border-radius:50%;background:white;left:21px;top:21px}
+#bottomHud{position:absolute;left:28px;bottom:24px;display:flex;gap:22px;align-items:end}.meter{width:180px}.meterHead{display:flex;justify-content:space-between;margin-bottom:7px}.track{height:5px;background:#ffffff24;border-radius:8px;overflow:hidden}.fill{height:100%;width:100%;background:linear-gradient(90deg,#2a8cff,#65edff);transition:width .15s}
+#fire{pointer-events:auto;position:absolute;right:28px;bottom:28px;width:92px;height:92px;border:1px solid #80e9ffbb;border-radius:50%;background:#0b314c99;color:white;font:700 15px 'DM Mono',monospace;letter-spacing:.08em;display:grid;place-items:center;box-shadow:0 0 28px #2bbbe844;touch-action:none}
+#fire:active{background:#1676a8cc;transform:scale(.96)}#toast{position:absolute;left:50%;top:61%;transform:translate(-50%,10px);opacity:0;font:700 20px 'DM Mono',monospace;letter-spacing:.1em;color:#baf5ff;text-shadow:0 0 18px #22bfff;transition:.2s}#toast.on{opacity:1;transform:translate(-50%,0)}
+#menu{position:fixed;z-index:5;inset:0;display:flex;align-items:center;justify-content:center;padding:22px;background:linear-gradient(105deg,#06121cde 0%,#06121c9c 50%,#06121c22)}
+.panel{width:min(1060px,100%);max-height:94vh;overflow:auto;padding:clamp(18px,3vw,34px);border:1px solid #b4eaff31;background:linear-gradient(135deg,#0c1e2bd9,#0a1823c9);backdrop-filter:blur(14px);box-shadow:0 24px 80px #0008}
+.topline{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.brand{display:flex;align-items:center;gap:12px}.insignia{width:42px;height:42px;border:1px solid #68dfff77;display:grid;place-items:center;color:var(--cyan);font-size:24px;clip-path:polygon(50% 0,100% 18%,88% 78%,50% 100%,12% 78%,0 18%)}h1{font-size:clamp(32px,6vw,64px);line-height:.88;letter-spacing:.025em;margin:0;font-weight:900;text-transform:uppercase}h1 span{color:var(--cyan)}.kicker{font:10px 'DM Mono',monospace;letter-spacing:.2em;color:#98b9cb;text-transform:uppercase;margin-bottom:6px}
+.pill{border:1px solid #72eaff55;padding:8px 11px;color:#aeeeff;font:10px 'DM Mono',monospace;letter-spacing:.1em;white-space:nowrap}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}.aircraft{position:relative;text-align:left;color:inherit;background:#071521ad;border:1px solid #a8d9ee2c;padding:12px;min-height:154px;cursor:pointer;transition:.16s}.aircraft:hover{border-color:#68dfff88;transform:translateY(-2px)}.aircraft.selected{border-color:var(--cyan);background:#103049c9;box-shadow:inset 0 0 0 1px #64e1ff55}.jetIcon{height:55px;display:flex;justify-content:center;align-items:center;color:var(--cyan);font-size:43px;text-shadow:0 0 20px #38c8ff75;transform:rotate(-90deg)}.aircraft:nth-child(2) .jetIcon{color:#ffc36a}.aircraft:nth-child(3) .jetIcon{color:#94ffc8}.aircraft:nth-child(4) .jetIcon{color:#caadff}.aircraft h2{font-size:19px;margin:7px 0 0;letter-spacing:.04em}.aircraft p{font:10px 'DM Mono',monospace;color:#9bb2c2;margin:3px 0 8px}.stat{font:9px 'DM Mono',monospace;letter-spacing:.06em;color:#77d9ee}
+.launchRow{display:flex;justify-content:space-between;align-items:center;gap:14px;border-top:1px solid var(--line);padding-top:17px}.controls{color:#a6bfce;font:11px 'DM Mono',monospace;line-height:1.8}.start{border:0;background:var(--cyan);color:#06121c;padding:13px 22px;font:800 16px 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;box-shadow:0 0 26px #40d9ff44}.start:hover{background:#b9f5ff}.note{font:10px 'DM Mono',monospace;color:#83a0b1;margin-top:13px}
+#endScreen{display:none;position:fixed;inset:0;z-index:5;align-items:center;justify-content:center;background:#06121c99;padding:20px}
+@media(max-width:720px){.grid{grid-template-columns:repeat(2,1fr)}.aircraft{min-height:135px}.topline{align-items:flex-start}.pill{display:none}.panel{max-height:96vh}.hudTop{padding:14px}.value{font-size:27px}.meter{width:120px}#bottomHud{left:14px;bottom:16px}#fire{right:15px;bottom:18px;width:76px;height:76px}.controls{font-size:10px}}
+@media(max-width:390px){.grid{gap:7px}.aircraft{padding:9px}.jetIcon{height:42px;font-size:34px}.aircraft h2{font-size:17px}.aircraft p{font-size:9px}.value{font-size:23px}}
+</style>
 </head>
 <body>
-  <canvas id="game"></canvas>
-
-  <!-- Heads-up display -->
-  <div id="hud">
-    <div class="corner tl">
-      <div class="label">DISTANCE</div>
-      <div class="big"><span id="distance">0</span><span class="unit">m</span></div>
-      <div class="sub-stat"><span class="label">STYLE</span> <span id="style">0</span></div>
-    </div>
-
-    <div class="corner tr">
-      <div class="label">VELOCITY</div>
-      <div class="big"><span id="speed">0</span><span class="unit">m/s</span></div>
-      <div class="mult-row"><span id="mult" class="mult">x1</span> <span id="chain" class="chainlbl"></span></div>
-    </div>
-
-    <div id="dangerWrap" class="meter danger">
-      <div class="label">RIFT PROXIMITY</div>
-      <div class="bar"><div id="dangerBar" class="fill"></div></div>
-    </div>
-
-    <div class="meter boost">
-      <div class="label">BOOST</div>
-      <div class="bar"><div id="boostBar" class="fill"></div></div>
-    </div>
-
-    <div id="muteIndicator" class="mute">SOUND (M)</div>
-
-    <!-- Touch-only on-screen boost pad (shown on touch devices during play) -->
-    <button id="boostBtn" aria-label="Boost">BOOST</button>
-  </div>
-
-  <div id="popups"></div>
-
-  <!-- Menu / game-over overlay -->
-  <div id="overlay">
-    <div class="panel">
-      <h1 id="overlayTitle"></h1>
-      <div id="overlaySub" class="overlay-sub"></div>
-      <div id="overlayStats" class="overlay-stats"></div>
-      <div id="overlayHint" class="overlay-hint"></div>
-    </div>
-    <div class="scanlines"></div>
-  </div>
-
-  <!-- Persistent credit, shown on every screen -->
-  <div id="credit">Developed by: <b>SkyCoder YazanPK</b></div>
-
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "./lib/three.module.js",
-      "three/addons/": "./lib/jsm/"
-    }
-  }
-  </script>
-  <script type="module" src="./src/main.js"></script>
+<canvas id="game"></canvas><div id="veil"></div>
+<div id="hud">
+ <div class="hudTop">
+  <div class="readout"><div class="eyebrow">Patrol score</div><div id="score" class="value">0000</div><div class="status"><span class="dot"></span><span id="jetLabel">FALCON MK II</span></div></div>
+  <div class="readout right"><div class="eyebrow">Drone wave</div><div id="wave" class="value">01</div><div class="status right">ARCADE TRAINING</div></div>
+ </div>
+ <div id="centerMark"><i></i></div>
+ <div id="bottomHud"><div class="meter"><div class="meterHead"><span class="eyebrow">Shield</span><span id="shieldText" class="mono">100%</span></div><div class="track"><div id="shield" class="fill"></div></div></div><div class="meter"><div class="meterHead"><span class="eyebrow">Energy</span><span id="energyText" class="mono">100%</span></div><div class="track"><div id="energy" class="fill"></div></div></div></div>
+ <button id="fire" aria-label="Fire energy bolts">FIRE</button><div id="toast">DRONE CLEARED</div>
+</div>
+<div id="menu"><div class="panel">
+ <div class="topline"><div class="brand"><div class="insignia">✦</div><div><div class="kicker">Sky patrol · arcade flight</div><h1>Counterstrike<br><span>Air Force</span></h1></div></div><div class="pill">FLIGHT SYSTEMS ONLINE</div></div>
+ <div class="kicker">Choose your aircraft</div>
+ <div id="aircraftGrid" class="grid"></div>
+ <div class="launchRow"><div class="controls">FLY: WASD / ARROWS &nbsp; · &nbsp; AIM: MOUSE<br>ENERGY BOLTS: CLICK / SPACE &nbsp; · &nbsp; PAUSE: ESC</div><button class="start" id="start">Launch patrol →</button></div>
+ <div class="note">Clear the glowing drone targets. This is a non-graphic arcade flight game.</div>
+</div></div>
+<div id="endScreen"><div class="panel" style="max-width:480px;text-align:center"><div class="kicker">Patrol complete</div><h1>Flight <span>recap</span></h1><p id="recap" class="mono" style="line-height:2;margin:20px 0;color:#b8d0de"></p><button class="start" id="again">Fly again →</button></div></div>
+<script type="importmap">{"imports":{"three":"./lib/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+const renderer=new THREE.WebGLRenderer({canvas:document.querySelector('#game'),antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x92b8cf);scene.fog=new THREE.Fog(0x92b8cf,36,175);
+const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,400);camera.position.set(0,4.8,14);camera.lookAt(0,1,-16);
+scene.add(new THREE.HemisphereLight(0xc8efff,0x263746,2.1));const sun=new THREE.DirectionalLight(0xffedcf,3);sun.position.set(-15,28,8);scene.add(sun);
+const mat=(c,metal=.2,rough=.55,em=0)=>new THREE.MeshStandardMaterial({color:c,metalness:metal,roughness:rough,emissive:em});
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(500,500),mat(0x304653,.1,.9));ground.rotation.x=-Math.PI/2;ground.position.y=-17;scene.add(ground);
+const haze=new THREE.Mesh(new THREE.SphereGeometry(180,24,16),new THREE.MeshBasicMaterial({color:0xaad0df,side:THREE.BackSide}));haze.position.y=20;scene.add(haze);
+const sunDisc=new THREE.Mesh(new THREE.CircleGeometry(9,48),new THREE.MeshBasicMaterial({color:0xffd49a}));sunDisc.position.set(-45,42,-105);scene.add(sunDisc);
+const stars=new THREE.Group();for(let i=0;i<220;i++){let s=new THREE.Mesh(new THREE.SphereGeometry(.08+Math.random()*.12,5,4),new THREE.MeshBasicMaterial({color:0xe7f8ff,transparent:true,opacity:.65}));s.position.set((Math.random()-.5)*220,Math.random()*95-2,-Math.random()*210);stars.add(s)}scene.add(stars);
+const mountainMat=mat(0x425e69,.1,.92);for(let side of [-1,1])for(let i=0;i<18;i++){const h=10+Math.random()*27;const m=new THREE.Mesh(new THREE.ConeGeometry(h*.6,h,5),mountainMat);m.position.set(side*(48+Math.random()*43),-15+h*.45,-i*14-15);scene.add(m)}
+const aircraft=[
+ {name:'Falcon Mk II',role:'BALANCED INTERCEPTOR',speed:8,agility:8,shield:8,color:0x83d7e8,accent:0x26b8dd},
+ {name:'Viper XR',role:'HIGH-SPEED SCOUT',speed:10,agility:10,shield:5,color:0xe2ad67,accent:0xffa23d},
+ {name:'Tempest A4',role:'HEAVY PATROL JET',speed:7,agility:6,shield:10,color:0x8cdeb0,accent:0x58e3a1},
+ {name:'Aegis VT',role:'ADVANCED MULTIROLE',speed:9,agility:8,shield:8,color:0xb9a6ef,accent:0x9e83ff}
+];
+const grid=document.querySelector('#aircraftGrid');let selected=Number(localStorage.getItem('aircraftPick')||0);
+function renderCards(){grid.innerHTML=aircraft.map((a,i)=>'<button class="aircraft '+(i===selected?'selected':'')+'" data-i="'+i+'"><div class="jetIcon">✦</div><h2>'+a.name+'</h2><p>'+a.role+'</p><div class="stat">SPEED '+a.speed+' &nbsp; AGILITY '+a.agility+' &nbsp; SHIELD '+a.shield+'</div></button>').join('');grid.querySelectorAll('button').forEach(b=>b.onclick=()=>{selected=+b.dataset.i;localStorage.setItem('aircraftPick',selected);renderCards();buildPlane()})}renderCards();
+const planeRoot=new THREE.Group();scene.add(planeRoot);let plane=new THREE.Group();planeRoot.add(plane);
+function buildPlane(){planeRoot.remove(plane);plane=new THREE.Group();planeRoot.add(plane);const a=aircraft[selected],hull=mat(a.color,.72,.29),dark=mat(0x263847,.75,.36),glow=new THREE.MeshStandardMaterial({color:a.accent,emissive:a.accent,emissiveIntensity:1.8,metalness:.25,roughness:.3}),glass=new THREE.MeshPhysicalMaterial({color:0x173b50,metalness:.45,roughness:.12,clearcoat:1,transparent:true,opacity:.88});
+function add(g,m,x,y,z,sx,sy,sz,rz=0){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.rotation.z=rz;o.castShadow=true;plane.add(o);return o}
+add(new THREE.ConeGeometry(.85,5.8,8),hull,0,0,-.4,1,1,1,0); // nose points +Y by default; rotate
+plane.children.at(-1).rotation.x=Math.PI/2;
+add(new THREE.CylinderGeometry(.66,.78,3.8,10),hull,0,-.25,1.1,1,1,1);plane.children.at(-1).rotation.x=Math.PI/2;
+add(new THREE.SphereGeometry(.58,12,8),glass,0,.32,-.35,.78,.45,1.5);
+for(const d of [-1,1]){
+const wing=add(new THREE.BoxGeometry(1, .15,4.2),hull,d*1.28,-.08,.52,1,1,1,d*.25);
+const tip=add(new THREE.BoxGeometry(.34,.13,1.25),dark,d*2.32,-.02,.72,1,1,1,d*.1);
+add(new THREE.CylinderGeometry(.19,.25,1.5,10),dark,d*.67,-.12,2.12,1,1,1);plane.children.at(-1).rotation.x=Math.PI/2;
+add(new THREE.SphereGeometry(.22,10,8),glow,d*.67,-.12,2.82,1,1,1);
+add(new THREE.BoxGeometry(.12,.07,1.8),glow,d*1.3,-.18,.4,1,1,1,d*.25)
+}
+add(new THREE.BoxGeometry(.16,.82,1.1),hull,0,.58,1.75,1,1,1);
+add(new THREE.BoxGeometry(.5,.1,1.1),hull,0,-.52,.72,1,1,1);
+add(new THREE.TorusGeometry(.65,.065,8,20),glow,0,0,2.94,1,1,1);
+plane.scale.setScalar(.92);plane.rotation.x=-.08
+}buildPlane();
+const projectiles=[],drones=[],sparks=[];const boltMat=new THREE.MeshBasicMaterial({color:0x71eeff});const boltGeo=new THREE.CapsuleGeometry(.095,.65,4,8);
+let running=false,score=0,shield=100,energy=100,wave=1,px=0,py=0,targetX=0,targetY=0,fireHeld=false,lastShot=0,spawnTimer=0,clock=new THREE.Clock(),toastTimer;
+const scoreEl=document.querySelector('#score');
+function makeDrone(){const g=new THREE.Group(),core=new THREE.Mesh(new THREE.IcosahedronGeometry(1.05,1),mat(0x3e8497,.66,.26,0x073545));g.add(core);const ring=new THREE.Mesh(new THREE.TorusGeometry(1.32,.12,8,28),new THREE.MeshStandardMaterial({color:0x7ff1ff,emissive:0x27aaca,emissiveIntensity:1.6,metalness:.25,roughness:.3}));ring.rotation.x=.8;g.add(ring);for(let j=0;j<4;j++){const n=new THREE.Mesh(new THREE.BoxGeometry(.38,.38,.8),mat(0x273f4b,.55,.35));n.position.set(Math.cos(j*Math.PI/2)*1.25,Math.sin(j*Math.PI/2)*.6,0);n.rotation.z=j*Math.PI/2;g.add(n)}g.position.set((Math.random()-.5)*20,(Math.random()-.5)*8,-75-Math.random()*30);scene.add(g);drones.push({g,hp:1+Math.floor(wave/3),phase:Math.random()*8})}
+function pop(pos){for(let i=0;i<13;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.09+Math.random()*.08,5,4),new THREE.MeshBasicMaterial({color:i%2?0x69e9ff:0xffd17a,transparent:true}));p.position.copy(pos);scene.add(p);sparks.push({m:p,v:new THREE.Vector3((Math.random()-.5)*7,(Math.random()-.5)*7,(Math.random()-.5)*8),life:.65})}}
+function showToast(msg){const t=document.querySelector('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('on'),950)}
+function fire(){if(!running||energy<3)return;const b=new THREE.Mesh(boltGeo,boltMat);b.rotation.x=Math.PI/2;b.position.set(px,py+.05,1.2);scene.add(b);projectiles.push({m:b});energy=Math.max(0,energy-3)}
+function start(){document.querySelector('#menu').style.display='none';document.querySelector('#endScreen').style.display='none';document.querySelector('#hud').style.display='block';running=true;score=0;shield=100;energy=100;wave=1;px=py=targetX=targetY=0;drones.forEach(d=>scene.remove(d.g));drones.length=0;projectiles.forEach(p=>scene.remove(p.m));projectiles.length=0;document.querySelector('#jetLabel').textContent=aircraft[selected].name.toUpperCase();clock.getDelta()}
+function end(){running=false;document.querySelector('#hud').style.display='none';document.querySelector('#recap').textContent='SCORE  '+score.toString().padStart(4,'0')+'  ·  WAVE '+String(wave).padStart(2,'0')+'  ·  AIRCRAFT  '+aircraft[selected].name.toUpperCase();document.querySelector('#endScreen').style.display='flex'}
+document.querySelector('#start').onclick=start;document.querySelector('#again').onclick=start;
+addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key))e.preventDefault();if(e.key==='Escape'&&running)end();if(e.key===' '){fireHeld=true;fire()}});
+addEventListener('keyup',e=>{if(e.key===' ')fireHeld=false});
+addEventListener('pointermove',e=>{if(e.pointerType==='mouse'){targetX=(e.clientX/innerWidth-.5)*18;targetY=(.5-e.clientY/innerHeight)*8}});
+addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;if(e.pointerType==='mouse'){fireHeld=true;fire()}else{targetX=(e.clientX/innerWidth-.5)*18;targetY=(.5-e.clientY/innerHeight)*8}});
+addEventListener('pointerup',()=>fireHeld=false);
+document.querySelector('#fire').addEventListener('pointerdown',e=>{e.preventDefault();fireHeld=true;fire()});addEventListener('pointerup',()=>fireHeld=false);
+addEventListener('touchmove',e=>{if(e.target.closest('#fire')||e.target.closest('.aircraft'))return;const t=e.touches[0];if(t){targetX=(t.clientX/innerWidth-.5)*18;targetY=(.5-t.clientY/innerHeight)*8}},{passive:true});
+function update(dt,t){stars.position.z=(t*1.5)%18;planeRoot.position.set(THREE.MathUtils.damp(planeRoot.position.x,px,6,dt),THREE.MathUtils.damp(planeRoot.position.y,py,6,dt),0);plane.rotation.z=THREE.MathUtils.damp(plane.rotation.z,-(px-planeRoot.position.x)*.045,5,dt);plane.rotation.x=THREE.MathUtils.damp(plane.rotation.x,-.08-py*.012,4,dt);
+if(running){const keys=window.keys||{};let dx=(keys.left?-1:0)+(keys.right?1:0),dy=(keys.up?1:0)+(keys.down?-1:0);px=THREE.MathUtils.clamp(px+dx*aircraft[selected].agility*dt+(targetX-px)*Math.min(1,dt*3),-9,9);py=THREE.MathUtils.clamp(py+dy*aircraft[selected].agility*.55*dt+(targetY-py)*Math.min(1,dt*3),-4.5,4.5);energy=Math.min(100,energy+dt*6);if(fireHeld&&t-lastShot>.2&&energy>=3){fire();lastShot=t}
+spawnTimer-=dt;if(spawnTimer<=0){makeDrone();spawnTimer=Math.max(.62,1.65-wave*.055)}
+for(let i=projectiles.length-1;i>=0;i--){const p=projectiles[i];p.m.position.z-=58*dt;if(p.m.position.z< -100){scene.remove(p.m);projectiles.splice(i,1);continue}for(let j=drones.length-1;j>=0;j--){const d=drones[j];if(p.m.position.distanceTo(d.g.position)<1.8){d.hp--;scene.remove(p.m);projectiles.splice(i,1);if(d.hp<=0){pop(d.g.position);scene.remove(d.g);drones.splice(j,1);score+=100;showToast('DRONE CLEARED');if(score&&score%(wave*800)===0){wave++;showToast('WAVE '+String(wave).padStart(2,'0'))}}else showToast('HIT');break}}}
+for(let i=drones.length-1;i>=0;i--){const d=drones[i];d.phase+=dt;d.g.position.z+= (14+wave*1.1)*dt;d.g.position.x+=Math.sin(d.phase)*dt*1.5;d.g.position.y+=Math.cos(d.phase*.8)*dt*.8;d.g.rotation.z+=dt*.35;if(d.g.position.z>4){pop(d.g.position);scene.remove(d.g);drones.splice(i,1);shield=Math.max(0,shield-(100/aircraft[selected].shield));showToast('SHIELD BUFFERED');if(shield<=0)end()}}
+for(let i=sparks.length-1;i>=0;i--){const s=sparks[i];s.life-=dt;s.m.position.addScaledVector(s.v,dt);s.v.y-=3*dt;s.m.material.opacity=Math.max(0,s.life/.65);if(s.life<=0){scene.remove(s.m);sparks.splice(i,1)}}
+scoreEl.textContent=String(score).padStart(4,'0');document.querySelector('#wave').textContent=String(wave).padStart(2,'0');document.querySelector('#shield').style.width=shield+'%';document.querySelector('#shieldText').textContent=Math.ceil(shield)+'%';document.querySelector('#energy').style.width=energy+'%';document.querySelector('#energyText').textContent=Math.floor(energy)+'%'}
+else{px=Math.sin(t*.45)*1.1;py=Math.sin(t*.7)*.25;drones.forEach(d=>{d.phase+=dt;d.g.position.z+=dt*4;d.g.rotation.z+=dt*.25;if(d.g.position.z>20)d.g.position.z=-90})}
+camera.position.x=THREE.MathUtils.damp(camera.position.x,planeRoot.position.x*.28,2,dt);camera.position.y=THREE.MathUtils.damp(camera.position.y,4.8+planeRoot.position.y*.2,2,dt);camera.lookAt(0,0,-22)}
+const keys={left:false,right:false,up:false,down:false};window.keys=keys;addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key.toLowerCase()==='a')keys.left=true;if(e.key==='ArrowRight'||e.key.toLowerCase()==='d')keys.right=true;if(e.key==='ArrowUp'||e.key.toLowerCase()==='w')keys.up=true;if(e.key==='ArrowDown'||e.key.toLowerCase()==='s')keys.down=true});addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key.toLowerCase()==='a')keys.left=false;if(e.key==='ArrowRight'||e.key.toLowerCase()==='d')keys.right=false;if(e.key==='ArrowUp'||e.key.toLowerCase()==='w')keys.up=false;if(e.key==='ArrowDown'||e.key.toLowerCase()==='s')keys.down=false});
+let last=performance.now();function loop(now){const dt=Math.min(.04,(now-last)/1000);last=now;const t=now/1000;update(dt,t);renderer.render(scene,camera);requestAnimationFrame(loop)}requestAnimationFrame(loop);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight)});
+</script>
 </body>
 </html>
