@@ -28,6 +28,42 @@
 #endScreen{display:none;position:fixed;inset:0;z-index:5;align-items:center;justify-content:center;background:#06121c99;padding:20px}
 @media(max-width:720px){.grid{grid-template-columns:repeat(2,1fr)}.aircraft{min-height:135px}.topline{align-items:flex-start}.pill{display:none}.panel{max-height:96vh}.hudTop{padding:14px}.value{font-size:27px}.meter{width:120px}#bottomHud{left:14px;bottom:16px}#fire{right:15px;bottom:18px;width:76px;height:76px}.controls{font-size:10px}}
 @media(max-width:390px){.grid{gap:7px}.aircraft{padding:9px}.jetIcon{height:42px;font-size:34px}.aircraft h2{font-size:17px}.aircraft p{font-size:9px}.value{font-size:23px}}
+
+#menu{background:linear-gradient(90deg,#06121cf4 0%,#071622ca 58%,#09182766)}
+.panel{width:min(1180px,100%);padding:clamp(20px,3vw,38px);border:1px solid #66cce642;background:linear-gradient(135deg,#0a1d2bea,#0a202edf);box-shadow:0 34px 110px #000a,inset 0 1px 0 #ffffff14;touch-action:pan-y}
+.topline{margin-bottom:30px}.brand{align-items:flex-start}.insignia{width:49px;height:49px;background:#65dffe16;font-size:26px;flex:none}
+h1{font-size:clamp(36px,5vw,72px);letter-spacing:.012em}h1 span{color:#9cecff}
+.hangarLayout{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(320px,.9fr);gap:28px;align-items:stretch}
+.selectionColumn{display:flex;flex-direction:column;min-width:0}.selectionHeading{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ffffff28;padding:0 0 12px;margin-bottom:14px}
+.selectionHeading strong{font:600 14px 'DM Mono',monospace;letter-spacing:.07em}.selectionHeading .mono{color:#64dfff}
+.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
+.aircraft{min-height:152px;border:1px solid #89b8ca30;background:linear-gradient(145deg,#102b3cad,#0b1c29ba);padding:14px 15px;clip-path:polygon(0 0,calc(100% - 13px) 0,100% 13px,100% 100%,0 100%)}
+.aircraft:hover{border-color:#75dfffaa}.aircraft.selected{background:linear-gradient(145deg,#18425be0,#0c273adf);border-color:#69e1ff;box-shadow:inset 0 0 0 1px #6ce4ff2b}
+.aircraft .cardTop{display:flex;align-items:center;justify-content:space-between}.aircraft .cardIndex{font:12px 'DM Mono',monospace;color:#6de4fc}.aircraft .cardState{font:10px 'DM Mono',monospace;color:#b9d1dc}.aircraft.selected .cardState{color:#91f0ff}
+.aircraft .jetIcon{height:38px;justify-content:flex-start;font-size:36px;transform:rotate(-90deg);width:36px;margin:6px 0 1px 14px}
+.aircraft h2{font-size:21px;margin:0}.aircraft p{font-size:11px;margin:2px 0 12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.statItem span{font:10px 'DM Mono',monospace;color:#a2bbc8;letter-spacing:.06em}.statTrack{height:4px;background:#e6f7ff25;margin-top:5px}.statTrack i{display:block;height:100%;background:var(--jet-accent,#6de4fc)}
+.hangar{position:relative;min-height:400px;overflow:hidden;border:1px solid #81cae342;background:radial-gradient(circle at 51% 43%,#24557399,#0d273af0 55%,#091b2aed);isolation:isolate}
+.hangar:before{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(#bdeeff0b 1px,transparent 1px),linear-gradient(90deg,#bdeeff0b 1px,transparent 1px);background-size:30px 30px;transform:perspective(310px) rotateX(64deg) scale(1.8);transform-origin:center 67%;mask-image:linear-gradient(transparent 5%,#000 95%)}
+.hangar:after{content:'';position:absolute;width:65%;height:30%;left:18%;top:49%;border:1px solid #72d9ef33;border-radius:50%;transform:rotateX(68deg);box-shadow:0 0 50px #44c3f322,0 0 0 26px #64d9ee09;pointer-events:none}
+#hangarCanvas{width:100%;height:100%;min-height:400px;display:block;position:absolute;inset:0;z-index:1}
+.hangarLabel{position:absolute;left:20px;top:19px;z-index:2;font:11px 'DM Mono',monospace;letter-spacing:.16em;color:#bce9f4}
+.hangarInfo{position:absolute;bottom:19px;left:20px;right:20px;z-index:2;display:flex;justify-content:space-between;align-items:end;gap:15px;pointer-events:none}.hangarInfo strong{display:block;font-size:32px;line-height:.9;text-transform:uppercase}.hangarInfo small{font:11px 'DM Mono',monospace;color:#abd1df;letter-spacing:.05em}.hangarInfo .mono{text-align:right;color:#72e7ff}
+#hangarFallback{display:none;position:absolute;inset:0;place-items:center;color:#b5d3e1;text-align:center;font:12px 'DM Mono',monospace;z-index:1}
+#hangarFallback .outline{font-size:150px;line-height:1;color:#83dfff88;transform:rotate(-90deg);display:block}
+.no-webgl #hangarFallback,.no-preview #hangarFallback{display:grid}.no-webgl #hangarCanvas,.no-preview #hangarCanvas{display:none}.no-webgl .start{opacity:.55;cursor:not-allowed}
+.launchRow{margin-top:auto;padding-top:22px;border-top:0}.controls{font-size:12px;line-height:1.8}.start{font-size:19px;padding:14px 26px;min-width:185px}
+.note{margin-top:9px;font-size:11px;line-height:1.45}
+#hud .readout{padding:12px 16px;background:#071b29ad;border:1px solid #8fdfff36;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);backdrop-filter:blur(8px)}
+#hud .value{font-size:38px}.hudTop{gap:12px}
+#centerMark{border-color:#aaf2ffbb;box-shadow:0 0 0 9px #ffffff07,0 0 26px #52dfff44}
+#bottomHud{background:#081f30b8;border:1px solid #91ddf43a;padding:13px 17px;backdrop-filter:blur(8px)}
+#toast{padding:7px 14px;background:#092e42bd;border:1px solid #72e9ff66;white-space:nowrap}
+button:focus-visible{outline:2px solid white;outline-offset:3px}
+@media(max-width:900px){.hangarLayout{grid-template-columns:1fr}.hangar{min-height:260px;order:-1}#hangarCanvas{min-height:260px}.topline{margin-bottom:16px}.aircraft{min-height:133px}.panel{max-height:96vh}.hangarInfo strong{font-size:25px}}
+@media(max-width:600px){#menu{padding:8px}.panel{padding:18px;max-height:98vh}.hangar{min-height:190px}#hangarCanvas{min-height:190px}.hangarInfo{bottom:12px;left:13px;right:13px}.hangarInfo strong{font-size:22px}.hangarLabel{top:12px;left:13px}.grid{gap:8px}.aircraft{min-height:124px;padding:10px}.aircraft h2{font-size:19px}.aircraft p{font-size:9px;margin-bottom:8px}.stats{gap:4px}.statItem span{font-size:8px}.aircraft .jetIcon{height:24px;font-size:27px}.launchRow{padding-top:16px}.controls{font-size:10px}.start{min-width:unset;font-size:16px;padding:12px}.hudTop{padding:12px}.hudTop .readout{padding:8px}.hudTop .value{font-size:28px}#bottomHud{left:10px;bottom:10px;gap:10px;padding:10px}.meter{width:96px}#fire{width:76px;height:76px;bottom:12px;right:10px}.note{font-size:10px}}
+@media(max-height:720px) and (min-width:901px){.hangar{min-height:330px}#hangarCanvas{min-height:330px}.panel{padding:20px}.topline{margin-bottom:16px}.aircraft{min-height:128px}}
+
 </style>
 </head>
 <body>
@@ -43,17 +79,28 @@
 </div>
 <div id="menu"><div class="panel">
  <div class="topline"><div class="brand"><div class="insignia">✦</div><div><div class="kicker">Sky patrol · arcade flight</div><h1>Counterstrike<br><span>Air Force</span></h1></div></div><div class="pill">FLIGHT SYSTEMS ONLINE</div></div>
- <div class="kicker">Choose your aircraft</div>
- <div id="aircraftGrid" class="grid"></div>
- <div class="launchRow"><div class="controls">FLY: WASD / ARROWS &nbsp; · &nbsp; AIM: MOUSE<br>ENERGY BOLTS: CLICK / SPACE &nbsp; · &nbsp; PAUSE: ESC</div><button class="start" id="start">Launch patrol →</button></div>
- <div class="note">Clear the glowing drone targets. This is a non-graphic arcade flight game.</div>
+ <div class="hangarLayout">
+  <section class="selectionColumn" aria-label="Aircraft selection">
+   <div class="selectionHeading"><strong>CHOOSE YOUR AIRCRAFT</strong><span class="mono">04 AVAILABLE</span></div>
+   <div id="aircraftGrid" class="grid"></div>
+   <div class="launchRow"><div class="controls">MOVE: WASD / ARROWS / MOUSE<br>FIRE: CLICK / SPACE &nbsp; · &nbsp; FINISH: ESC</div><button class="start" id="start">Launch patrol →</button></div>
+   <div class="note" id="gameNote">Clear the glowing drone targets.</div>
+  </section>
+  <div class="hangar" aria-label="Selected aircraft 3D preview">
+   <span class="hangarLabel">HANGAR / LIVE MODEL</span>
+   <canvas id="hangarCanvas" aria-hidden="true"></canvas>
+   <div id="hangarFallback"><div><span class="outline">➤</span><span>3D GRAPHICS UNAVAILABLE</span></div></div>
+   <div class="hangarInfo"><div><small id="previewRole">BALANCED INTERCEPTOR</small><strong id="previewName">Falcon Mk II</strong></div><span class="mono" id="previewCode">AF-01</span></div>
+  </div>
+ </div>
 </div></div>
 <div id="endScreen"><div class="panel" style="max-width:480px;text-align:center"><div class="kicker">Patrol complete</div><h1>Flight <span>recap</span></h1><p id="recap" class="mono" style="line-height:2;margin:20px 0;color:#b8d0de"></p><button class="start" id="again">Fly again →</button></div></div>
 <script type="importmap">{"imports":{"three":"./lib/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
-const renderer=new THREE.WebGLRenderer({canvas:document.querySelector('#game'),antialias:true,alpha:false});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;
+let renderer=null;
+try{renderer=new THREE.WebGLRenderer({canvas:document.querySelector('#game'),antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true}
+catch(err){document.body.classList.add('no-webgl');document.querySelector('#gameNote').textContent='This browser cannot start 3D graphics. Open the game in a browser with WebGL enabled.';document.querySelector('#start').disabled=true}
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x92b8cf);scene.fog=new THREE.Fog(0x92b8cf,36,175);
 const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,400);camera.position.set(0,4.8,14);camera.lookAt(0,1,-16);
 scene.add(new THREE.HemisphereLight(0xc8efff,0x263746,2.1));const sun=new THREE.DirectionalLight(0xffedcf,3);sun.position.set(-15,28,8);scene.add(sun);
@@ -69,42 +116,94 @@ const aircraft=[
  {name:'Tempest A4',role:'HEAVY PATROL JET',speed:7,agility:6,shield:10,color:0x8cdeb0,accent:0x58e3a1},
  {name:'Aegis VT',role:'ADVANCED MULTIROLE',speed:9,agility:8,shield:8,color:0xb9a6ef,accent:0x9e83ff}
 ];
-const grid=document.querySelector('#aircraftGrid');let selected=Number(localStorage.getItem('aircraftPick')||0);
-function renderCards(){grid.innerHTML=aircraft.map((a,i)=>'<button class="aircraft '+(i===selected?'selected':'')+'" data-i="'+i+'"><div class="jetIcon">➤</div><h2>'+a.name+'</h2><p>'+a.role+'</p><div class="stat">SPEED '+a.speed+' &nbsp; AGILITY '+a.agility+' &nbsp; SHIELD '+a.shield+'</div></button>').join('');grid.querySelectorAll('button').forEach(b=>b.onclick=()=>{selected=+b.dataset.i;localStorage.setItem('aircraftPick',selected);renderCards();buildPlane()})}renderCards();
+const grid=document.querySelector('#aircraftGrid');let selected=Math.max(0,Math.min(3,Number(localStorage.getItem('aircraftPick')||0)||0));
+function renderCards(){
+ grid.innerHTML=aircraft.map((a,i)=>'<button type="button" class="aircraft '+(i===selected?'selected':'')+'" data-i="'+i+'" style="--jet-accent:#'+a.accent.toString(16).padStart(6,'0')+'" aria-pressed="'+(i===selected)+'"><div class="cardTop"><span class="cardIndex">AF-0'+(i+1)+'</span><span class="cardState">'+(i===selected?'● SELECTED':'SELECT')+'</span></div><div class="jetIcon">➤</div><h2>'+a.name+'</h2><p>'+a.role+'</p><div class="stats">'+[['SPEED',a.speed],['AGILITY',a.agility],['SHIELD',a.shield]].map(([label,value])=>'<div class="statItem"><span>'+label+'</span><div class="statTrack"><i style="width:'+(value*10)+'%"></i></div></div>').join('')+'</div></button>').join('');
+ grid.querySelectorAll('button').forEach(b=>b.onclick=()=>{selected=+b.dataset.i;localStorage.setItem('aircraftPick',selected);renderCards();buildPlane()});
+ document.querySelector('#previewName').textContent=aircraft[selected].name;
+ document.querySelector('#previewRole').textContent=aircraft[selected].role;
+ document.querySelector('#previewCode').textContent='AF-0'+(selected+1)
+}renderCards();
 const planeRoot=new THREE.Group();scene.add(planeRoot);let plane=new THREE.Group();planeRoot.add(plane);
-function buildPlane(){planeRoot.remove(plane);plane=new THREE.Group();planeRoot.add(plane);const a=aircraft[selected],hull=mat(a.color,.72,.29),dark=mat(0x263847,.75,.36),glow=new THREE.MeshStandardMaterial({color:a.accent,emissive:a.accent,emissiveIntensity:1.8,metalness:.25,roughness:.3}),glass=new THREE.MeshPhysicalMaterial({color:0x173b50,metalness:.45,roughness:.12,clearcoat:1,transparent:true,opacity:.88});
-function add(g,m,x,y,z,sx,sy,sz,rz=0){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.rotation.z=rz;o.castShadow=true;plane.add(o);return o}
-add(new THREE.ConeGeometry(.85,5.8,8),hull,0,0,-.4,1,1,1,0); // nose points +Y by default; rotate
-plane.children.at(-1).rotation.x=Math.PI/2;
-add(new THREE.CylinderGeometry(.66,.78,3.8,10),hull,0,-.25,1.1,1,1,1);plane.children.at(-1).rotation.x=Math.PI/2;
-add(new THREE.SphereGeometry(.58,12,8),glass,0,.32,-.35,.78,.45,1.5);
-const span=[2.65,2.25,3.35,2.95][selected];
-const wingShape=new THREE.Shape();
-wingShape.moveTo(-.42,1.7);wingShape.lineTo(.42,1.7);wingShape.lineTo(.55,.36);wingShape.lineTo(span,-.1);wingShape.lineTo(span*.93,-1.05);wingShape.lineTo(.75,-.52);wingShape.lineTo(-.75,-.52);wingShape.lineTo(-span*.93,-1.05);wingShape.lineTo(-span,-.1);wingShape.lineTo(-.55,.36);wingShape.closePath();
-const wingGeo=new THREE.ExtrudeGeometry(wingShape,{depth:.13,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.035,bevelThickness:.025});wingGeo.rotateX(Math.PI/2);
-const mainWings=new THREE.Mesh(wingGeo,hull);mainWings.position.y=-.08;mainWings.castShadow=true;plane.add(mainWings);
-const tailShape=new THREE.Shape();tailShape.moveTo(-.22,-1.45);tailShape.lineTo(.22,-1.45);tailShape.lineTo(.28,-2.42);tailShape.lineTo(1.18,-2.78);tailShape.lineTo(1.05,-3.1);tailShape.lineTo(.24,-2.88);tailShape.lineTo(-.24,-2.88);tailShape.lineTo(-1.05,-3.1);tailShape.lineTo(-1.18,-2.78);tailShape.lineTo(-.28,-2.42);tailShape.closePath();
-const tailGeo=new THREE.ExtrudeGeometry(tailShape,{depth:.12,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.025,bevelThickness:.02});tailGeo.rotateX(Math.PI/2);const tail=new THREE.Mesh(tailGeo,dark);tail.position.y=-.04;plane.add(tail);
-for(const d of [-1,1]){
-  const fin=add(new THREE.BoxGeometry(.16,.92,.72),hull,d*.55,.48,-1.72,1,1,1,d*-.24);
-  const stripe=add(new THREE.BoxGeometry(.055,.08,1.4),glow,d*(span*.72),-.005,-.44,1,1,1,d*.12);
-  const engineX=(selected===2?.72:.57)*d;
-  add(new THREE.CylinderGeometry(.24,.3,.95,12),dark,engineX,-.12,-2.15,1,1,1);plane.children.at(-1).rotation.x=Math.PI/2;
-  add(new THREE.TorusGeometry(.24,.055,8,16),glow,engineX,-.12,-2.66,1,1,1);
-  if(selected===2){add(new THREE.BoxGeometry(.16,.14,.68),dark,d*1.32,-.32,-.58,1,1,1,d*.15)}
+let previewRenderer=null;
+const previewScene=new THREE.Scene(),previewGroup=new THREE.Group();
+previewScene.add(new THREE.HemisphereLight(0xe3f6ff,0x244151,2.4));
+const previewKey=new THREE.DirectionalLight(0xffffff,3.4);previewKey.position.set(5,9,10);previewScene.add(previewKey);
+const previewRim=new THREE.DirectionalLight(0x3cbfff,2.1);previewRim.position.set(-8,4,-7);previewScene.add(previewRim);
+previewScene.add(previewGroup);
+const previewCamera=new THREE.PerspectiveCamera(36,1,.1,100);
+previewCamera.position.set(7,5.5,11);previewCamera.lookAt(0,0,0);
+if(renderer){try{previewRenderer=new THREE.WebGLRenderer({canvas:document.querySelector('#hangarCanvas'),alpha:true,antialias:true});previewRenderer.setPixelRatio(Math.min(devicePixelRatio,1.5))}catch(err){document.body.classList.add('no-preview')}}
+function resizePreview(){if(!previewRenderer)return;const box=document.querySelector('#hangarCanvas').getBoundingClientRect();if(box.width<1||box.height<1)return;previewRenderer.setSize(box.width,box.height,false);previewCamera.aspect=box.width/box.height;previewCamera.updateProjectionMatrix()}
+function buildPlane(){
+ planeRoot.remove(plane);plane=new THREE.Group();planeRoot.add(plane);
+ const a=aircraft[selected], variant=selected;
+ const hull=mat(a.color,.74,.29),dark=mat(0x1c3343,.78,.34),light=mat(0xc7eaf3,.56,.38);
+ const glow=new THREE.MeshStandardMaterial({color:a.accent,emissive:a.accent,emissiveIntensity:2.2,metalness:.3,roughness:.23});
+ const glass=new THREE.MeshPhysicalMaterial({color:variant===1?0x263940:0x0c4059,metalness:.45,roughness:.12,clearcoat:1,clearcoatRoughness:.05});
+ const add=(geo,material,x,y,z,rx=0,ry=0,rz=0)=>{const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);m.rotation.set(rx,ry,rz);m.castShadow=true;plane.add(m);return m};
+ // Forward fuselage and recessed lower keel.
+ add(new THREE.CylinderGeometry(.62,.78,3.5,12),hull,0,0,-.15,Math.PI/2);
+ add(new THREE.ConeGeometry(.64,3.25,12),hull,0,0,1.82,Math.PI/2);
+ add(new THREE.ConeGeometry(.69,1.7,12),dark,0,-.04,-2.23,-Math.PI/2);
+ const keel=add(new THREE.BoxGeometry(.28,.35,3.55),dark,0,-.53,.25);
+ // Clear canopy, front instrument rim, segmented canopy frame.
+ const canopy=add(new THREE.SphereGeometry(1,20,12),glass,0,.58,.18);canopy.scale.set(.55,.37,1.06);
+ const rim=add(new THREE.TorusGeometry(.43,.045,8,24),light,0,.47,1.00,Math.PI/2);
+ for(const z of [-.2,.35]){const frame=add(new THREE.TorusGeometry(.49,.025,6,24),dark,0,.51,z,Math.PI/2);frame.scale.y=.73}
+ const span=[2.75,2.36,3.45,3.05][variant],sweep=[-.13,-.55,.15,-.3][variant],tip=[-1.13,-.86,-1.20,-1.02][variant];
+ const wingShape=new THREE.Shape();
+ wingShape.moveTo(-.54,1.25);wingShape.lineTo(.54,1.25);wingShape.lineTo(.65,.4);
+ wingShape.lineTo(span*.9,sweep);wingShape.lineTo(span,tip);wingShape.lineTo(.82,-.78);
+ wingShape.lineTo(-.82,-.78);wingShape.lineTo(-span,tip);wingShape.lineTo(-span*.9,sweep);wingShape.lineTo(-.65,.4);wingShape.closePath();
+ const wings=new THREE.ExtrudeGeometry(wingShape,{depth:.14,steps:1,bevelEnabled:true,bevelSegments:1,bevelSize:.035,bevelThickness:.025});wings.rotateX(Math.PI/2);
+ add(wings,hull,0,-.11,0);
+ // Leading-edge light and two individually articulated surface panels.
+ const edgeMaterial=new THREE.LineBasicMaterial({color:a.accent,transparent:true,opacity:.8});
+ for(const sign of [-1,1]){
+   const points=[new THREE.Vector3(sign*.65,.02,.4),new THREE.Vector3(sign*span*.9,.02,sweep),new THREE.Vector3(sign*span,.02,tip)];
+   const edge=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),edgeMaterial);plane.add(edge);
+   add(new THREE.BoxGeometry(.53,.045,.58),dark,sign*(span*.55),.02,-.54,0,0,sign*.07);
+   add(new THREE.BoxGeometry(.11,.05,.44),glow,sign*(span*.89),.035,(sweep+tip)*.5);
+   if(variant===2)add(new THREE.BoxGeometry(.24,.19,.8),dark,sign*1.65,-.37,-.42);
+ }
+ const tailShape=new THREE.Shape();
+ tailShape.moveTo(-.28,-1.45);tailShape.lineTo(.28,-1.45);tailShape.lineTo(.34,-2.26);tailShape.lineTo(1.18,-2.73);tailShape.lineTo(1.05,-3.0);tailShape.lineTo(.3,-2.83);tailShape.lineTo(-.3,-2.83);tailShape.lineTo(-1.05,-3.0);tailShape.lineTo(-1.18,-2.73);tailShape.lineTo(-.34,-2.26);tailShape.closePath();
+ const tailGeo=new THREE.ExtrudeGeometry(tailShape,{depth:.12,bevelEnabled:true,bevelSize:.025,bevelThickness:.02,bevelSegments:1});tailGeo.rotateX(Math.PI/2);
+ add(tailGeo,dark,0,-.04,0);
+ if(variant===3){for(const sign of [-1,1])add(new THREE.BoxGeometry(.13,1.02,.81),hull,sign*.55,.44,-1.9,0,0,sign*.15)}
+ else{const fin=add(new THREE.BoxGeometry(.15,variant===2?1.42:1.15,1.05),hull,0,.65,-1.94);fin.rotation.x=-.14}
+ const engines=variant===1?[0]:variant===2?[-.75,.75]:[-.55,.55];
+ engines.forEach(x=>{
+   add(new THREE.CylinderGeometry(variant===2?.35:.27,variant===2?.4:.31,1.05,12),dark,x,-.17,-2.18,Math.PI/2);
+   add(new THREE.TorusGeometry(variant===2?.34:.27,.065,8,20),glow,x,-.17,-2.75);
+   add(new THREE.CircleGeometry(variant===2?.25:.19,18),glow,x,-.17,-2.76);
+ });
+ add(new THREE.BoxGeometry(.09,.06,2.4),glow,0,-.39,.26);
+ plane.scale.setScalar(variant===2?.87:.94);plane.rotation.x=-.07;
+ previewGroup.clear();previewGroup.add(plane.clone(true));
 }
-add(new THREE.BoxGeometry(.14,.92,.78),hull,0,.58,-1.68,1,1,1);
-add(new THREE.BoxGeometry(.12,.08,2.6),glow,0,-.16,-.02,1,1,1);
-plane.scale.setScalar(.92);plane.rotation.x=-.08
-}buildPlane();
+buildPlane();resizePreview();
 const projectiles=[],drones=[],sparks=[];const boltMat=new THREE.MeshBasicMaterial({color:0x71eeff});const boltGeo=new THREE.CapsuleGeometry(.095,.65,4,8);
 let running=false,score=0,shield=100,energy=100,wave=1,px=0,py=0,targetX=0,targetY=0,fireHeld=false,lastShot=0,spawnTimer=0,clock=new THREE.Clock(),toastTimer;
 const scoreEl=document.querySelector('#score');
-function makeDrone(){const g=new THREE.Group(),core=new THREE.Mesh(new THREE.IcosahedronGeometry(1.05,1),mat(0x3e8497,.66,.26,0x073545));g.add(core);const ring=new THREE.Mesh(new THREE.TorusGeometry(1.32,.12,8,28),new THREE.MeshStandardMaterial({color:0x7ff1ff,emissive:0x27aaca,emissiveIntensity:1.6,metalness:.25,roughness:.3}));ring.rotation.x=.8;g.add(ring);for(let j=0;j<4;j++){const n=new THREE.Mesh(new THREE.BoxGeometry(.38,.38,.8),mat(0x273f4b,.55,.35));n.position.set(Math.cos(j*Math.PI/2)*1.25,Math.sin(j*Math.PI/2)*.6,0);n.rotation.z=j*Math.PI/2;g.add(n)}g.position.set((Math.random()-.5)*20,(Math.random()-.5)*8,-75-Math.random()*30);scene.add(g);drones.push({g,hp:1+Math.floor(wave/3),phase:Math.random()*8})}
+function makeDrone(){
+ const type=Math.floor(Math.random()*3),colors=[0x5de6ff,0xffc978,0xc5a4ff],accent=colors[type],g=new THREE.Group();
+ const shell=mat([0x376578,0x735e4c,0x555275][type],.78,.26);
+ const lit=new THREE.MeshStandardMaterial({color:accent,emissive:accent,emissiveIntensity:1.8,metalness:.34,roughness:.25});
+ const body=new THREE.Mesh(type===1?new THREE.OctahedronGeometry(1.05,1):new THREE.IcosahedronGeometry(1.05,1),shell);body.scale.set(type===2?1.2:1,.75,type===1?1.35:.95);g.add(body);
+ const orbit=new THREE.Group();g.add(orbit);
+ for(const rotation of [0,Math.PI/2]){const ring=new THREE.Mesh(new THREE.TorusGeometry(type===2?1.45:1.33,.095,8,36),lit);ring.rotation.x=rotation+.22;orbit.add(ring)}
+ for(let j=0;j<4;j++){const ang=j*Math.PI/2,arm=new THREE.Mesh(new THREE.BoxGeometry(.32,.2,.85),shell);arm.position.set(Math.cos(ang)*1.22,Math.sin(ang)*1.06,0);arm.rotation.z=ang;g.add(arm);const tip=new THREE.Mesh(new THREE.SphereGeometry(.18,8,6),lit);tip.position.set(Math.cos(ang)*1.47,Math.sin(ang)*1.25,.08);g.add(tip)}
+ const lens=new THREE.Mesh(new THREE.SphereGeometry(.39,14,8),lit);lens.position.z=type===1?1.35:.86;lens.scale.z=.32;g.add(lens);
+ const inner=new THREE.Mesh(new THREE.RingGeometry(.11,.22,12),new THREE.MeshBasicMaterial({color:0xe9ffff,side:THREE.DoubleSide}));inner.position.z=lens.position.z+.13;g.add(inner);
+ g.userData.orbit=orbit;g.position.set((Math.random()-.5)*19,(Math.random()-.5)*7,-72-Math.random()*28);
+ scene.add(g);drones.push({g,hp:1+Math.floor(wave/3),phase:Math.random()*8});
+}
 function pop(pos){for(let i=0;i<13;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.09+Math.random()*.08,5,4),new THREE.MeshBasicMaterial({color:i%2?0x69e9ff:0xffd17a,transparent:true}));p.position.copy(pos);scene.add(p);sparks.push({m:p,v:new THREE.Vector3((Math.random()-.5)*7,(Math.random()-.5)*7,(Math.random()-.5)*8),life:.65})}}
 function showToast(msg){const t=document.querySelector('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('on'),950)}
 function fire(){if(!running||energy<3)return;const b=new THREE.Mesh(boltGeo,boltMat);b.rotation.x=Math.PI/2;b.position.set(px,py+.05,1.2);scene.add(b);projectiles.push({m:b});energy=Math.max(0,energy-3)}
-function start(){document.querySelector('#menu').style.display='none';document.querySelector('#endScreen').style.display='none';document.querySelector('#hud').style.display='block';running=true;score=0;shield=100;energy=100;wave=1;px=py=targetX=targetY=0;drones.forEach(d=>scene.remove(d.g));drones.length=0;projectiles.forEach(p=>scene.remove(p.m));projectiles.length=0;document.querySelector('#jetLabel').textContent=aircraft[selected].name.toUpperCase();clock.getDelta()}
+function start(){if(!renderer)return;document.querySelector('#menu').style.display='none';document.querySelector('#endScreen').style.display='none';document.querySelector('#hud').style.display='block';running=true;score=0;shield=100;energy=100;wave=1;px=py=targetX=targetY=0;drones.forEach(d=>scene.remove(d.g));drones.length=0;projectiles.forEach(p=>scene.remove(p.m));projectiles.length=0;document.querySelector('#jetLabel').textContent=aircraft[selected].name.toUpperCase();clock.getDelta()}
 function end(){running=false;document.querySelector('#hud').style.display='none';document.querySelector('#recap').textContent='SCORE  '+score.toString().padStart(4,'0')+'  ·  WAVE '+String(wave).padStart(2,'0')+'  ·  AIRCRAFT  '+aircraft[selected].name.toUpperCase();document.querySelector('#endScreen').style.display='flex'}
 document.querySelector('#start').onclick=start;document.querySelector('#again').onclick=start;
 addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key))e.preventDefault();if(e.key==='Escape'&&running)end();if(e.key===' '){fireHeld=true;fire()}});
@@ -118,14 +217,16 @@ function update(dt,t){stars.position.z=(t*1.5)%18;planeRoot.position.set(THREE.M
 if(running){const keys=window.keys||{};let dx=(keys.left?-1:0)+(keys.right?1:0),dy=(keys.up?1:0)+(keys.down?-1:0);px=THREE.MathUtils.clamp(px+dx*aircraft[selected].agility*dt+(targetX-px)*Math.min(1,dt*3),-9,9);py=THREE.MathUtils.clamp(py+dy*aircraft[selected].agility*.55*dt+(targetY-py)*Math.min(1,dt*3),-4.5,4.5);energy=Math.min(100,energy+dt*6);if(fireHeld&&t-lastShot>.2&&energy>=3){fire();lastShot=t}
 spawnTimer-=dt;if(spawnTimer<=0){makeDrone();spawnTimer=Math.max(.62,1.65-wave*.055)}
 for(let i=projectiles.length-1;i>=0;i--){const p=projectiles[i];p.m.position.z-=58*dt;if(p.m.position.z< -100){scene.remove(p.m);projectiles.splice(i,1);continue}for(let j=drones.length-1;j>=0;j--){const d=drones[j];if(p.m.position.distanceTo(d.g.position)<1.8){d.hp--;scene.remove(p.m);projectiles.splice(i,1);if(d.hp<=0){pop(d.g.position);scene.remove(d.g);drones.splice(j,1);score+=100;showToast('DRONE CLEARED');if(score&&score%(wave*800)===0){wave++;showToast('WAVE '+String(wave).padStart(2,'0'))}}else showToast('HIT');break}}}
-for(let i=drones.length-1;i>=0;i--){const d=drones[i];d.phase+=dt;d.g.position.z+= (14+wave*1.1)*dt;d.g.position.x+=Math.sin(d.phase)*dt*1.5;d.g.position.y+=Math.cos(d.phase*.8)*dt*.8;d.g.rotation.z+=dt*.35;if(d.g.position.z>4){pop(d.g.position);scene.remove(d.g);drones.splice(i,1);shield=Math.max(0,shield-(100/aircraft[selected].shield));showToast('SHIELD BUFFERED');if(shield<=0)end()}}
+for(let i=drones.length-1;i>=0;i--){const d=drones[i];d.phase+=dt;d.g.position.z+= (14+wave*1.1)*dt;d.g.position.x+=Math.sin(d.phase)*dt*1.5;d.g.position.y+=Math.cos(d.phase*.8)*dt*.8;d.g.rotation.z+=dt*.35;d.g.userData.orbit.rotation.y+=dt*.9;if(d.g.position.z>4){pop(d.g.position);scene.remove(d.g);drones.splice(i,1);shield=Math.max(0,shield-(100/aircraft[selected].shield));showToast('SHIELD BUFFERED');if(shield<=0)end()}}
 for(let i=sparks.length-1;i>=0;i--){const s=sparks[i];s.life-=dt;s.m.position.addScaledVector(s.v,dt);s.v.y-=3*dt;s.m.material.opacity=Math.max(0,s.life/.65);if(s.life<=0){scene.remove(s.m);sparks.splice(i,1)}}
 scoreEl.textContent=String(score).padStart(4,'0');document.querySelector('#wave').textContent=String(wave).padStart(2,'0');document.querySelector('#shield').style.width=shield+'%';document.querySelector('#shieldText').textContent=Math.ceil(shield)+'%';document.querySelector('#energy').style.width=energy+'%';document.querySelector('#energyText').textContent=Math.floor(energy)+'%'}
-else{px=Math.sin(t*.45)*1.1;py=Math.sin(t*.7)*.25;drones.forEach(d=>{d.phase+=dt;d.g.position.z+=dt*4;d.g.rotation.z+=dt*.25;if(d.g.position.z>20)d.g.position.z=-90})}
+else{px=Math.sin(t*.45)*1.1;py=Math.sin(t*.7)*.25;drones.forEach(d=>{d.phase+=dt;d.g.position.z+=dt*4;d.g.rotation.z+=dt*.25;d.g.userData.orbit.rotation.y+=dt*.5;if(d.g.position.z>20)d.g.position.z=-90})}
 camera.position.x=THREE.MathUtils.damp(camera.position.x,planeRoot.position.x*.28,2,dt);camera.position.y=THREE.MathUtils.damp(camera.position.y,4.8+planeRoot.position.y*.2,2,dt);camera.lookAt(0,0,-22)}
 const keys={left:false,right:false,up:false,down:false};window.keys=keys;addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key.toLowerCase()==='a')keys.left=true;if(e.key==='ArrowRight'||e.key.toLowerCase()==='d')keys.right=true;if(e.key==='ArrowUp'||e.key.toLowerCase()==='w')keys.up=true;if(e.key==='ArrowDown'||e.key.toLowerCase()==='s')keys.down=true});addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key.toLowerCase()==='a')keys.left=false;if(e.key==='ArrowRight'||e.key.toLowerCase()==='d')keys.right=false;if(e.key==='ArrowUp'||e.key.toLowerCase()==='w')keys.up=false;if(e.key==='ArrowDown'||e.key.toLowerCase()==='s')keys.down=false});
-let last=performance.now();function loop(now){const dt=Math.min(.04,(now-last)/1000);last=now;const t=now/1000;update(dt,t);renderer.render(scene,camera);requestAnimationFrame(loop)}requestAnimationFrame(loop);
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight)});
+let last=performance.now();function loop(now){const dt=Math.min(.04,(now-last)/1000);last=now;const t=now/1000;update(dt,t);if(renderer)renderer.render(scene,camera);
+if(previewRenderer&&document.querySelector('#menu').style.display!=='none'){previewGroup.rotation.y=-.18+Math.sin(t*.55)*.25;previewRenderer.render(previewScene,previewCamera)}
+requestAnimationFrame(loop)}requestAnimationFrame(loop);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();if(renderer){renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight)}resizePreview()});
 </script>
 </body>
 </html>
