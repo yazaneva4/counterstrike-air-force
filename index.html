@@ -64,18 +64,22 @@ button:focus-visible{outline:2px solid white;outline-offset:3px}
 @media(max-width:600px){#menu{padding:8px}.panel{padding:18px;max-height:98vh}.hangar{min-height:190px}#hangarCanvas{min-height:190px}.hangarInfo{bottom:12px;left:13px;right:13px}.hangarInfo strong{font-size:22px}.hangarLabel{top:12px;left:13px}.grid{gap:8px}.aircraft{min-height:124px;padding:10px}.aircraft h2{font-size:19px}.aircraft p{font-size:9px;margin-bottom:8px}.stats{gap:4px}.statItem span{font-size:8px}.aircraft .jetIcon{height:24px;font-size:27px}.launchRow{padding-top:16px}.controls{font-size:10px}.start{min-width:unset;font-size:16px;padding:12px}.hudTop{padding:12px}.hudTop .readout{padding:8px}.hudTop .value{font-size:28px}#bottomHud{left:10px;bottom:10px;gap:10px;padding:10px}.meter{width:96px}#fire{width:76px;height:76px;bottom:12px;right:10px}.note{font-size:10px}}
 @media(max-height:720px) and (min-width:901px){.hangar{min-height:330px}#hangarCanvas{min-height:330px}.panel{padding:20px}.topline{margin-bottom:16px}.aircraft{min-height:128px}}
 
+
+.multiplayerBar{border:1px solid #72d9ee33;background:#081a27a8;padding:11px 13px;margin:14px 0 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}.multiHeading{display:flex;flex-direction:column;gap:5px;min-width:0}.multiHeading .mono{color:#6de4fc}.multiHeading #roomStatus{font:10px 'DM Mono',monospace;color:#a7bfcc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.multiActions{display:flex;align-items:center;gap:7px;flex:none}.roomButton{border:1px solid #65daf277;background:#0c2a3b;color:#bdf4ff;padding:9px 12px;font:10px 'DM Mono',monospace;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}.roomButton:hover{background:#12425b}.roomButton.join{background:#65dfff;color:#071722;border-color:#65dfff}.roomButton.leave{border-color:#ff9d8b77;color:#ffc2b5}.multiActions input{width:72px;text-align:center;background:#06131e;border:1px solid #9bc6d544;color:#e7faff;padding:9px 6px;font:700 12px 'DM Mono',monospace;letter-spacing:.18em;text-transform:uppercase}#peerReadout{position:absolute;top:112px;right:28px;min-width:150px;text-align:right}.peerList{font:11px 'DM Mono',monospace;color:#b9eefd;text-align:right;line-height:1.6}.peerLine{white-space:nowrap}.peerDot{display:inline-block;width:6px;height:6px;background:#7dffcf;border-radius:50%;margin:0 6px 1px 0;box-shadow:0 0 8px #7dffcf}
+@media(max-width:600px){.multiplayerBar{padding:9px;align-items:flex-start;flex-direction:column;gap:8px;margin:9px 0 12px}.multiActions{width:100%}.multiActions input{margin-left:auto}.roomButton{padding:8px}.multiHeading #roomStatus{max-width:calc(100vw - 55px)}#peerReadout{top:94px;right:12px;min-width:110px}.peerList{font-size:9px}}
 </style>
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
 </head>
 <body>
 <canvas id="game"></canvas><div id="veil"></div>
 <div id="hud">
  <div class="hudTop">
   <div class="readout"><div class="eyebrow">Patrol score</div><div id="score" class="value">0000</div><div class="status"><span class="dot"></span><span id="jetLabel">FALCON MK II</span></div></div>
-  <div class="readout right"><div class="eyebrow">Drone wave</div><div id="wave" class="value">01</div><div class="status right">ARCADE TRAINING</div></div>
+  <div class="readout right"><div class="eyebrow">Incoming wave</div><div id="wave" class="value">01</div><div class="status right">ARCADE TRAINING</div></div>
  </div>
  <div id="centerMark"><i></i></div>
  <div id="bottomHud"><div class="meter"><div class="meterHead"><span class="eyebrow">Shield</span><span id="shieldText" class="mono">100%</span></div><div class="track"><div id="shield" class="fill"></div></div></div><div class="meter"><div class="meterHead"><span class="eyebrow">Energy</span><span id="energyText" class="mono">100%</span></div><div class="track"><div id="energy" class="fill"></div></div></div></div>
- <button id="fire" aria-label="Fire energy bolts">FIRE</button><div id="toast">DRONE CLEARED</div>
+ <div id="peerReadout" class="readout" style="display:none"><div class="eyebrow">Wingmates</div><div id="peerList" class="peerList"></div></div><button id="fire" aria-label="Fire energy bolts">FIRE</button><div id="toast">DRONE CLEARED</div>
 </div>
 <div id="menu"><div class="panel">
  <div class="topline"><div class="brand"><div class="insignia">✦</div><div><div class="kicker">Sky patrol · arcade flight</div><h1>Counterstrike<br><span>Air Force</span></h1></div></div><div class="pill">FLIGHT SYSTEMS ONLINE</div></div>
@@ -83,7 +87,7 @@ button:focus-visible{outline:2px solid white;outline-offset:3px}
   <section class="selectionColumn" aria-label="Aircraft selection">
    <div class="selectionHeading"><strong>CHOOSE YOUR AIRCRAFT</strong><span class="mono">04 AVAILABLE</span></div>
    <div id="aircraftGrid" class="grid"></div>
-   <div class="launchRow"><div class="controls">MOVE: WASD / ARROWS / MOUSE<br>FIRE: CLICK / SPACE &nbsp; · &nbsp; FINISH: ESC</div><button class="start" id="start">Launch patrol →</button></div>
+   <div class="multiplayerBar"><div class="multiHeading"><span class="mono">CO-OP FLIGHT</span><span id="roomStatus">Create a room or enter a room code</span></div><div class="multiActions"><button class="roomButton" id="hostRoom" type="button">Create room</button><input id="roomCode" maxlength="5" autocomplete="off" placeholder="CODE" aria-label="Room code"><button class="roomButton join" id="joinRoom" type="button">Join</button><button class="roomButton leave" id="leaveRoom" type="button" style="display:none">Leave</button></div></div><div class="launchRow"><div class="controls">MOVE: WASD / ARROWS / MOUSE<br>FIRE: CLICK / SPACE &nbsp; · &nbsp; FINISH: ESC</div><button class="start" id="start">Launch patrol →</button></div>
    <div class="note" id="gameNote">Clear the glowing drone targets.</div>
   </section>
   <div class="hangar" aria-label="Selected aircraft 3D preview">
@@ -197,19 +201,71 @@ function buildPlane(){
 buildPlane();resizePreview();
 const projectiles=[],drones=[],sparks=[];const boltMat=new THREE.MeshBasicMaterial({color:0x71eeff});const boltGeo=new THREE.CapsuleGeometry(.095,.65,4,8);
 let running=false,score=0,shield=100,energy=100,wave=1,px=0,py=0,targetX=0,targetY=0,fireHeld=false,lastShot=0,spawnTimer=0,clock=new THREE.Clock(),toastTimer;
+const net={peer:null,host:false,room:'',connections:new Map(),remote:new Map(),lastSend:0,localName:'Pilot '+Math.floor(100+Math.random()*900)};
+const roomStatus=document.querySelector('#roomStatus');
+function setRoomStatus(message){roomStatus.textContent=message}
+function makeRoomCode(){return Math.random().toString(36).slice(2,7).toUpperCase()}
+function paintRemote(id,state){if(!state||!Number.isFinite(state.x)||!Number.isFinite(state.y))return;let item=net.remote.get(id);if(!item){const model=plane.clone(true);model.traverse(o=>{if(o.material){const mats=(Array.isArray(o.material)?o.material:[o.material]).map(m=>m.clone());for(const m of mats){m.color?.set(0xf6b75e);m.emissive?.set(0x55280b)}o.material=Array.isArray(o.material)?mats:mats[0]}});const root=new THREE.Group();root.add(model);scene.add(root);item={root,model,score:0,name:'Wingmate',seen:performance.now(),targetX:0,targetY:0};net.remote.set(id,item)}item.root.position.set(THREE.MathUtils.clamp(state.x,-9,9),THREE.MathUtils.clamp(state.y,-4.5,4.5),-13);item.root.rotation.z=THREE.MathUtils.clamp(state.roll||0,-.45,.45);item.name=String(state.name||'Wingmate').slice(0,18);item.targetX=THREE.MathUtils.clamp(state.x,-9,9);item.targetY=THREE.MathUtils.clamp(state.y,-4.5,4.5);const craft=Number(state.aircraft);if(Number.isInteger(craft)&&craft>=0&&craft<aircraft.length)item.model.scale.x=.75*[1,.86,1.12,1.02][craft];item.score=Math.max(0,Math.min(999999,Number(state.score)||0));item.seen=performance.now();renderPeerList()}
+function renderPeerList(){const list=document.querySelector('#peerList'),readout=document.querySelector('#peerReadout');const entries=[...net.remote.values()];readout.style.display=entries.length?'block':'none';list.innerHTML=entries.map(p=>'<div class="peerLine"><i class="peerDot"></i>'+escapeText(p.name)+' · '+String(p.score).padStart(4,'0')+'</div>').join('')}
+function escapeText(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function sendRoomState(){if(!net.peer)return;const packet={type:'state',x:px,y:py,roll:plane.rotation.z,score,name:net.localName,aircraft:selected};for(const [id,conn] of net.connections){if(conn.open)conn.send(packet)}}
+function receiveRoomData(conn,data){if(!data)return;if(data.type==='full'){setRoomStatus('Room is full · ask the host for another code');return}if(data.type!=='state')return;const id=conn.peer;paintRemote(id,data);if(net.host){for(const [otherId,other] of net.connections)if(otherId!==id&&other.open)other.send(data)}}
+function trackConnection(conn){net.connections.set(conn.peer,conn);conn.on('open',()=>{net.connections.set(conn.peer,conn);setRoomStatus('Connected · '+net.connections.size+' wingmate'+(net.connections.size===1?'':'s'));document.querySelector('#leaveRoom').style.display='inline-block';document.querySelector('#modeLabel').textContent='CO-OP FLIGHT'});conn.on('data',data=>receiveRoomData(conn,data));conn.on('close',()=>{net.connections.delete(conn.peer);const item=net.remote.get(conn.peer);if(item){scene.remove(item.root);net.remote.delete(conn.peer)}renderPeerList();setRoomStatus(net.connections.size?'Wingmate disconnected':'Room connection closed')});conn.on('error',()=>setRoomStatus('Connection issue · check the room code'))}
+function connectRoom(host){if(!window.Peer){setRoomStatus('Multiplayer connection library did not load');return}if(net.peer)net.peer.destroy();net.host=host;net.connections.clear();net.remote.forEach(p=>scene.remove(p.root));net.remote.clear();renderPeerList();const code=host?makeRoomCode():document.querySelector('#roomCode').value.trim().toUpperCase();if(!/^[A-Z0-9]{5}$/.test(code)){setRoomStatus('Enter a 5 character room code');return}net.room=code;document.querySelector('#roomCode').value=code;setRoomStatus(host?'Opening room '+code+'…':'Connecting to '+code+'…');const peer=host?new window.Peer('skyforce-'+code.toLowerCase()):new window.Peer();net.peer=peer;peer.on('open',()=>{if(host){setRoomStatus('Room '+code+' ready · share this code');document.querySelector('#leaveRoom').style.display='inline-block'}else{const conn=peer.connect('skyforce-'+code.toLowerCase(),{reliable:true});trackConnection(conn)}});if(host)peer.on('connection',conn=>{if(net.connections.size>=3){conn.on('open',()=>conn.send({type:'full'}));setRoomStatus('Room is full (3 wingmates max)');return}trackConnection(conn)});peer.on('error',err=>{setRoomStatus(err.type==='unavailable-id'?'That room code is taken · create another':err.type==='peer-unavailable'?'Room not found · check the code and try again':'Room error · check the code and reconnect');if(!host){setTimeout(()=>peer.destroy(),1500)}})}
+function leaveRoom(){if(net.peer)net.peer.destroy();net.peer=null;net.connections.clear();net.remote.forEach(p=>scene.remove(p.root));net.remote.clear();net.room='';renderPeerList();document.querySelector('#leaveRoom').style.display='none';document.querySelector('#modeLabel').textContent='ARCADE TRAINING';setRoomStatus('Create a room or enter a room code')}
+document.querySelector('#hostRoom').onclick=()=>connectRoom(true);document.querySelector('#joinRoom').onclick=()=>connectRoom(false);document.querySelector('#leaveRoom').onclick=leaveRoom;document.querySelector('#roomCode').addEventListener('keydown',e=>{if(e.key==='Enter')connectRoom(false)});
+
 const scoreEl=document.querySelector('#score');
 function makeDrone(){
- const type=Math.floor(Math.random()*3),colors=[0x5de6ff,0xffc978,0xc5a4ff],accent=colors[type],g=new THREE.Group();
- const shell=mat([0x376578,0x735e4c,0x555275][type],.78,.26);
- const lit=new THREE.MeshStandardMaterial({color:accent,emissive:accent,emissiveIntensity:1.8,metalness:.34,roughness:.25});
- const body=new THREE.Mesh(type===1?new THREE.OctahedronGeometry(1.05,1):new THREE.IcosahedronGeometry(1.05,1),shell);body.scale.set(type===2?1.2:1,.75,type===1?1.35:.95);g.add(body);
- const orbit=new THREE.Group();g.add(orbit);
- for(const rotation of [0,Math.PI/2]){const ring=new THREE.Mesh(new THREE.TorusGeometry(type===2?1.45:1.33,.095,8,36),lit);ring.rotation.x=rotation+.22;orbit.add(ring)}
- for(let j=0;j<4;j++){const ang=j*Math.PI/2,arm=new THREE.Mesh(new THREE.BoxGeometry(.32,.2,.85),shell);arm.position.set(Math.cos(ang)*1.22,Math.sin(ang)*1.06,0);arm.rotation.z=ang;g.add(arm);const tip=new THREE.Mesh(new THREE.SphereGeometry(.18,8,6),lit);tip.position.set(Math.cos(ang)*1.47,Math.sin(ang)*1.25,.08);g.add(tip)}
- const lens=new THREE.Mesh(new THREE.SphereGeometry(.39,14,8),lit);lens.position.z=type===1?1.35:.86;lens.scale.z=.32;g.add(lens);
- const inner=new THREE.Mesh(new THREE.RingGeometry(.11,.22,12),new THREE.MeshBasicMaterial({color:0xe9ffff,side:THREE.DoubleSide}));inner.position.z=lens.position.z+.13;g.add(inner);
- g.userData.orbit=orbit;g.position.set((Math.random()-.5)*19,(Math.random()-.5)*7,-72-Math.random()*28);
- scene.add(g);drones.push({g,hp:1+Math.floor(wave/3),phase:Math.random()*8});
+ const type=Math.floor(Math.random()*3);
+ const groups=[
+  {name:'AIRCRAFT',model:'aircraft',colors:[0xffcf78,0x699ab0],speed:13},
+  {name:'DRONE',model:'drone',colors:[0x65eaff,0x398299],speed:14},
+  {name:'ALIEN SHIP',model:'alien',colors:[0xc79aff,0x613d88],speed:12}
+ ];
+ const kind=groups[type],g=new THREE.Group(),shell=mat(kind.colors[1],.78,.3),
+  trim=new THREE.MeshStandardMaterial({color:kind.colors[0],emissive:kind.colors[0],emissiveIntensity:1.15,metalness:.55,roughness:.28}),
+  glass=new THREE.MeshStandardMaterial({color:0x162b38,metalness:.5,roughness:.12,emissive:kind.colors[0],emissiveIntensity:.22});
+ const add=(geo,material,pos,scale,rot)=>{const m=new THREE.Mesh(geo,material);m.position.set(...pos);if(scale)m.scale.set(...scale);if(rot)m.rotation.set(...rot);g.add(m);return m};
+ if(type===0){
+   // Interceptor silhouette: tapered fuselage, swept wings, twin tail fins.
+   add(new THREE.ConeGeometry(.58,3.8,7),shell,[0,0,0],[1,1,1],[Math.PI/2,0,0]);
+   add(new THREE.BoxGeometry(.42,.12,1.05),glass,[0,.38,-.15],[1,1,1],[.12,0,0]);
+   for(const s of [-1,1]){
+     add(new THREE.BoxGeometry(1.35,.12,1.35),shell,[s*.92,-.08,.25],[1,1,1],[0,s*.42,0]);
+     add(new THREE.BoxGeometry(.18,.2,.62),trim,[s*.78,.02,.45],[1,1,1],[0,s*.42,0]);
+     add(new THREE.BoxGeometry(.16,.55,.38),shell,[s*.45,.29,1.32],[1,0.8,1],[s*.15,0,s*-.15]);
+     const nozzle=add(new THREE.CylinderGeometry(.18,.23,.45,10),trim,[s*.33,0,1.75],[1,1,1],[Math.PI/2,0,0]);
+   }
+ } else if(type===1){
+   // Autonomous quad drone with armored center, guard frame, and four pods.
+   add(new THREE.OctahedronGeometry(.9,1),shell,[0,0,0],[1.2,.68,1]);
+   add(new THREE.SphereGeometry(.31,16,10),glass,[0,.22,-.18],[1,.72,.5]);
+   for(const s of [-1,1])for(const z of [-1,1]){
+     const arm=add(new THREE.BoxGeometry(.17,.13,1.15),shell,[s*.9,0,z*.8],[1,1,1],[0,s*.28,0]);
+     add(new THREE.CylinderGeometry(.31,.31,.12,16),trim,[s*1.34,.03,z*1.12],[1,1,1],[Math.PI/2,0,0]);
+     add(new THREE.SphereGeometry(.12,10,8),glass,[s*1.34,.17,z*1.12]);
+   }
+   const shield=new THREE.Mesh(new THREE.TorusGeometry(1.48,.055,8,48),trim);shield.rotation.x=.55;g.add(shield);
+ } else {
+   // Fictional alien glider: broad crescent wings around a glowing core.
+   add(new THREE.IcosahedronGeometry(.66,1),shell,[0,0,0],[1.2,.6,1.25]);
+   add(new THREE.SphereGeometry(.34,16,12),trim,[0,.2,-.08],[1,.55,.8]);
+   for(const s of [-1,1]){
+     add(new THREE.ConeGeometry(.36,2.5,5),shell,[s*1.12,0,.02],[1,1,1],[0,0,s*Math.PI/2]);
+     add(new THREE.BoxGeometry(1.35,.12,.7),trim,[s*1.1,-.12,.18],[1,1,1],[0,s*.34,0]);
+     add(new THREE.SphereGeometry(.17,12,8),glass,[s*1.7,.12,.1]);
+   }
+   const halo=new THREE.Mesh(new THREE.TorusGeometry(1.18,.07,8,36),trim);halo.rotation.x=Math.PI/2;g.add(halo);
+ }
+ // Rear engines, nose sensors, and panel marks give each silhouette readable detail.
+ for(const s of [-1,1]){
+   add(new THREE.CylinderGeometry(.11,.17,.34,10),trim,[s*.34,-.06,1.8],[1,1,1],[Math.PI/2,0,0]);
+   add(new THREE.SphereGeometry(.09,10,8),trim,[s*.2,.05,-1.48]);
+ }
+ g.userData={kind:kind.name,orbit:g.children.find(o=>o.geometry?.type==='TorusGeometry')||g};
+ g.position.set((Math.random()-.5)*19,(Math.random()-.5)*7,-72-Math.random()*28);
+ scene.add(g);drones.push({g,hp:1+Math.floor(wave/3),phase:Math.random()*8,kind});
 }
 function pop(pos){for(let i=0;i<13;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.09+Math.random()*.08,5,4),new THREE.MeshBasicMaterial({color:i%2?0x69e9ff:0xffd17a,transparent:true}));p.position.copy(pos);scene.add(p);sparks.push({m:p,v:new THREE.Vector3((Math.random()-.5)*7,(Math.random()-.5)*7,(Math.random()-.5)*8),life:.65})}}
 function showToast(msg){const t=document.querySelector('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('on'),950)}
@@ -227,16 +283,16 @@ addEventListener('touchmove',e=>{if(e.target.closest('#fire')||e.target.closest(
 function update(dt,t){stars.position.z=(t*1.5)%18;planeRoot.position.set(THREE.MathUtils.damp(planeRoot.position.x,px,6,dt),THREE.MathUtils.damp(planeRoot.position.y,py,6,dt),0);plane.rotation.z=THREE.MathUtils.damp(plane.rotation.z,-(px-planeRoot.position.x)*.045,5,dt);plane.rotation.x=THREE.MathUtils.damp(plane.rotation.x,-.08-py*.012,4,dt);
 if(running){const keys=window.keys||{};let dx=(keys.left?-1:0)+(keys.right?1:0),dy=(keys.up?1:0)+(keys.down?-1:0);px=THREE.MathUtils.clamp(px+dx*aircraft[selected].agility*dt+(targetX-px)*Math.min(1,dt*3),-9,9);py=THREE.MathUtils.clamp(py+dy*aircraft[selected].agility*.55*dt+(targetY-py)*Math.min(1,dt*3),-4.5,4.5);energy=Math.min(100,energy+dt*6);if(fireHeld&&t-lastShot>.2&&energy>=3){fire();lastShot=t}
 spawnTimer-=dt;if(spawnTimer<=0){makeDrone();spawnTimer=Math.max(.62,1.65-wave*.055)}
-for(let i=projectiles.length-1;i>=0;i--){const p=projectiles[i];p.m.position.z-=58*dt;if(p.m.position.z< -100){scene.remove(p.m);projectiles.splice(i,1);continue}for(let j=drones.length-1;j>=0;j--){const d=drones[j];if(p.m.position.distanceTo(d.g.position)<1.8){d.hp--;scene.remove(p.m);projectiles.splice(i,1);if(d.hp<=0){pop(d.g.position);scene.remove(d.g);drones.splice(j,1);score+=100;showToast('DRONE CLEARED');if(score&&score%(wave*800)===0){wave++;showToast('WAVE '+String(wave).padStart(2,'0'))}}else showToast('HIT');break}}}
-for(let i=drones.length-1;i>=0;i--){const d=drones[i];d.phase+=dt;d.g.position.z+= (14+wave*1.1)*dt;d.g.position.x+=Math.sin(d.phase)*dt*1.5;d.g.position.y+=Math.cos(d.phase*.8)*dt*.8;d.g.rotation.z+=dt*.35;d.g.userData.orbit.rotation.y+=dt*.9;const wingHalfSpan=5.25*[1,.86,1.12,1.02][selected];
+for(let i=projectiles.length-1;i>=0;i--){const p=projectiles[i];p.m.position.z-=58*dt;if(p.m.position.z< -100){scene.remove(p.m);projectiles.splice(i,1);continue}for(let j=drones.length-1;j>=0;j--){const d=drones[j];if(p.m.position.distanceTo(d.g.position)<1.8){d.hp--;scene.remove(p.m);projectiles.splice(i,1);if(d.hp<=0){pop(d.g.position);scene.remove(d.g);drones.splice(j,1);score+=100;showToast(d.kind.name+' CLEARED');if(score>=wave*800){wave++;showToast('WAVE '+String(wave).padStart(2,'0'))}}else showToast('HIT');break}}}
+for(let i=drones.length-1;i>=0;i--){const d=drones[i];d.phase+=dt;d.g.position.z+= (14+wave*1.1)*dt;d.g.position.x+=Math.sin(d.phase)*dt*1.5;d.g.position.y+=Math.cos(d.phase*.8)*dt*.8;d.g.rotation.z+=dt*.35;if(d.g.userData.orbit!==d.g)d.g.userData.orbit.rotation.y+=dt*.9;const wingHalfSpan=5.25*[1,.86,1.12,1.02][selected];
 if(droneTouchesAircraft(d.g.position,planeRoot.position,wingHalfSpan)){
   pop(d.g.position);scene.remove(d.g);drones.splice(i,1);
   shield=Math.max(0,shield-(100/aircraft[selected].shield));
   showToast('SHIELD BUFFERED');if(shield<=0)end()
 }else if(d.g.position.z>4){scene.remove(d.g);drones.splice(i,1)}}
 for(let i=sparks.length-1;i>=0;i--){const s=sparks[i];s.life-=dt;s.m.position.addScaledVector(s.v,dt);s.v.y-=3*dt;s.m.material.opacity=Math.max(0,s.life/.65);if(s.life<=0){scene.remove(s.m);sparks.splice(i,1)}}
-scoreEl.textContent=String(score).padStart(4,'0');document.querySelector('#wave').textContent=String(wave).padStart(2,'0');document.querySelector('#shield').style.width=shield+'%';document.querySelector('#shieldText').textContent=Math.ceil(shield)+'%';document.querySelector('#energy').style.width=energy+'%';document.querySelector('#energyText').textContent=Math.floor(energy)+'%'}
-else{px=Math.sin(t*.45)*1.1;py=Math.sin(t*.7)*.25;drones.forEach(d=>{d.phase+=dt;d.g.position.z+=dt*4;d.g.rotation.z+=dt*.25;d.g.userData.orbit.rotation.y+=dt*.5;if(d.g.position.z>20)d.g.position.z=-90})}
+if(net.peer&&t-net.lastSend>.08){sendRoomState();net.lastSend=t}for(const remote of net.remote.values()){remote.root.position.x=THREE.MathUtils.damp(remote.root.position.x,remote.targetX,7,dt);remote.root.position.y=THREE.MathUtils.damp(remote.root.position.y,remote.targetY,7,dt);remote.root.rotation.y=Math.PI;remote.root.position.z=-13+Math.sin(t*1.1+remote.seen*.001)*.18} scoreEl.textContent=String(score).padStart(4,'0');document.querySelector('#wave').textContent=String(wave).padStart(2,'0');document.querySelector('#shield').style.width=shield+'%';document.querySelector('#shieldText').textContent=Math.ceil(shield)+'%';document.querySelector('#energy').style.width=energy+'%';document.querySelector('#energyText').textContent=Math.floor(energy)+'%'}
+else{px=Math.sin(t*.45)*1.1;py=Math.sin(t*.7)*.25;drones.forEach(d=>{d.phase+=dt;d.g.position.z+=dt*4;d.g.rotation.z+=dt*.25;if(d.g.userData.orbit!==d.g)d.g.userData.orbit.rotation.y+=dt*.5;if(d.g.position.z>20)d.g.position.z=-90})}
 camera.position.x=THREE.MathUtils.damp(camera.position.x,planeRoot.position.x*.28,2,dt);camera.position.y=THREE.MathUtils.damp(camera.position.y,4.8+planeRoot.position.y*.2,2,dt);camera.lookAt(0,0,-22)}
 const keys={left:false,right:false,up:false,down:false};window.keys=keys;addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key.toLowerCase()==='a')keys.left=true;if(e.key==='ArrowRight'||e.key.toLowerCase()==='d')keys.right=true;if(e.key==='ArrowUp'||e.key.toLowerCase()==='w')keys.up=true;if(e.key==='ArrowDown'||e.key.toLowerCase()==='s')keys.down=true});addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key.toLowerCase()==='a')keys.left=false;if(e.key==='ArrowRight'||e.key.toLowerCase()==='d')keys.right=false;if(e.key==='ArrowUp'||e.key.toLowerCase()==='w')keys.up=false;if(e.key==='ArrowDown'||e.key.toLowerCase()==='s')keys.down=false});
 let last=performance.now();function loop(now){const dt=Math.min(.04,(now-last)/1000);last=now;const t=now/1000;update(dt,t);if(renderer)renderer.render(scene,camera);
