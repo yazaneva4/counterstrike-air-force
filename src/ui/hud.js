@@ -104,7 +104,7 @@ export class HUD {
     if (this.textTimer <= 0) {
       this.textTimer = 0.2;
       const p = G.focusPos();
-      $('#locName').textContent = G.space.active ? 'Low Earth Orbit' : G.world.terrain.regionName(p.x, p.z, p.y);
+      $('#locName').textContent = G.locationName();
       $('#clock').textContent = G.sky.clockString();
       $('#dayIcon').textContent = G.sky.night > 0.5 ? '☾' : G.sky.golden > 0.4 ? '◐' : '☀';
       $('#mysteryCount').textContent = G.mysteries.count + ' / ' + MYSTERY_INFO.length;
@@ -168,6 +168,8 @@ export class HUD {
     if (!img || w < 40) return;
     const p = G.focusPos();
     const v = G.player.vehicle;
+    const onEarth = G.location === 'earth';
+    const MS = G.world.terrain.mapSize || MAP_SIZE, HF = MS / 2;
     const range = G.space.active ? 3000 : v ? clamp(400 + v.speed * 6 + (v.pos.y - 100) * 0.5, 500, 2200) : 260;
     const scale = (w / 2) / range; // px per metre
     c.save();
@@ -176,10 +178,10 @@ export class HUD {
     c.fillStyle = '#0c3a52'; c.fillRect(0, 0, w, h);
     c.translate(w / 2, h / 2);
     c.rotate(heading - Math.PI);
-    const k = img.width / MAP_SIZE;
+    const k = img.width / MS;
     c.imageSmoothingEnabled = true;
     c.globalAlpha = 0.95;
-    c.drawImage(img, (p.x + HALF - range * 1.5) * k, (p.z + HALF - range * 1.5) * k, range * 3 * k, range * 3 * k, -range * 1.5 * scale, -range * 1.5 * scale, range * 3 * scale, range * 3 * scale);
+    if (!G.space.active) c.drawImage(img, (p.x + HF - range * 1.5) * k, (p.z + HF - range * 1.5) * k, range * 3 * k, range * 3 * k, -range * 1.5 * scale, -range * 1.5 * scale, range * 3 * scale, range * 3 * scale);
     c.globalAlpha = 1;
     const dot = (x, z, r, color, ring = false) => {
       const mx = (x - p.x) * scale, mz = (z - p.z) * scale;
@@ -188,11 +190,16 @@ export class HUD {
       c.beginPath(); c.arc(mx, mz, r * d, 0, Math.PI * 2);
       if (ring) { c.strokeStyle = color; c.lineWidth = 1.5 * d; c.stroke(); } else c.fill();
     };
-    for (const n of G.npcs.list) if (Math.abs(n.pos.x - p.x) < range && Math.abs(n.pos.z - p.z) < range) dot(n.pos.x, n.pos.z, 1.6, '#f4efe0');
-    for (const veh of G.vehicles) if (!veh.destroyed && veh !== v) dot(veh.pos.x, veh.pos.z, 3, veh.locked ? '#8a7aa8' : '#ffd36a');
-    for (const s of G.aliens.saucers) if (G.sky.night > 0.4 && s.state !== 'high') dot(s.pos.x, s.pos.z, 3.2, '#c89aff');
-    for (const r of G.remotes.values()) dot(r.pos.x, r.pos.z, 3.5, r.color);
-    for (const [id, s] of Object.entries(G.mysteries.sites)) {
+    if (onEarth) {
+      for (const n of G.npcs.list) if (Math.abs(n.pos.x - p.x) < range && Math.abs(n.pos.z - p.z) < range) dot(n.pos.x, n.pos.z, 1.6, '#f4efe0');
+      for (const veh of G.vehicles) if (!veh.destroyed && veh !== v) dot(veh.pos.x, veh.pos.z, 3, veh.locked ? '#8a7aa8' : '#ffd36a');
+      for (const s of G.aliens.saucers) if (G.sky.night > 0.4 && s.state !== 'high') dot(s.pos.x, s.pos.z, 3.2, '#c89aff');
+    } else if (!G.space.active) {
+      for (const veh of G.vehicles) if (!veh.destroyed && veh !== v) dot(veh.pos.x, veh.pos.z, 3.5, '#ffd36a');
+    }
+    for (const r of G.remotes.values()) if (r.here) dot(r.pos.x, r.pos.z, 3.5, r.color);
+    const sites = onEarth ? G.mysteries.sites : G.surface && !G.space.active ? G.surface.sites : {};
+    for (const [id, s] of Object.entries(sites)) {
       const found = G.mysteries.found.has(id);
       dot(s.pos.x, s.pos.z, found ? 3.5 : 5, found ? '#7dffd6' : 'rgba(255,211,106,0.8)', !found);
     }
@@ -225,10 +232,11 @@ export class HUD {
     c.shadowColor = 'rgba(0,10,16,0.75)'; c.shadowBlur = 4 * d;
     c.font = `500 ${11 * d}px 'DM Mono', monospace`;
     c.textBaseline = 'middle';
-    const speed = inSpace ? G.space.speed : v.speed;
-    const alt = inSpace ? G.space.altitude * 1000 : v.pos.y;
-    const unitsSpeed = inSpace ? 'KM/H×10' : 'KT';
-    const spd = inSpace ? speed * 36 : speed * 1.944;
+    const speed = inSpace ? Math.min(G.space.speed, 5000) : v.speed;
+    const onSurface = !inSpace && G.location !== 'earth';
+    const alt = inSpace ? G.space.nearest.alt * 6.4 : onSurface || v.kind === 'rocket' ? v.pos.y - v.ground - G.world.groundAt(v.pos.x, v.pos.z) : v.pos.y;
+    const unitsSpeed = inSpace ? 'KM/H×10' : v.kind === 'rocket' ? 'M/S' : 'KT';
+    const spd = inSpace ? speed * 36 : v.kind === 'rocket' ? speed : speed * 1.944;
     // Speed tape (left) and altitude tape (right).
     const tape = (x, value, step, label, alignRight) => {
       const hgt = H * 0.36, top = cy - hgt / 2;
@@ -256,9 +264,11 @@ export class HUD {
       c.font = `500 ${11 * d}px 'DM Mono', monospace`;
     };
     tape(cx - Math.min(W * 0.28, 330 * d), spd, inSpace ? 500 : 20, unitsSpeed, false);
-    tape(cx + Math.min(W * 0.28, 330 * d), alt, inSpace ? 5000 : alt > 1500 ? 200 : 50, inSpace ? 'ALT M' : 'ALT M', true);
+    tape(cx + Math.min(W * 0.28, 330 * d), alt, inSpace ? (alt > 20000 ? 5000 : 500) : alt > 1500 ? 200 : 50, inSpace ? 'ALT KM · ' + G.space.nearest.name.toUpperCase() : onSurface || v.kind === 'rocket' ? 'AGL M' : 'ALT M', true);
 
-    if (!inSpace && v.kind === 'plane') {
+    if (!inSpace && v.kind === 'rocket') {
+      this._rocketHud(c, v, cx, cy, W, H, d, col, dim);
+    } else if (!inSpace && v.kind === 'plane') {
       // Pitch ladder + horizon, rotated by bank.
       const pitch = v.pitchAngle(), bank = v.bankAngle();
       c.save();
@@ -304,21 +314,94 @@ export class HUD {
       c.fillStyle = col; c.textAlign = 'center';
       c.fillText('V/S ' + (v.vel.y >= 0 ? '+' : '') + v.vel.y.toFixed(1) + ' m/s', cx, cy + H * 0.23);
       if (v.kind === 'heli' && v.rpm < 0.95) c.fillText('ROTOR ' + Math.round(v.rpm * 100) + '%', cx, cy + H * 0.23 + 18 * d);
-      if (v.kind === 'ufo') {
-        c.fillText(v.pos.y > 2400 ? 'HOLD SPACE ABOVE 3,000 M TO LEAVE THE ATMOSPHERE' : 'E TRACTOR BEAM · SHIFT BOOST', cx, cy + H * 0.23 + 18 * d);
+      if (v.kind === 'ufo' || v.kind === 'ship') {
+        const agl = v.pos.y - G.world.groundAt(v.pos.x, v.pos.z);
+        const need = onSurface ? 1500 : 3000;
+        c.fillText(agl > need * 0.8 ? `HOLD SPACE ABOVE ${need.toLocaleString()} M TO REACH ORBIT` : v.kind === 'ufo' ? 'E TRACTOR BEAM · SHIFT BOOST' : 'SPACE CLIMB · SHIFT BOOST · ORBIT ABOVE ' + need.toLocaleString() + ' M', cx, cy + H * 0.23 + 18 * d);
       }
       if (v.onGround && v.kind === 'heli') c.fillText('HOLD SPACE TO LIFT OFF', cx, cy + H * 0.2);
     } else {
       c.textAlign = 'center';
-      c.fillText('W THRUST · MOUSE STEER · SPACE/C UP/DOWN · SHIFT BOOST · DIVE INTO THE ATMOSPHERE TO RETURN', cx, H * 0.86);
+      const S = G.space;
+      if (S.warp) {
+        c.font = `700 ${16 * d}px 'DM Mono', monospace`;
+        c.fillText('WARP · ' + S.warp.id.toUpperCase(), cx, cy - H * 0.18);
+        c.font = `500 ${11 * d}px 'DM Mono', monospace`;
+      }
+      // Navigation: distance to each world and the warp keys.
+      const list = S.targets();
+      list.forEach((tg, i) => {
+        const y = H * 0.74 + i * 17 * d;
+        const km = tg.dist * 6.4;
+        c.fillStyle = tg.id === S.nearest.id ? col : dim;
+        c.fillText(`[${tg.key}] ${tg.name.toUpperCase()}  ${km < 1000 ? Math.round(km) + ' KM' : (km / 1000).toFixed(1) + 'K KM'}`, cx, y);
+      });
+      c.fillStyle = dim;
+      c.fillText('W THRUST · MOUSE STEER · SPACE/C UP/DOWN · SHIFT BOOST · 1/2/3 WARP · DIVE AT A WORLD TO LAND', cx, H * 0.74 + list.length * 17 * d + 6 * d);
     }
+  }
+
+  _rocketHud(c, v, cx, cy, W, H, d, col, dim) {
+    const G = this.game;
+    // Attitude: where the nose points (a centred dot is straight up).
+    const up = tv.set(0, 1, 0).applyQuaternion(v.quat);
+    c.strokeStyle = dim;
+    c.beginPath(); c.arc(cx, cy, 46 * d, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.moveTo(cx - 52 * d, cy); c.lineTo(cx + 52 * d, cy); c.moveTo(cx, cy - 52 * d); c.lineTo(cx, cy + 52 * d); c.stroke();
+    const cam = G.camera, right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion), fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+    right.y = 0; fwd.y = 0; right.normalize(); fwd.normalize();
+    const tilt = Math.acos(clamp(up.y, -1, 1));
+    const px = up.dot(right), pz = up.dot(fwd);
+    const k = 46 * d * Math.min(1, tilt / 0.7) / Math.max(1e-4, Math.hypot(px, pz));
+    c.fillStyle = tilt > 0.32 ? '#ffb45a' : col;
+    c.beginPath(); c.arc(cx + px * k, cy - pz * k, 5 * d, 0, Math.PI * 2); c.fill();
+    c.textAlign = 'center';
+    c.fillStyle = dim; c.fillText('TILT ' + Math.round(tilt * 57.3) + '°', cx, cy + 64 * d);
+    // Stage, propellant and throttle.
+    const tx = cx - Math.min(W * 0.28, 330 * d), ty = cy + H * 0.23;
+    const bar = (y, label, f, colr) => {
+      c.strokeStyle = dim; c.strokeRect(tx - 38 * d, y, 76 * d, 7 * d);
+      c.fillStyle = colr; c.fillRect(tx - 38 * d, y, 76 * d * clamp(f, 0, 1), 7 * d);
+      c.fillStyle = dim; c.textAlign = 'center'; c.fillText(label, tx, y + 18 * d);
+    };
+    bar(ty, 'THR ' + Math.round(v.throttle * 100) + '%', v.throttle, col);
+    const fuel = v.stage === 2 ? v.fuel1 / v.def.burn1 : v.fuel2 / v.def.burn2;
+    bar(ty + 34 * d, (v.stage === 2 ? 'BOOSTER' : 'UPPER STAGE') + ' FUEL ' + Math.round(fuel * 100) + '%', fuel, fuel < 0.15 ? '#ff6a5a' : 'rgba(255,211,106,0.95)');
+    const ax = cx + Math.min(W * 0.28, 330 * d);
+    c.textAlign = 'center'; c.fillStyle = col;
+    c.fillText('V/S ' + (v.vel.y >= 0 ? '+' : '') + v.vel.y.toFixed(1) + ' m/s', ax, ty);
+    c.fillText('G ' + ((v.thrustAcc || 0) / 9.81).toFixed(2), ax, ty + 18 * d);
+    c.fillStyle = dim; c.fillText('LEGS ' + (v.legsOut ? 'DOWN' : 'UP'), ax, ty + 36 * d);
+    // Guidance and warnings.
+    const lines = [];
+    const agl = v.pos.y - v.ground - G.world.groundAt(v.pos.x, v.pos.z);
+    const g = 9.81 * (G.world.gravity ?? 1);
+    if (v.countdown > 0) lines.push(['T-' + Math.ceil(v.countdown), col, 22]);
+    else if (v.onGround && !v.launched) lines.push(['PRESS SPACE TO LAUNCH', col, 14]);
+    else if (v.onGround) lines.push([v.stage === 1 ? 'LANDED · W TO LIFT OFF · F TO STEP OUT' : 'LANDED', col, 14]);
+    else {
+      if (v.stage === 2) lines.push(['SPACE · STAGE SEPARATION', dim, 12]);
+      if (v.stage === 1 && G.location === 'earth') lines.push([v.pos.y < 3000 ? 'ORBIT AT 3,000 M · ' + Math.max(0, Math.round(3000 - v.pos.y)) + ' M TO GO' : 'ORBIT', dim, 12]);
+      if (G.location !== 'earth') lines.push(['CLIMB 1,500 M TO RETURN TO ORBIT', dim, 12]);
+      const maxDec = (v.stage === 2 ? v.def.twr1 : v.def.twr2) * 9.81 - g;
+      const stop = v.vel.y < 0 ? (v.vel.y * v.vel.y) / (2 * Math.max(0.5, maxDec)) : 0;
+      if (v.vel.y < -3 && agl < stop * 1.35 + 30) lines.push(['LANDING BURN · FULL THROTTLE', (performance.now() / 250) % 2 < 1 ? '#ff6a5a' : '#ffb0a0', 14]);
+      else if (v.vel.y < -8 && agl < 600) lines.push(['R HOLD LEVEL · SLOW TO UNDER 8 M/S', dim, 12]);
+      if (fuel < 0.15) lines.push(['LOW FUEL', '#ffb45a', 13]);
+    }
+    lines.forEach(([txt, colr, size], i) => {
+      c.font = `700 ${size * d}px 'DM Mono', monospace`;
+      c.fillStyle = colr; c.textAlign = 'center';
+      c.fillText(txt, cx, cy - H * 0.2 - i * 20 * d);
+    });
+    c.font = `500 ${11 * d}px 'DM Mono', monospace`;
   }
 
   // Floating name tags for other players and the NPC you're talking to.
   _labels() {
     const G = this.game, cam = G.camera;
     const want = new Map();
-    for (const [id, r] of G.remotes) want.set('r' + id, { pos: r.labelPos(), text: r.name, cls: 'player', color: r.color });
+    for (const [id, r] of G.remotes) if (r.here) want.set('r' + id, { pos: r.labelPos(), text: r.name, cls: 'player', color: r.color });
     if (G.talkingTo) want.set('talk', { pos: tv.copy(G.talkingTo.pos).setY(G.talkingTo.pos.y + 2.1).clone(), text: G.talkingTo.name, cls: 'npc' });
     for (const [key, el] of this.labelPool) if (!want.has(key)) { el.remove(); this.labelPool.delete(key); }
     const w = innerWidth, h = innerHeight;
@@ -356,7 +439,7 @@ export class HUD {
     const X = (x) => ox + ((x + HALF) / MAP_SIZE) * S, Z = (z) => oy + ((z + HALF) / MAP_SIZE) * S;
     ctx.font = `600 ${12 * d}px 'DM Mono', monospace`;
     ctx.textAlign = 'center';
-    const labels = [PLACES.airbase, PLACES.village, PLACES.farm, PLACES.lighthouse, PLACES.beach, PLACES.stones, PLACES.turbines, { name: 'Red Mesa', x: -1300, z: -60 }, { name: 'Mount Kestrel', x: PLACES.peak.x, z: PLACES.peak.z + 160 }];
+    const labels = [PLACES.airbase, PLACES.village, PLACES.farm, PLACES.lighthouse, PLACES.beach, PLACES.stones, PLACES.turbines, PLACES.spaceport, { name: 'Red Mesa', x: -1300, z: -60 }, { name: 'Mount Kestrel', x: PLACES.peak.x, z: PLACES.peak.z + 160 }];
     for (const l of labels) {
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(l.name, X(l.x) + d, Z(l.z) + d);
       ctx.fillStyle = '#f4efe0'; ctx.fillText(l.name, X(l.x), Z(l.z));

@@ -1,5 +1,5 @@
 // Procedural sound via Web Audio - no audio files. Engine voices for each
-// aircraft type (jet turbine, propeller buzz, rotor chop, saucer hum), wind
+// craft (jet turbine, propeller buzz, rotor chop, saucer hum, rocket roar), wind
 // that rises with speed, surf near the coast, birds by day, crickets by night,
 // a slow ambient pad, and one-shot effects. Silent until the first gesture.
 
@@ -83,6 +83,17 @@ export class AudioEngine {
       this.humGain.connect(this.reverb);
       [this.hum1, this.hum2, this.hum3, vib].forEach((o) => o.start());
 
+      // Rocket roar: deep filtered noise with a crackling top end.
+      this.roarFilter = ctx.createBiquadFilter(); this.roarFilter.type = 'lowpass'; this.roarFilter.frequency.value = 160; this.roarFilter.Q.value = 0.7;
+      this.roarGain = ctx.createGain(); this.roarGain.gain.value = 0;
+      noise().connect(this.roarFilter); this.roarFilter.connect(this.roarGain); this.roarGain.connect(this.master);
+      this.crackleFilter = ctx.createBiquadFilter(); this.crackleFilter.type = 'bandpass'; this.crackleFilter.frequency.value = 900; this.crackleFilter.Q.value = 0.8;
+      this.crackleGain = ctx.createGain(); this.crackleGain.gain.value = 0;
+      const crackLfo = ctx.createOscillator(); crackLfo.type = 'square'; crackLfo.frequency.value = 23;
+      const crackDepth = ctx.createGain(); crackDepth.gain.value = 0.5;
+      crackLfo.connect(crackDepth); crackDepth.connect(this.crackleGain.gain); crackLfo.start();
+      noise().connect(this.crackleFilter); this.crackleFilter.connect(this.crackleGain); this.crackleGain.connect(this.master);
+
       // Night crickets.
       this.cricketGain = ctx.createGain(); this.cricketGain.gain.value = 0;
       const cr = ctx.createOscillator(); cr.type = 'sine'; cr.frequency.value = 4400;
@@ -125,7 +136,7 @@ export class AudioEngine {
     R(this.windGain.gain, Math.min(0.28, 0.015 + sp * 0.0009 + (s.altitude > 800 ? 0.03 : 0)) * (s.space ? 0 : 1));
     R(this.windFilter.frequency, 300 + sp * 8);
     R(this.surfGain.gain, s.space ? 0 : s.coast * 0.07);
-    let eng = 0, hiss = 0, chop = 0, hum = 0;
+    let eng = 0, hiss = 0, chop = 0, hum = 0, roar = 0, crackle = 0;
     if (t === 'jet' || t === 'nova') {
       eng = 0.05 + th * 0.09; hiss = 0.01 + th * 0.05 + (s.boosting ? 0.06 : 0);
       R(this.osc1.frequency, 55 + th * 90 + (s.boosting ? 20 : 0)); R(this.osc2.frequency, 28 + th * 45);
@@ -141,11 +152,23 @@ export class AudioEngine {
       R(this.chopLfo.frequency, rpm * 18); R(this.chopDepth.gain, chop * 0.9);
       R(this.osc1.frequency, 90 + rpm * 60); R(this.engFilter.frequency, 600);
       R(this.hissFilter.frequency, 3200);
+    } else if (t === 'rocket') {
+      // In vacuum you only hear the engine through the structure.
+      const k = s.thrust ? th : 0, vac = s.vacuum ? 0.25 : 1;
+      roar = k * 0.9 * vac + k * 0.12; crackle = k * 0.22 * vac;
+      R(this.roarFilter.frequency, 120 + k * 120);
+    } else if (t === 'ship') {
+      hum = 0.03 + (s.rpm || 0) * 0.04;
+      hiss = 0.02 + (s.boosting ? 0.06 : 0.02) + th * 0.04;
+      roar = (s.boosting ? 0.12 : 0.05) * (s.vacuum ? 0.3 : 1);
+      R(this.hissFilter.frequency, 2600); R(this.roarFilter.frequency, 220);
+      R(this.hum1.frequency, 80 + sp * 0.1); R(this.hum2.frequency, 82 + sp * 0.1); R(this.hum3.frequency, 420 + sp * 0.5);
     } else if (t === 'ufo') {
       hum = 0.05 + (s.rpm || 0) * 0.08 + (s.boosting ? 0.05 : 0) + (s.beam ? 0.05 : 0);
       R(this.hum1.frequency, 105 + sp * 0.12); R(this.hum2.frequency, 108 + sp * 0.13); R(this.hum3.frequency, 620 + sp * 0.8 + (s.beam ? 200 : 0));
     }
     R(this.engGain.gain, eng); R(this.hissGain.gain, hiss); R(this.chopGain.gain, chop > 0 ? chop * 0.5 : 0); R(this.humGain.gain, hum);
+    R(this.roarGain.gain, roar, 0.2); R(this.crackleGain.gain, crackle, 0.2);
     if (chop === 0) R(this.chopDepth.gain, 0);
     const outside = !s.space && !t;
     R(this.cricketGain.gain, outside || t ? s.night * 0.012 * (s.altitude < 150 ? 1 : 0) : 0, 0.8);

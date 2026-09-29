@@ -4,10 +4,12 @@
 import * as THREE from 'three';
 import { Human, outfitFor } from '../actors/human.js';
 import { buildFighter, buildProp, buildHelicopter, buildSaucer, buildNova } from '../vehicles/models.js';
+import { buildRocket, buildShip, AURORA } from '../vehicles/spacecraft.js';
 import { mulberry32 } from '../core/noise.js';
 import { CHARACTERS } from '../player.js';
 
-const builders = { jet: () => buildFighter({ color: 0x7a8a96 }), prop: () => buildProp({ stripe: 0x2a8a4a }), heli: () => buildHelicopter({ color: 0x2a6a4a }), ufo: () => buildSaucer({ glow: 0xffa86a }), nova: () => ({ group: buildNova().group, parts: {} }) };
+const builders = { jet: () => buildFighter({ color: 0x7a8a96 }), prop: () => buildProp({ stripe: 0x2a8a4a }), heli: () => buildHelicopter({ color: 0x2a6a4a }), ufo: () => buildSaucer({ glow: 0xffa86a }), nova: () => ({ group: buildNova().group, parts: {} }), rocket: () => buildRocket(), ship: () => buildShip() };
+const ROCKET_SIDEWAYS = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 
 export class RemotePlayer {
   constructor(scene, id, name, color) {
@@ -52,6 +54,20 @@ export class RemotePlayer {
     }
   }
 
+  // Move our meshes into whichever scene we are drawn in (island, orbit, Moon, Mars).
+  setScene(scene) {
+    if (this.scene === scene) return;
+    this.scene = scene;
+    if (this.human) scene.add(this.human.root);
+    if (this.vehicle) scene.add(this.vehicle.group);
+  }
+
+  setVisible(on) {
+    this.here = on;
+    if (!on) { if (this.human) this.human.root.visible = false; if (this.vehicle) this.vehicle.group.visible = false; }
+    else if (this.vehicle) this.vehicle.group.visible = true;
+  }
+
   apply(s) {
     if (!Array.isArray(s.p) || s.p.length !== 3 || !s.p.every(Number.isFinite)) return;
     if (!Array.isArray(s.q) || s.q.length !== 4 || !s.q.every(Number.isFinite)) return;
@@ -77,6 +93,16 @@ export class RemotePlayer {
       this.vehicle.group.quaternion.copy(this.quat);
       const P = this.vehicle.parts;
       const th = Number(s.th) || 0;
+      if (this.vehicleType === 'rocket') {
+        if (s.L === 'space') this.vehicle.group.quaternion.multiply(ROCKET_SIDEWAYS);
+        const upper = s.sg === 1;
+        P.stage1.visible = !upper;
+        P.model.position.y = upper ? -AURORA.UPPER_BASE : 0;
+        P.plume1Mat.uniforms.uThrottle.value = upper ? 0 : th;
+        P.plume2Mat.uniforms.uThrottle.value = upper ? th : 0;
+        P.plume1Mat.uniforms.uTime.value += dt; P.plume2Mat.uniforms.uTime.value += dt;
+      }
+      if (this.vehicleType === 'ship') { P.liftMat.uniforms.uThrottle.value = th * 0.6; P.liftMat.uniforms.uTime.value += dt; }
       if (P.rotor) { P.rotor.rotation.y += dt * 28 * th; P.tailRotor.rotation.x += dt * 50 * th; P.rDisc.material.opacity = 0.28 * th; }
       if (P.prop) { P.prop.rotation.z += dt * 60 * th; P.disc.material.opacity = 0.3 * th; }
       if (P.flame) { P.flame.scale.set(0.8, 0.8, 0.2 + th); P.flame.material.opacity = 0.3 + th * 0.4; }

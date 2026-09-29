@@ -1,12 +1,15 @@
 // Vehicle physics. Fixed-wing aircraft fly on an arcade flight model with
 // throttle, stall, banked turns, takeoff rolls and landings; the helicopter
-// hovers on a collective with rotor spin-up; the saucer floats on
-// anti-gravity and can climb out of the atmosphere. All of them crash on
-// hard contact with terrain, water, buildings or trees.
+// hovers on a collective with rotor spin-up; the saucer and the Odyssey
+// spaceplane float on vertical thrust and can climb out of the atmosphere; the
+// Aurora rocket flies on real thrust against gravity with fuel, staging,
+// gimballed steering and propulsive landings on deployable legs. All of them
+// crash on hard contact with terrain, water, buildings or trees.
 
 import * as THREE from 'three';
 import { clamp, damp, lerp, smoothstep } from '../core/util.js';
 import { buildFighter, buildProp, buildHelicopter, buildSaucer, buildNova } from './models.js';
+import { buildRocket, buildShip, AURORA } from './spacecraft.js';
 
 export const VEHICLE_DEFS = {
   jet: { name: 'F-7 Falcon', role: 'Air-superiority jet', kind: 'plane', maxSpeed: 280, stall: 58, takeoff: 70, thrust: 15, pitchRate: 1.15, rollRate: 2.6, yawRate: 0.45, turn: 0.8, boost: 1.35, weapons: true },
@@ -14,6 +17,8 @@ export const VEHICLE_DEFS = {
   nova: { name: 'Nova X-1', role: 'Experimental prototype', kind: 'plane', maxSpeed: 330, stall: 42, takeoff: 52, thrust: 20, pitchRate: 1.5, rollRate: 3.4, yawRate: 0.7, turn: 1.05, boost: 1.45, weapons: true },
   heli: { name: 'H-60 Kite', role: 'Rescue helicopter', kind: 'heli', maxSpeed: 72, climb: 14 },
   ufo: { name: 'Visitor Craft', role: 'Anti-gravity saucer', kind: 'ufo', maxSpeed: 170, climb: 48, boost: 2.6 },
+  ship: { name: 'Odyssey', role: 'Spaceplane · vertical take-off to orbit', kind: 'ship', maxSpeed: 240, climb: 55, boost: 2.4 },
+  rocket: { name: 'Aurora', role: 'Two-stage orbital rocket', kind: 'rocket', twr1: 1.75, twr2: 2.1, burn1: 26, burn2: 90 },
 };
 
 const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
@@ -27,6 +32,8 @@ function buildFor(type) {
     case 'prop': return buildProp();
     case 'heli': return buildHelicopter();
     case 'ufo': return buildSaucer();
+    case 'ship': return buildShip();
+    case 'rocket': return buildRocket();
     case 'nova': {
       const n = buildNova();
       const gear = new THREE.Group();
@@ -92,6 +99,7 @@ export class Vehicle {
     this.idleTime = 0;
     this.stalling = false;
     this.group.visible = true;
+    if (this.kind === 'rocket') this._rocketReset();
   }
 
   get forward() { return tv.copy(Z).applyQuaternion(this.quat); }
@@ -114,6 +122,7 @@ export class Vehicle {
 
   // Returns 'crash' | null.
   update(dt, ctl, world) {
+    if (this.booster) this.booster.update(dt, world);
     if (this.destroyed) {
       this.respawn -= dt;
       if (this.respawn <= 0 && !this.occupied) this.reset();
@@ -122,6 +131,8 @@ export class Vehicle {
     let result = null;
     if (this.kind === 'plane') result = this._plane(dt, ctl, world);
     else if (this.kind === 'heli') result = this._heli(dt, ctl, world);
+    else if (this.kind === 'rocket') result = this._rocket(dt, ctl, world);
+    else if (this.kind === 'ship') result = this._ship(dt, ctl, world);
     else result = this._ufo(dt, ctl, world);
     this._animate(dt, world);
     // Return abandoned vehicles to base after a while.
@@ -365,6 +376,151 @@ export class Vehicle {
     return null;
   }
 
+  // ---- Spaceplane ---------------------------------------------------------------
+
+  _ship(dt, ctl, world) {
+    const r = this._ufo(dt, ctl, world);
+    const agl = this.pos.y - this.ground - world.groundAt(this.pos.x, this.pos.z);
+    this.gearDown = this.onGround || agl < 35;
+    this.lift = this.onGround ? 0 : clamp(1 - this.speed / 160, 0.25, 1) * this.rpm;
+    this.mainThrust = this.onGround ? 0 : clamp(this.speed / 120, 0, 1) * (this.boosting ? 1 : 0.6);
+    return r;
+  }
+
+  // ---- Rocket ------------------------------------------------------------------
+
+  _rocketReset() {
+    const P = this.parts;
+    if (this.booster) { this.booster.dispose(); this.booster = null; }
+    if (P.stage1.parent !== P.model) P.model.add(P.stage1);
+    P.stage1.position.set(0, 0, 0); P.stage1.quaternion.identity();
+    P.model.position.set(0, 0, 0);
+    for (const l of P.legs1) l.rotation.x = 0;
+    for (const l of P.legs2) l.rotation.x = 0;
+    for (const f of P.fins) f.rotation.x = 0;
+    this.stage = 2;
+    this.fuel1 = this.def.burn1;
+    this.fuel2 = this.def.burn2;
+    this.legsOut = false;
+    this.launched = false;
+    this.countdown = 0;
+    this.autoThrottle = false;
+    this.rcsAmt = 0;
+    this.thrustAcc = 0;
+    this.ground = 0;
+    this.pos.y = this.home.y;
+  }
+
+  // Detach the booster (it flies itself back to the landing zone) and carry
+  // on with the upper stage, whose origin becomes the base of its nozzle.
+  _separate() {
+    const P = this.parts;
+    const scene = this.group.parent;
+    this.group.updateMatrixWorld(true);
+    if (scene) {
+      scene.attach(P.stage1);
+      this.booster = new BoosterReturn(P, this.vel.clone(), this.home.lz);
+    } else P.model.remove(P.stage1);
+    const up = tv.copy(Y).applyQuaternion(this.quat);
+    this.pos.addScaledVector(up, AURORA.UPPER_BASE);
+    P.model.position.y = -AURORA.UPPER_BASE;
+    this.vel.addScaledVector(up, 3);
+    this.stage = 1;
+    this.legsOut = false;
+    this.events = (this.events || []).concat('staged');
+  }
+
+  // Prepare for a fresh descent (after re-entry or arriving above a moon):
+  // upper stage only, full tanks, nose up.
+  prepareDescent(heading = 0) {
+    if (this.stage === 2) { const P = this.parts; P.model.remove(P.stage1); P.model.position.y = -AURORA.UPPER_BASE; this.stage = 1; }
+    if (this.booster) this.booster.finish();
+    this.fuel2 = this.def.burn2;
+    this.legsOut = false;
+    this.launched = true;
+    this.throttle = 0;
+    this.onGround = false;
+    this.quat.setFromEuler(e3.set(0, heading, 0));
+  }
+
+  _rocket(dt, ctl, world) {
+    const d = this.def, p = this.pos;
+    const occupied = !!ctl;
+    ctl = ctl || { throttle: 0, pitch: 0, yaw: 0, roll: 0, stage: false, legs: false, launch: false, level: false, full: false };
+    const gE = 9.81, g = gE * (world.gravity ?? 1);
+    // Launch sequence: a 3-second countdown, then throttle runs up to 100 %.
+    if (ctl.launch && this.onGround && this.countdown <= 0 && this.throttle < 0.05 && !this.launched) { this.countdown = 3; this.events = (this.events || []).concat('countdown'); }
+    if (this.countdown > 0) { this.countdown -= dt; if (this.countdown <= 0) { this.countdown = 0; this.autoThrottle = true; this.events = (this.events || []).concat('ignition'); } }
+    if (this.autoThrottle) { this.throttle = Math.min(1, this.throttle + dt * 0.9); if (this.throttle >= 1 || ctl.throttle < 0) this.autoThrottle = false; }
+    this.throttle = clamp(this.throttle + ctl.throttle * dt * 0.6 + (ctl.full ? dt * 2 : 0), 0, 1);
+    if (!occupied) this.throttle = Math.max(0, this.throttle - dt * 0.5);
+    // Fuel and thrust.
+    const key = this.stage === 2 ? 'fuel1' : 'fuel2';
+    this[key] = Math.max(0, this[key] - this.throttle * dt);
+    const twr = this.stage === 2 ? d.twr1 : d.twr2;
+    const acc = this[key] > 0 ? this.throttle * twr * gE : 0;
+    this.thrustAcc = acc;
+    // Staging: on command, when the booster runs dry, or before leaving the atmosphere.
+    if (this.stage === 2 && !this.onGround && this.launched && (ctl.stage || this.fuel1 <= 0 || p.y > 2900)) this._separate();
+    if (ctl.legs) this.legsOut = !this.legsOut;
+    // Attitude: gimbal + RCS. Heavier full stack turns slowly.
+    const up = tv2.copy(Y).applyQuaternion(this.quat);
+    if (!this.onGround) {
+      const rate = this.stage === 2 ? 0.32 : 0.75;
+      tq.setFromAxisAngle(X, ctl.pitch * rate * dt); this.quat.multiply(tq);
+      tq.setFromAxisAngle(Z, -ctl.yaw * rate * dt); this.quat.multiply(tq);
+      tq.setFromAxisAngle(Y, -ctl.roll * 0.9 * dt); this.quat.multiply(tq);
+      if (ctl.level) {
+        const f = tv.copy(Z).applyQuaternion(this.quat);
+        const target = new THREE.Quaternion().setFromEuler(e3.set(0, Math.atan2(f.x, f.z), 0));
+        this.quat.slerp(target, 1 - Math.exp(-1.6 * dt));
+      }
+      this.quat.normalize();
+      up.copy(Y).applyQuaternion(this.quat);
+    }
+    this.rcsAmt = damp(this.rcsAmt, Math.min(1, Math.abs(ctl.pitch) + Math.abs(ctl.yaw) + Math.abs(ctl.roll) + (ctl.level ? 0.5 : 0)), 8, dt);
+    const groundH = world.groundAt(p.x, p.z);
+    this.ground = this.legsOut ? (this.stage === 2 ? AURORA.FOOT1 : AURORA.FOOT2) : 0;
+    if (this.onGround) {
+      this.vel.set(0, 0, 0);
+      p.y = groundH + this.ground;
+      if (acc > g * 1.02) { this.onGround = false; this.launched = true; this.events = (this.events || []).concat('liftoff'); }
+      this.speed = 0;
+      return null;
+    }
+    // Thrust, gravity, and drag in an atmosphere that thins with height.
+    this.vel.addScaledVector(up, acc * dt);
+    this.vel.y -= g * dt;
+    const rho = (world.air ?? 1) * Math.exp(-Math.max(0, p.y) / 2600);
+    const sp = this.vel.length();
+    this.vel.multiplyScalar(1 / (1 + 0.00022 * rho * sp * dt));
+    p.addScaledVector(this.vel, dt);
+    this.speed = this.vel.length();
+    // Legs deploy by themselves on a descent close to the ground.
+    const agl = p.y - groundH;
+    if (!this.legsOut && this.launched && this.vel.y < -2 && agl < 320) this.legsOut = true;
+    this.ground = this.legsOut ? (this.stage === 2 ? AURORA.FOOT1 : AURORA.FOOT2) : 0;
+    // Touchdown.
+    if (p.y - this.ground <= groundH) {
+      const tilt = Math.acos(clamp(up.y, -1, 1));
+      const vs = -this.vel.y, hs = Math.hypot(this.vel.x, this.vel.z);
+      const water = world.terrain.heightAt(p.x, p.z) < -0.3 && world.structures.platformAt(p.x, p.z) === -Infinity;
+      const ok = !water && vs < 8 && hs < 6 && tilt < 0.32 && (this.legsOut || vs < 2.5);
+      if (!ok) return water ? 'water' : 'ground';
+      const f = tv.copy(Z).applyQuaternion(this.quat);
+      this.quat.setFromEuler(e3.set(0, Math.atan2(f.x, f.z), 0));
+      p.y = groundH + this.ground;
+      this.vel.set(0, 0, 0);
+      this.onGround = true;
+      this.throttle = 0;
+      this.autoThrottle = false;
+      return 'landed';
+    }
+    tv.copy(p);
+    if (world.structures.collide(tv, 2, p.y + 4)) return 'building';
+    return null;
+  }
+
   // ---- Visuals ---------------------------------------------------------------
 
   _animate(dt, world) {
@@ -419,7 +575,36 @@ export class Vehicle {
       P.beam.visible = this.beamActive;
       if (this.beamActive) { P.beamMat.opacity = 0.45 + Math.sin(t * 8) * 0.08; P.beam.rotation.y += dt; }
     }
+    if (this.kind === 'rocket') this._animRocket(dt, t);
+    if (this.kind === 'ship') {
+      for (const m of [P.plumeMat, P.liftMat]) m.uniforms.uTime.value = t;
+      P.liftMat.uniforms.uThrottle.value = damp(P.liftMat.uniforms.uThrottle.value, this.lift || 0, 6, dt);
+      P.plumeMat.uniforms.uThrottle.value = damp(P.plumeMat.uniforms.uThrottle.value, this.mainThrust || 0, 6, dt);
+      for (const e of P.mains) e.glow.material.opacity = P.plumeMat.uniforms.uThrottle.value;
+      for (const l of P.lifts) l.glow.material.opacity = P.liftMat.uniforms.uThrottle.value * 0.9;
+    }
     if (P.pilot) P.pilot.root.visible = this.occupied;
+  }
+
+  _animRocket(dt, t) {
+    const P = this.parts;
+    const th = this.thrustAcc > 0 ? this.throttle : 0;
+    const flick = 0.9 + Math.random() * 0.1;
+    P.plume1Mat.uniforms.uTime.value = t;
+    P.plume2Mat.uniforms.uTime.value = t;
+    if (this.stage === 2) {
+      P.plume1Mat.uniforms.uThrottle.value = th * flick;
+      P.glow1.material.opacity = th * 0.9;
+      // The plume widens as the air thins.
+      const spread = 1 + clamp(this.pos.y / 2500, 0, 1.2);
+      for (const m of P.plume1) m.scale.set(spread, 1 + th * 0.2, spread);
+    }
+    P.plume2Mat.uniforms.uThrottle.value = this.stage === 1 ? th * flick : 0;
+    P.glow2.material.opacity = this.stage === 1 ? th * 0.9 : 0;
+    const legs = this.stage === 2 ? P.legs1 : P.legs2, angle = this.stage === 2 ? AURORA.LEG1 : AURORA.LEG2;
+    for (const l of legs) l.rotation.x = damp(l.rotation.x, this.legsOut ? angle : 0, 3, dt);
+    for (const r of P.rcs) r.material.opacity = this.rcsAmt * (0.4 + Math.random() * 0.6) * 0.8;
+    P.strobe.material.opacity = (this.occupied || !this.onGround) && (t % 1.4) < 0.08 ? 1 : 0;
   }
 
   // Where a pilot steps out: beside the cockpit on the left.
@@ -427,5 +612,86 @@ export class Vehicle {
     const side = tv.copy(X).applyQuaternion(this.quat);
     side.y = 0; side.normalize();
     return out.copy(this.pos).addScaledVector(side, this.radius * 0.7 + 1.5);
+  }
+}
+
+// The spent first stage flips, boosts back and lands itself on the landing
+// zone on its own legs (a scripted guidance loop, not player controlled).
+class BoosterReturn {
+  constructor(parts, vel, lz) {
+    this.P = parts;
+    this.group = parts.stage1;
+    this.vel = vel;
+    this.lz = lz ? new THREE.Vector3(lz.x, lz.y, lz.z) : null;
+    this.phase = 'coast';
+    this.t = 0;
+    this.thr = 0;
+    this.landed = false;
+  }
+
+  update(dt, world) {
+    if (this.landed || !this.group.parent) return;
+    const g = 9.81 * (world.gravity ?? 1), p = this.group.position, q = this.group.quaternion;
+    this.t += dt;
+    const lz = this.lz || new THREE.Vector3(p.x, world.groundAt(p.x, p.z), p.z);
+    const toLz = tv.set(lz.x - p.x, 0, lz.z - p.z);
+    const agl = p.y - AURORA.FOOT1 - lz.y;
+    let thrust = 0;
+    // Guidance: aim horizontal velocity at the pad, then a suicide burn.
+    if (this.phase === 'coast' && this.t > 2.5) this.phase = 'boostback';
+    if (this.phase === 'boostback') {
+      const want = toLz.clone().multiplyScalar(0.06).clampLength(0, 90);
+      const dv = want.sub(tv2.set(this.vel.x, 0, this.vel.z));
+      if (dv.length() > 4) { thrust = 22; this.vel.addScaledVector(dv.normalize(), thrust * dt); } else this.phase = 'fall';
+    }
+    if (this.phase === 'fall') {
+      const stop = (this.vel.y * this.vel.y) / (2 * (2.6 * 9.81 - g));
+      if (this.vel.y < 0 && agl < stop + 30) this.phase = 'landing';
+      // Steer gently towards the pad during the fall.
+      this.vel.x += (toLz.x * 0.02 - this.vel.x) * dt * 0.3;
+      this.vel.z += (toLz.z * 0.02 - this.vel.z) * dt * 0.3;
+    }
+    if (this.phase === 'landing') {
+      const wantVy = -Math.max(2.5, Math.sqrt(Math.max(0, 2 * (2.2 * 9.81 - g) * agl)));
+      const ay = clamp((wantVy - this.vel.y) * 3 + g, 0, 2.8 * 9.81);
+      this.vel.y += (ay - g) * dt + g * dt;
+      thrust = ay;
+      this.vel.x += (toLz.x * 0.5 - this.vel.x) * dt * 1.5;
+      this.vel.z += (toLz.z * 0.5 - this.vel.z) * dt * 1.5;
+      for (const l of this.P.legs1) l.rotation.x = damp(l.rotation.x, agl < 500 ? AURORA.LEG1 : 0, 2.5, dt);
+    }
+    this.vel.y -= g * dt;
+    p.addScaledVector(this.vel, dt);
+    // Orientation: engines into the direction of travel (retrograde), upright when landing.
+    const up = this.phase === 'landing' ? new THREE.Vector3(0, 1, 0).lerp(tv.copy(this.vel).multiplyScalar(-1).normalize(), 0.3).normalize() : tv.copy(this.vel).multiplyScalar(-1).normalize();
+    const target = new THREE.Quaternion().setFromUnitVectors(Y, up);
+    q.slerp(target, 1 - Math.exp(-1.2 * dt));
+    for (const f of this.P.fins) f.rotation.x = damp(f.rotation.x, Math.PI / 2, 2, dt);
+    this.thr = damp(this.thr, thrust > 0 ? clamp(thrust / 25, 0.4, 1) : 0, 10, dt);
+    this.P.plume1Mat.uniforms.uThrottle.value = this.thr * (0.9 + Math.random() * 0.1);
+    this.P.glow1.material.opacity = this.thr * 0.9;
+    if (agl <= 0.05) {
+      if (Math.abs(this.vel.y) > 12 || world.terrain.heightAt(p.x, p.z) < -0.3) { this.dispose(); this.crashed = true; return; }
+      this.finish(world);
+    }
+  }
+
+  // Snap to a clean landing on the pad (used when the player leaves Earth).
+  finish() {
+    if (!this.group.parent) return;
+    const p = this.group.position;
+    if (this.lz) p.set(this.lz.x, this.lz.y + AURORA.FOOT1, this.lz.z);
+    this.group.quaternion.identity();
+    for (const l of this.P.legs1) l.rotation.x = AURORA.LEG1;
+    for (const f of this.P.fins) f.rotation.x = Math.PI / 2;
+    this.P.plume1Mat.uniforms.uThrottle.value = 0;
+    this.P.glow1.material.opacity = 0;
+    this.vel.set(0, 0, 0);
+    this.landed = true;
+  }
+
+  dispose() {
+    this.group.parent?.remove(this.group);
+    this.P.plume1Mat.uniforms.uThrottle.value = 0;
   }
 }

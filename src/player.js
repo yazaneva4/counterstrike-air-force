@@ -48,8 +48,8 @@ export class Player {
 
   buildBody() {
     const ch = CHARACTERS.find((c) => c.id === this.character) || CHARACTERS[0];
-    const outfit = outfitFor(ch.role, mulberry32(this.name.length * 131 + 7));
-    Object.assign(outfit, ch.extra);
+    const outfit = outfitFor(this.suit ? 'astronaut' : ch.role, mulberry32(this.name.length * 131 + 7));
+    if (!this.suit) Object.assign(outfit, ch.extra);
     const skins = [0xf1c7a5, 0xe0ac86, 0xc68a62, 0xa66d47, 0x7c4c32, 0x5a3825];
     outfit.skin = skins[this.skinIndex % skins.length];
     const old = this.human;
@@ -63,6 +63,16 @@ export class Player {
   }
 
   get pos() { return this.root.position; }
+
+  // Space suit on the Moon and Mars, normal clothes on Earth.
+  setSuit(on) {
+    if (!!this.suit === !!on) return;
+    this.suit = on;
+    const visible = this.root.visible, rot = this.root.rotation.y;
+    this.buildBody();
+    this.root.visible = visible;
+    this.root.rotation.y = rot;
+  }
 
   spawnAt(p, heading = 0) {
     this.root.position.set(p.x, this.game.world.groundAt(p.x, p.z), p.z);
@@ -112,7 +122,8 @@ export class Player {
     const terrainH = W.terrain.heightAt(pos.x, pos.z);
     const plat = W.structures.platformAt(pos.x, pos.z);
     this.swimming = terrainH < -1.25 && plat === -Infinity && pos.y < 0.2;
-    const speed = this.swimming ? 1.9 : sprint ? 6.4 : 2.6;
+    const grav = W.gravity ?? 1;
+    const speed = (this.swimming ? 1.9 : sprint ? 6.4 : 2.6) * (grav < 1 ? 0.8 : 1);
     const accel = this.onGround || this.swimming ? 12 : 2.5;
     this.vel.x = damp(this.vel.x, wx * speed, accel, dt);
     this.vel.z = damp(this.vel.z, wz * speed, accel, dt);
@@ -121,8 +132,8 @@ export class Player {
       pos.y = damp(pos.y, -0.95, 4, dt);
       if (I.hit('Space') || I.thit('up')) G.audio?.splash();
     } else {
-      this.vel.y -= 22 * dt;
-      if ((I.hit('Space') || I.thit('up')) && this.onGround) { this.vel.y = 7.2; this.onGround = false; G.audio?.jump(); }
+      this.vel.y -= 22 * grav * dt;
+      if ((I.hit('Space') || I.thit('up')) && this.onGround) { this.vel.y = 7.2 * (grav < 1 ? 0.62 : 1); this.onGround = false; G.audio?.jump(); }
     }
     pos.x += this.vel.x * dt; pos.z += this.vel.z * dt;
     if (!this.swimming) pos.y += this.vel.y * dt;
@@ -138,10 +149,11 @@ export class Player {
       const dx = pos.x - v.pos.x, dz = pos.z - v.pos.z, d = Math.hypot(dx, dz), r = v.radius * 0.42;
       if (d < r && d > 1e-4 && pos.y < v.pos.y + 2) { pos.x = v.pos.x + dx / d * r; pos.z = v.pos.z + dz / d * r; }
     }
-    pos.x = clamp(pos.x, -2700, 2700); pos.z = clamp(pos.z, -2700, 2700);
+    const lim = W.limit ?? 2700;
+    pos.x = clamp(pos.x, -lim, lim); pos.z = clamp(pos.z, -lim, lim);
     const g = W.groundAt(pos.x, pos.z);
     if (!this.swimming && pos.y <= g) {
-      if (this.vel.y < -16) G.hud.toast('Ouch! Hard landing');
+      if (this.vel.y < -16 * Math.sqrt(grav)) G.hud.toast('Ouch! Hard landing');
       pos.y = g; this.vel.y = 0; this.onGround = true;
     } else if (!this.swimming && pos.y > g + 0.25) this.onGround = false;
     if (this.swimming && terrainH > -1.0) { pos.y = g; }
@@ -191,7 +203,8 @@ export class Player {
     this.camYaw = v.headingAngle();
     if (v.kind === 'plane') v.throttle = Math.max(v.throttle, 0);
     G.hud.prompt(null);
-    G.hud.toast(v.def.name + ' · ' + (v.kind === 'plane' ? 'W throttle, mouse/arrows pitch, A/D roll' : v.kind === 'heli' ? 'Space up, C down, WASD fly, mouse turn' : 'Space/C altitude, WASD fly, E tractor beam'), 4.5);
+    const help = { plane: 'W throttle, mouse/arrows pitch, A/D roll', heli: 'Space up, C down, WASD fly, mouse turn', ufo: 'Space/C altitude, WASD fly, E tractor beam', ship: 'Space/C altitude, WASD fly, Shift boost · climb past 3,000 m for orbit', rocket: v.onGround && !v.launched ? 'Space to launch · W/S throttle · mouse steer · G legs · R level' : 'W/S throttle · mouse steer · Q/E roll · G legs · R hold level' };
+    G.hud.toast(v.def.name + ' · ' + help[v.kind], 5);
     G.audio?.enter(v.type);
     G.onEnterVehicle?.(v);
   }
@@ -239,7 +252,26 @@ export class Player {
     } else {
       this.lookYaw = damp(this.lookYaw, 0, 3, dt); this.lookPitch = damp(this.lookPitch, 0, 3, dt);
     }
-    if (v.kind === 'plane') {
+    if (v.kind === 'rocket') {
+      if (!freeLook) {
+        this.stick.x = clamp(this.stick.x + look.dx * 0.004 * S.sensitivity, -1, 1);
+        this.stick.y = clamp(this.stick.y - look.dy * 0.004 * S.sensitivity * (S.invertY ? -1 : 1), -1, 1);
+      }
+      this.stick.x = damp(this.stick.x, 0, 2.5, dt); this.stick.y = damp(this.stick.y, 0, 2.5, dt);
+      const touch = I.touch.active;
+      this.ctl = {
+        throttle: touch ? (up - down) : (I.down('KeyW') ? 1 : 0) - (I.down('KeyS') ? 1 : 0),
+        full: boost,
+        pitch: clamp(this.stick.y + ar.y + (touch ? I.touch.y : 0), -1, 1),
+        yaw: clamp(this.stick.x + ar.x + (touch ? I.touch.x : ((I.down('KeyD') ? 1 : 0) - (I.down('KeyA') ? 1 : 0))), -1, 1),
+        roll: (I.down('KeyE') ? 1 : 0) - (I.down('KeyQ') ? 1 : 0),
+        launch: I.hit('Space') || I.thit('fire'),
+        stage: I.hit('Space') || I.thit('fire'),
+        legs: I.hit('KeyG'),
+        level: I.down('KeyR'),
+      };
+      if (v.stage === 1 && v.pos.y > 3000 && G.location === 'earth') G.enterSpace();
+    } else if (v.kind === 'plane') {
       // Mouse acts as a spring-centred control stick.
       if (!freeLook) {
         this.stick.x = clamp(this.stick.x + look.dx * 0.0045 * S.sensitivity, -1, 1);
@@ -264,7 +296,7 @@ export class Player {
         yaw: clamp(((I.down('KeyE') && v.kind !== 'ufo') ? 1 : 0) - (I.down('KeyQ') ? 1 : 0) + yawMouse + ar.x, -2.5, 2.5),
         beam: v.kind === 'ufo' && (I.down('KeyE') || I.tdown('act')),
       };
-      if (v.kind === 'ufo' && v.pos.y > 3000 && up) G.enterSpace();
+      if ((v.kind === 'ufo' || v.kind === 'ship') && up && v.pos.y - G.world.groundAt(v.pos.x, v.pos.z) > (G.location === 'earth' ? 3000 : 1500)) G.enterSpace();
     }
     if (I.hit('KeyF') || I.thit('veh')) this.exitVehicle();
     this._vehicleCamera(dt);
@@ -338,13 +370,29 @@ export class Player {
     const G = this.game, cam = G.camera, v = this.vehicle, W = G.world;
     const fwd = tv.copy(Z).applyQuaternion(v.quat);
     if (this.cockpit) {
-      const seat = { jet: [0, 0.95, 3.4], nova: [0, 1.05, 0.2], prop: [0.3, 0.55, 0.8], heli: [-0.45, 0.4, 1.5], ufo: [0, 2.2, 0] }[v.type] || [0, 1, 0];
+      const seat = { jet: [0, 0.95, 3.4], nova: [0, 1.05, 0.2], prop: [0.3, 0.55, 0.8], heli: [-0.45, 0.4, 1.5], ufo: [0, 2.2, 0], ship: [0, 0.9, 9.4], rocket: [0, 57 + (v.parts.model?.position.y || 0), -1.3] }[v.type] || [0, 1, 0];
       tv2.set(seat[0], seat[1], seat[2]).applyQuaternion(v.quat).add(v.pos);
       cam.position.copy(tv2);
       tq.copy(v.quat).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(this.lookPitch, Math.PI + this.lookYaw, 0, 'YXZ')));
       cam.quaternion.copy(tq);
       if (v.parts.pilot) v.parts.pilot.root.visible = false;
       this.camPos.copy(cam.position);
+    } else if (v.kind === 'rocket') {
+      // Chase from below and behind, looking up the stack; drag with the right mouse to orbit.
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(v.quat);
+      const len = v.stage === 2 ? 60 : 21;
+      const centre = tv2.copy(v.pos).addScaledVector(up, len * 0.45);
+      const yaw = v.headingAngle() + Math.PI * 0.75 + this.lookYaw;
+      const dist = v.stage === 2 ? 95 : 48;
+      const want = new THREE.Vector3(Math.sin(yaw) * dist, (v.onGround ? 8 : -dist * 0.18) - this.lookPitch * dist, Math.cos(yaw) * dist).add(centre);
+      const gh = W.groundAt(want.x, want.z);
+      if (want.y < gh + 2) want.y = gh + 2;
+      this.camPos.lerp(want, 1 - Math.exp(-4 * dt));
+      if (this.camPos.distanceToSquared(want) > 250000) this.camPos.copy(want);
+      cam.position.copy(this.camPos);
+      cam.up.set(0, 1, 0);
+      cam.lookAt(centre);
+      this.shake = Math.max(this.shake, v.onGround || v.pos.y < 600 ? v.throttle * 0.55 * (v.thrustAcc > 0 ? 1 : 0) : 0);
     } else {
       const flat = v.kind !== 'plane';
       const heading = flat ? v.heading : Math.atan2(fwd.x, fwd.z);
@@ -395,8 +443,9 @@ export class Player {
   // Snapshot for the network.
   netState() {
     const v = this.vehicle;
-    const q = v ? v.quat : this.root.quaternion;
-    const p = v ? v.pos : this.pos;
+    const craft = this.game.location === 'space' ? this.game.space.craft : null;
+    const q = craft ? craft.quaternion : v ? v.quat : this.root.quaternion;
+    const p = craft ? craft.position : v ? v.pos : this.pos;
     return {
       n: this.name.slice(0, 18), c: this.character, k: this.skinIndex,
       m: this.mode, v: v ? v.type : null,
@@ -404,6 +453,7 @@ export class Player {
       q: [q.x, q.y, q.z, q.w].map((x) => Math.round(x * 1000) / 1000),
       s: Math.round(this.human.speed * 10) / 10, st: this.human.state, g: this.human.gesture,
       th: v ? Math.round((v.throttle || v.rpm || 0) * 100) / 100 : 0, b: v ? !!v.beamActive : false,
+      L: this.game.location || 'earth', sg: v && v.kind === 'rocket' ? v.stage : 0,
     };
   }
 }

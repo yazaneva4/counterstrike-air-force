@@ -29,6 +29,7 @@ export const PLACES = {
   beach: { name: 'Sunset Beach', x: 0, z: 0 },      // resolved from coast
   lighthouse: { name: 'Gull Point', x: 0, z: 0 },   // resolved from coast
   vortex: { name: 'The Western Reef', x: 0, z: 0 }, // resolved offshore
+  spaceport: { name: 'Kestrel Spaceport', x: 1780, z: 110 },
 };
 
 const COL = (hex) => new THREE.Color(hex);
@@ -153,6 +154,7 @@ export class Terrain {
     zones.push({ id: 'crash', shape: 'circle', x: P.crash.x, z: P.crash.z, r: 34, blend: 45, h: this._avgRaw(P.crash.x, P.crash.z, 30) - 2.5 });
     zones.push({ id: 'peak', shape: 'circle', x: P.peak.x, z: P.peak.z, r: 14, blend: 22, h: P.peak.h - 3 });
     zones.push({ id: 'lighthouse', shape: 'circle', x: P.lighthouse.x, z: P.lighthouse.z, r: 16, blend: 40, mode: 'add', amount: 9 });
+    zones.push({ id: 'spaceport', shape: 'circle', x: P.spaceport.x, z: P.spaceport.z, r: 180, blend: 110, h: Math.max(9, this._avgRaw(P.spaceport.x, P.spaceport.z, 150)) });
     zones.push({ id: 'turbines', shape: 'rect', x: P.turbines.x, z: P.turbines.z, hw: 60, hd: 330, blend: 150, mode: 'add', amount: 28 });
     for (const z of zones) if (z.mode === 'add') z.h = 0;
   }
@@ -200,7 +202,7 @@ export class Terrain {
     const c = new THREE.Color();
     const t = new THREE.Color();
     const farm = this.zone('farm'), airbase = this.zone('airbase'), village = this.zone('village');
-    const crash = this.zone('crash'), pyramid = this.zone('pyramid');
+    const crash = this.zone('crash'), pyramid = this.zone('pyramid'), spaceport = this.zone('spaceport');
     for (let i = 0; i < V * V; i++) {
       const x = pos[i * 3], h = pos[i * 3 + 1], z = pos[i * 3 + 2];
       const ny = nrm[i * 3 + 1];
@@ -226,6 +228,7 @@ export class Terrain {
       // Zones.
       c.lerp(C.airfield, this.zoneWeight(airbase, x, z) * 0.85);
       c.lerp(C.village, this.zoneWeight(village, x, z) * 0.5);
+      c.lerp(C.dry, this.zoneWeight(spaceport, x, z) * 0.55);
       const wf = this.zoneWeight(farm, x, z);
       if (wf > 0) {
         const fx = Math.floor((x - farm.x + 400) / 78), fz = Math.floor((z - farm.z + 400) / 58);
@@ -345,6 +348,7 @@ export class Terrain {
     const near = (p, r) => Math.hypot(x - p.x, z - p.z) < r;
     if (near(P.airbase, 0) || (Math.abs(x - P.airbase.x) < 900 && Math.abs(z - P.airbase.z) < 240)) return P.airbase.name;
     if (near(P.village, 330)) return P.village.name;
+    if (near(P.spaceport, 300)) return P.spaceport.name;
     if (near(P.farm, 380)) return P.farm.name;
     if (near(P.stones, 160)) return P.stones.name;
     if (near(P.crash, 220)) return P.crash.name;

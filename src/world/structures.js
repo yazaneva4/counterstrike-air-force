@@ -1,14 +1,15 @@
 // Man-made places: Kestrel Airbase (runway, taxiway, hangars, tower with a
 // turning radar, helipads, runway lights), Harrow Village (houses around a
 // plaza, church, market, street lamps), Aldren Farms (barn, silo, fences),
-// the Gull Point lighthouse, a harbour pier with boats and a row of wind
-// turbines. Everything registers colliders and paints itself onto the map.
+// the Gull Point lighthouse, a harbour pier with boats, a row of wind
+// turbines and Kestrel Spaceport (see spaceport.js). Everything registers colliders and paints itself onto the map.
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/noise.js';
 import { canvasTexture, stdMat, mesh, glowSprite, glowTexture, tint, lerp, clamp } from '../core/util.js';
 import { PLACES, HALF, MAP_SIZE } from './terrain.js';
+import { buildSpaceport } from './spaceport.js';
 
 export const RUNWAY = { x0: -720, x1: 560, z: 700, width: 42 };
 
@@ -94,6 +95,7 @@ export class Structures {
     this._lighthouse();
     this._harbour();
     this._turbines();
+    buildSpaceport(this);
   }
 
   h(x, z) { return this.terrain.heightAt(x, z); }

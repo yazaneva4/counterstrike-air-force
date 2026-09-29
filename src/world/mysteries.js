@@ -23,8 +23,10 @@ export const MYSTERY_INFO = [
     lore: 'A whirlpool that never stops turning and glows at night. A fishing trawler circles it endlessly and never sinks.' },
   { id: 'mothership', name: 'The Watcher', place: 'Above the clouds', hint: 'Climb above 1,800 metres over the island.',
     lore: 'A vessel hundreds of metres across hangs silently above the clouds, hidden by daylight. It has been watching the island for a very long time.' },
-  { id: 'moon', name: 'Lunar Echo', place: 'The Moon', hint: 'Beyond the sky. Only the visitors\' craft can get there.',
+  { id: 'moon', name: 'Lunar Echo', place: 'Monolith Crater, the Moon', hint: 'Beyond the sky. Fly a rocket or the Odyssey to orbit, warp to the Moon (2) and land.',
     lore: 'On the Moon: a second monolith, identical to the one on Mount Kestrel. The echo was never a signal. It was a reply.' },
+  { id: 'ares', name: 'The Ares Beacon', place: 'Ares Vallis, Mars', hint: 'On Mars, down the dry canyon south-east of the landing site. Warp there with 3.',
+    lore: 'A glyph-covered obelisk older than the canyon it stands in, beaming a pulse into the sky every 1.7 seconds. The pulse is aimed at Kestrel Island.' },
 ];
 
 const STORE = 'csaf-mysteries-v1';
