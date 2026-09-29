@@ -216,7 +216,7 @@ export class Player {
       this.vel.y = 12;
       this.mode = 'fall';
       this.chuteTime = 0;
-      G.hud.toast('Ejected! Parachute deploying...', 2);
+      G.hud.toast('Ejected! Parachute deploying · WASD steer · hold C to drop faster', 3);
       G.audio?.eject();
     }
     this.yaw = v.headingAngle();
@@ -281,7 +281,9 @@ export class Player {
     if (this.mode === 'chute') {
       this.vel.x = damp(this.vel.x, wx * 9, 1.2, dt);
       this.vel.z = damp(this.vel.z, wz * 9, 1.2, dt);
-      this.vel.y = damp(this.vel.y, -5.2, 2.5, dt);
+      // Hold C (or ▼) to spill air and drop faster.
+      const spill = I.down('KeyC') || I.tdown('down');
+      this.vel.y = damp(this.vel.y, spill ? -17 : -6.5, 2.5, dt);
       this.human.state = 'chute';
     } else {
       this.vel.y -= 9.8 * dt;

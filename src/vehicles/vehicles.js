@@ -219,6 +219,8 @@ export class Vehicle {
     tq.setFromAxisAngle(Y, -ctl.yaw * d.yawRate * dt); this.quat.multiply(tq);
     // Banked flight turns the aircraft (coordinated turn).
     tq.setFromAxisAngle(Y, -Math.sin(bank) * d.turn * auth * dt); this.quat.premultiply(tq);
+    // An abandoned aircraft slowly noses over and goes down.
+    if (!occupied) { const fwd0 = tv2.copy(Z).applyQuaternion(this.quat); if (fwd0.y > -0.7) { tq.setFromAxisAngle(X, 0.18 * dt); this.quat.multiply(tq); } }
     // Stall: the nose falls and the aircraft sinks.
     const lift = clamp(this.speed / d.stall, 0, 1);
     this.stalling = lift < 0.85;

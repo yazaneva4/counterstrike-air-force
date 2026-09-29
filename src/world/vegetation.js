@@ -163,7 +163,8 @@ export class Vegetation {
         if (b.coast > 2600) continue;
         let blockedZone = false;
         for (const zn of terrain.zones) {
-          if (zn.id === 'turbines' || zn.id === 'lighthouse') continue;
+          if (zn.id === 'turbines') continue;
+          if (zn.id === 'lighthouse') { if (Math.hypot(px - zn.x, pz - zn.z) < 75) { blockedZone = true; break; } continue; }
           if (terrain.zoneWeight(zn, px, pz) > 0.05) { blockedZone = true; break; }
         }
         if (blockedZone || isBlocked(px, pz)) continue;

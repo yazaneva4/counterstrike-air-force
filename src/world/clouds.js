@@ -105,7 +105,7 @@ export class Clouds {
           float near = smoothstep(18.0, 140.0, vDepth);
           float fog = 1.0 - exp(-uFogDensity * uFogDensity * vDepth * vDepth * 0.45);
           col = mix(col, uFogColor, fog);
-          gl_FragColor = vec4(col, a * uOpacity * near * (1.0 - fog * 0.6));
+          gl_FragColor = vec4(col, pow(a, 1.35) * uOpacity * near * (1.0 - fog * 0.6));
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,

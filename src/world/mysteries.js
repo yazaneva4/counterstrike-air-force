@@ -295,7 +295,7 @@ export class Mysteries {
     g.position.copy(pos);
     this.group.add(g);
     this.mothership = g;
-    this.sites.mothership = { pos, radius: 520, minY: 1300 };
+    this.sites.mothership = { pos: pos.clone(), radius: 520, minY: 1300 };
     this.anim.push((t, night) => {
       g.rotation.y = t * 0.02;
       g.position.x = pos.x + Math.sin(t * 0.01) * 200;

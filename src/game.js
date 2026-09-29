@@ -411,6 +411,7 @@ export class Game {
       if (res) this._vehicleEvent(v, res);
     }
     if (p.mode === 'dead') p.deadCamera(dt, t);
+    if (this.debugCam) { this.camera.position.copy(this.debugCam.pos); this.camera.up.set(0, 1, 0); this.camera.lookAt(this.debugCam.look); }
     if (this.reentry > 0) {
       this.reentry -= dt;
       const u = this.ufo;
