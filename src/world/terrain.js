@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { Noise } from '../core/noise.js';
 import { clamp, lerp, smoothstep } from '../core/util.js';
+import { groundDetail } from '../core/textures.js';
 
 export const SEED = 1947;
 export const MAP_SIZE = 5600;
@@ -194,6 +195,7 @@ export class Terrain {
     geo.computeVertexNormals();
 
     const nrm = geo.attributes.normal.array;
+    const splat = new Float32Array(V * V * 3);
     const N = this.noise;
     const c = new THREE.Color();
     const t = new THREE.Color();
@@ -246,30 +248,63 @@ export class Terrain {
       if (h < 0.4) c.copy(C.wetSand).lerp(C.seabed, smoothstep(0.4, -10, h));
 
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      // Surface type weights for the detail textures: grass, rock, sand.
+      const sRock = Math.max(steep, smoothstep(300, 460, h) * mN * 0.8, dW > 0.01 ? smoothstep(0.93, 0.7, ny) * dW : 0);
+      const sSand = Math.max(dW * 0.9, (beach > 0 && d < 520) ? beach : 0, h < 0.4 ? 1 : 0, this.zoneWeight(pyramid, x, z) * 0.8) * (1 - sRock * 0.6);
+      splat[i * 3] = Math.max(0, 1 - sRock - sSand); splat[i * 3 + 1] = sRock; splat[i * 3 + 2] = sSand;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('splat', new THREE.BufferAttribute(splat, 3));
     geo.computeBoundingSphere();
 
+    const G = groundDetail();
     const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0 });
     material.onBeforeCompile = (shader) => {
+      shader.uniforms.uDetail = { value: G.detail };
+      shader.uniforms.uDetailN = { value: G.normal };
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
-        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNrm;\nvarying vec3 vSplat;\nattribute vec3 splat;')
+        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNrm = normalize(mat3(modelMatrix) * objectNormal);\nvSplat = splat;');
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
           varying vec3 vWPos;
+          varying vec3 vWNrm;
+          varying vec3 vSplat;
+          uniform sampler2D uDetail, uDetailN;
           float th(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
           float tn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
             return mix(mix(th(i), th(i+vec2(1,0)), f.x), mix(th(i+vec2(0,1)), th(i+vec2(1,1)), f.x), f.y); }`)
         .replace('#include <color_fragment>', `#include <color_fragment>
           float camD = length(vWPos - cameraPosition);
-          float fine = tn(vWPos.xz * 0.9) * 0.5 + tn(vWPos.xz * 3.7) * 0.5;
+          float near = 1.0 - smoothstep(60.0, 420.0, camD);
+          // Tri-planar-ish sampling: ground plane for grass/sand, the steeper
+          // wall projection for rock so cliffs are not smeared.
+          vec3 an = abs(normalize(vWNrm));
+          vec2 wallUV = an.x > an.z ? vWPos.zy : vWPos.xy;
+          vec3 dFlat = texture2D(uDetail, vWPos.xz * 0.16).rgb;
+          vec3 dFar = texture2D(uDetail, vWPos.xz * 0.019).rgb;
+          float rockT = mix(texture2D(uDetail, vWPos.xz * 0.08).g, texture2D(uDetail, wallUV * 0.08).g, smoothstep(0.75, 0.45, an.y));
+          vec3 w = vSplat / max(vSplat.r + vSplat.g + vSplat.b, 0.001);
+          float dNear = dot(w, vec3(dFlat.r, rockT, dFlat.b));
+          float dMid = dot(w, dFar);
+          float detail = mix(0.5, dNear, near) * 0.65 + dMid * 0.35;
           float mid = tn(vWPos.xz * 0.11);
           float broad = tn(vWPos.xz * 0.013);
-          float detail = mix(fine, 0.5, smoothstep(40.0, 260.0, camD));
-          diffuseColor.rgb *= 0.78 + 0.18 * mid + 0.16 * detail + 0.1 * broad;
+          diffuseColor.rgb *= 0.55 + detail * 0.9 + 0.1 * mid + 0.08 * broad - 0.09;
+          // Grass blades pick up a little yellow-green variation up close.
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 1.06, 0.8), w.r * near * smoothstep(0.45, 0.7, dFlat.r) * 0.6);
           // Wet darkening at the waterline.
-          diffuseColor.rgb *= mix(0.72, 1.0, smoothstep(-0.2, 1.4, vWPos.y));`);
+          diffuseColor.rgb *= mix(0.72, 1.0, smoothstep(-0.2, 1.4, vWPos.y));`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          {
+            vec3 dn = texture2D(uDetailN, vWPos.xz * 0.16).xyz * 2.0 - 1.0;
+            vec3 dr = texture2D(uDetailN, wallUV * 0.08).xyz * 2.0 - 1.0;
+            vec3 pert = vec3(dn.x, 0.0, -dn.y) * (0.55 * w.r + 0.3 * w.b) + vec3(dr.x, dr.y, dr.x) * 0.6 * w.g;
+            vec3 nw = normalize(vWNrm + pert * near);
+            normal = normalize((viewMatrix * vec4(nw, 0.0)).xyz);
+          }`)
+        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+          roughnessFactor = mix(roughnessFactor, 0.55, (1.0 - smoothstep(-0.2, 0.9, vWPos.y)) * 0.8);`);
     };
     this.mesh = new THREE.Mesh(geo, material);
     this.mesh.receiveShadow = true;

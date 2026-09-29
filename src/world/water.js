@@ -6,9 +6,25 @@
 import * as THREE from 'three';
 import { MAP_SIZE } from './terrain.js';
 
+// Photographic ripple normals (Cesium waterNormals, Apache-2.0), loaded once.
+let normalsTex = null;
+function waterNormals() {
+  if (normalsTex) return normalsTex;
+  const flat = new THREE.DataTexture(new Uint8Array([128, 128, 255, 255]), 1, 1);
+  flat.needsUpdate = true;
+  normalsTex = { value: flat };
+  new THREE.TextureLoader().load('assets/textures/water_normals.jpg', (t) => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    normalsTex.value = t;
+  });
+  return normalsTex;
+}
+
 export class Ocean {
   constructor(heightTex) {
     this.uniforms = {
+      uNormals: waterNormals(),
       uTime: { value: 0 },
       uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSunColor: { value: new THREE.Color(1, 1, 1) },
@@ -36,8 +52,9 @@ export class Ocean {
       fragmentShader: /* glsl */`
         uniform float uTime, uDay, uNight, uMapSize, uFogDensity;
         uniform vec3 uSunDir, uSunColor, uHorizon, uZenith, uFogColor, uMoonDir;
-        uniform sampler2D uHeight;
+        uniform sampler2D uHeight, uNormals;
         varying vec3 vW;
+        vec2 rip(vec2 uv){ return texture2D(uNormals, uv).xy * 2.0 - 1.0; }
 
         float hash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
         float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
@@ -57,11 +74,11 @@ export class Ocean {
             float ph = dot(d, p) * freq + t * speed * freq * 8.0;
             g += d * cos(ph) * amp * freq * mix(1.0, 0.25, fade * step(2.0, fi));
           }
-          // Fine chop from scrolling value noise.
-          vec2 q = p * 0.35 + vec2(t * 0.35, t * 0.22);
-          float e = 0.35;
-          float n0 = vnoise(q), nx = vnoise(q + vec2(e, 0.0)), nz = vnoise(q + vec2(0.0, e));
-          g += vec2(n0 - nx, n0 - nz) * 0.09 * (1.0 - fade);
+          // Fine chop: three scrolling layers of photographic ripple normals.
+          vec2 r = rip(p * 0.0125 + t * vec2(0.006, 0.004)) * 0.55
+                 + rip(p * 0.031 - t * vec2(0.009, -0.012)) * 0.35
+                 + rip(p * 0.083 + t * vec2(0.021, 0.017)) * 0.22 * (1.0 - fade);
+          g += r * 0.055 * (1.0 - fade * 0.7);
           return g;
         }
 
