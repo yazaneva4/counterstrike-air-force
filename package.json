@@ -1,8 +1,8 @@
 {
   "name": "counterstrike-air-force",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "Sky Patrol, a Three.js arcade air-defense flight game with selectable aircraft.",
+  "description": "Counterstrike Air Force: First Contact. An open-world Three.js island on Earth with people, jets, helicopters, a flying saucer, aliens, mysteries and multiplayer.",
   "type": "module",
   "scripts": {
     "start": "node serve.js",
@@ -10,11 +10,13 @@
   },
   "keywords": [
     "three.js",
-    "arcade",
+    "open-world",
     "flight",
-    "aircraft",
-    "game",
-    "webgl"
+    "helicopter",
+    "aliens",
+    "multiplayer",
+    "webgl",
+    "game"
   ],
   "license": "MIT"
 }

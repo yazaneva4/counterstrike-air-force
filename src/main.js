@@ -1,345 +1,320 @@
-// RIFTBREAK VELOCITY -- entry point and game loop.
-// Wires the subsystems together, owns the state machine (menu / playing / dead),
-// the scoring, the boost + rift economy, and the speed-drunk chase camera.
+// Entry point: the title screen (a live Earth with the sun, moon and a
+// visiting saucer), pilot profile and world options, multiplayer rooms,
+// loading, pause/settings, chat, and the main loop.
 
 import * as THREE from 'three';
-import { CFG } from './config.js';
-import { localBasis } from './path.js';
-import { Input } from './input.js';
-import { Environment } from './environment.js';
-import { Canyon } from './canyon.js';
-import { Ship } from './ship.js';
-import { Gates } from './gates.js';
-import { Rift } from './rift.js';
-import { Particles } from './particles.js';
-import { PostFX } from './postfx.js';
-import { HUD } from './hud.js';
-import { Audio } from './audio.js';
+import { Input } from './core/input.js';
+import { AudioEngine } from './core/audio.js';
+import { createEarth } from './space/globe.js';
+import { buildSaucer } from './vehicles/models.js';
+import { CHARACTERS } from './player.js';
+import { Game } from './game.js';
+import { Net } from './net/net.js';
+import { glowSprite, isTouch, clamp } from './core/util.js';
 
-const BEST_KEY = 'riftbreak_best';
+const $ = (s) => document.querySelector(s);
+const canvas = $('#game');
 
-class Game {
-  constructor() {
-    const canvas = document.getElementById('game');
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-    this.renderer.setSize(innerWidth, innerHeight);
+// ---- Settings ------------------------------------------------------------------
+const STORE = 'csaf-settings-v2';
+const defaults = { sensitivity: 1, invertY: false, volume: 0.8, muted: false, quality: 'auto', profile: { name: '', character: 'pilot', skin: 1 }, spawn: 'airbase', time: 'day' };
+let settings = defaults;
+try { settings = Object.assign({}, defaults, JSON.parse(localStorage.getItem(STORE) || '{}')); settings.profile = Object.assign({}, defaults.profile, settings.profile); } catch (e) { /* ignore */ }
+const save = () => { try { localStorage.setItem(STORE, JSON.stringify(settings)); } catch (e) { /* ignore */ } };
+if (!settings.profile.name) settings.profile.name = 'Pilot ' + Math.floor(100 + Math.random() * 900);
 
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(CFG.fovBase, innerWidth / innerHeight, 0.1, 12000);
+function resolveQuality() {
+  if (settings.quality !== 'auto') return settings.quality;
+  const mobile = isTouch() && Math.min(screen.width, screen.height) < 900;
+  return mobile ? 'low' : (navigator.hardwareConcurrency || 4) >= 8 ? 'high' : 'medium';
+}
 
-    this.env = new Environment(this.scene, this.renderer);
-    this.canyon = new Canyon(this.scene);
-    this.ship = new Ship(this.scene);
-    this.gates = new Gates(this.scene);
-    this.rift = new Rift(this.scene);
-    this.particles = new Particles(this.scene);
-    this.post = new PostFX(this.renderer, this.scene, this.camera);
+// ---- Renderer ------------------------------------------------------------------
+let renderer = null;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.9;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+} catch (err) {
+  document.body.classList.add('no-webgl');
+  $('#startBtn').disabled = true;
+  $('#webglNote').textContent = 'This browser could not start 3D graphics. Please open the game in a browser with WebGL enabled.';
+}
+const pixelRatio = () => Math.min(devicePixelRatio || 1, { high: 1.75, medium: 1.35, low: 1 }[resolveQuality()] || 1.35);
+if (renderer) { renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight); }
 
-    this.input = new Input();
-    this.hud = new HUD();
-    this.audio = new Audio();
+const input = new Input(canvas);
+const audio = new AudioEngine();
+audio.volume = settings.volume;
+audio.muted = settings.muted;
 
-    this.gates.onResult = (hit, idx) => this._onGate(hit, idx);
+// ---- Title scene -----------------------------------------------------------------
+const menu = { scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 5000) };
+let earth = null, saucer = null, moon = null, stars = null;
+if (renderer) {
+  menu.scene.background = new THREE.Color(0x01030a);
+  earth = createEarth(1, renderer, { segments: 128 });
+  earth.group.rotation.set(0.35, -2.1, 0.12);
+  menu.scene.add(earth.group);
+  const sunDir = new THREE.Vector3(-0.95, 0.22, 0.18).normalize();
+  earth.setSun(sunDir);
+  const sun = glowSprite(0xfff1d6, 26, 1); sun.position.copy(sunDir).multiplyScalar(60); menu.scene.add(sun);
+  const sunCore = glowSprite(0xffffff, 6, 1); sunCore.position.copy(sun.position); menu.scene.add(sunCore);
+  const moonMat = new THREE.MeshStandardMaterial({ color: 0xb8b6ae, roughness: 1 });
+  moon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 32, 16), moonMat);
+  menu.scene.add(moon);
+  const light = new THREE.DirectionalLight(0xffffff, 3); light.position.copy(sunDir); menu.scene.add(light);
+  menu.scene.add(new THREE.AmbientLight(0x223344, 0.4));
+  const sp = new Float32Array(3000 * 3);
+  for (let i = 0; i < 3000; i++) { const v = new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(400 + Math.random() * 400); sp.set([v.x, v.y, v.z], i * 3); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+  stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xcfe0ff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0.85 }));
+  menu.scene.add(stars);
+  const s = buildSaucer();
+  saucer = s.group;
+  saucer.scale.setScalar(0.012);
+  s.parts.halo.material.opacity = 0.6;
+  menu.saucerParts = s.parts;
+  menu.scene.add(saucer);
+  layoutMenuCamera();
+}
 
-    // Camera smoothing state.
-    this.camPos = new THREE.Vector3(0, CFG.camHeight, -CFG.camDist);
-    this._look = new THREE.Vector3();
-    this._rand = new THREE.Vector3();
-    this._up = new THREE.Vector3(0, 1, 0);
+function layoutMenuCamera() {
+  const wide = innerWidth / innerHeight > 1.05;
+  menu.camera.aspect = innerWidth / innerHeight;
+  menu.camera.position.set(wide ? -1.25 : 0, wide ? 0.05 : -0.7, wide ? 3.9 : 5.2);
+  menu.camera.lookAt(wide ? -1.25 : 0, wide ? 0.05 : -0.7, 0);
+  menu.camera.updateProjectionMatrix();
+}
 
-    this.best = Number(localStorage.getItem(BEST_KEY)) || 0;
+function renderMenu(dt, t) {
+  if (!renderer || !earth) return;
+  earth.update(dt);
+  earth.group.rotation.y += dt * 0.035;
+  const a = t * 0.32;
+  saucer.position.set(Math.cos(a) * 1.45, Math.sin(a * 0.7) * 0.35 + 0.15, Math.sin(a) * 1.45);
+  saucer.rotation.set(0.3, t * 2, 0.15);
+  menu.saucerParts.lights.forEach((m, i) => m.color.setHSL(0.45 + 0.1 * Math.sin(i + t * 3), 1, 0.5 + 0.2 * Math.sin(t * 6 - i)));
+  moon.position.set(Math.cos(t * 0.05 + 2) * 4.2, 0.9, Math.sin(t * 0.05 + 2) * 4.2 - 1);
+  const px = (menu.mx || 0) * 0.08, py = (menu.my || 0) * 0.05;
+  menu.camera.position.x += (layoutX() + px - menu.camera.position.x) * Math.min(1, dt * 2);
+  menu.camera.position.y += (layoutY() - py - menu.camera.position.y) * Math.min(1, dt * 2);
+  renderer.toneMappingExposure = 1.0;
+  renderer.render(menu.scene, menu.camera);
+}
+const layoutX = () => (innerWidth / innerHeight > 1.05 ? -1.25 : 0);
+const layoutY = () => (innerWidth / innerHeight > 1.05 ? 0.05 : -0.7);
+addEventListener('pointermove', (e) => { menu.mx = e.clientX / innerWidth - 0.5; menu.my = e.clientY / innerHeight - 0.5; });
 
-    this.state = 'menu';
-    this.menuZ = 0;
-    this.boostVis = 0;
-    this.fovKick = 0;
-    this.impulse = 0;
-    this.deadTimer = 0;
-    this.time = 0;
+// ---- Menu UI ----------------------------------------------------------------------
+function segmented(el, key, values) {
+  el.innerHTML = values.map(([v, label]) => `<button type="button" data-v="${v}" class="${settings[key] === v ? 'on' : ''}">${label}</button>`).join('');
+  el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    settings[key] = b.dataset.v; save(); audio.init(); audio.click();
+    el.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  }));
+}
 
-    this._resetRun();
-    this.ship.setVisible(true);
-    this.hud.showMenu(this.best);
-    this.hud.setMuted(this.audio.muted);
+function buildMenu() {
+  $('#pilotName').value = settings.profile.name;
+  $('#pilotName').addEventListener('input', (e) => { settings.profile.name = e.target.value.slice(0, 18) || 'Pilot'; save(); });
+  const chars = $('#characters');
+  const icons = { pilot: '✈', explorer: '⛰', scientist: '⚗', crew: '⚙' };
+  chars.innerHTML = CHARACTERS.map((c) => `<button type="button" data-c="${c.id}" class="${settings.profile.character === c.id ? 'on' : ''}"><span>${icons[c.id]}</span>${c.label}</button>`).join('');
+  chars.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    settings.profile.character = b.dataset.c; save(); audio.init(); audio.click();
+    chars.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  }));
+  const skins = ['#f1c7a5', '#e0ac86', '#c68a62', '#a66d47', '#7c4c32', '#5a3825'];
+  const sk = $('#skins');
+  sk.innerHTML = skins.map((c, i) => `<button type="button" aria-label="Skin tone ${i + 1}" data-i="${i}" style="--c:${c}" class="${settings.profile.skin === i ? 'on' : ''}"></button>`).join('');
+  sk.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    settings.profile.skin = +b.dataset.i; save(); audio.init(); audio.click();
+    sk.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  }));
+  segmented($('#spawnSel'), 'spawn', [['airbase', 'Airbase'], ['village', 'Village'], ['beach', 'Beach'], ['farm', 'Farm']]);
+  segmented($('#timeSel'), 'time', [['dawn', 'Dawn'], ['day', 'Day'], ['sunset', 'Sunset'], ['night', 'Night']]);
+  segmented($('#qualitySel'), 'quality', [['auto', 'Auto'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]);
+  $('#hostBtn').addEventListener('click', () => { audio.init(); pendingRoom = { host: true }; $('#roomStatus').textContent = 'A room will open when you enter the island'; $('#roomCode').value = ''; });
+  $('#joinBtn').addEventListener('click', () => {
+    audio.init();
+    const code = $('#roomCode').value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{5}$/.test(code)) { $('#roomStatus').textContent = 'Enter a 5-character room code'; return; }
+    pendingRoom = { host: false, code };
+    $('#roomStatus').textContent = `You will join ${code} when you enter the island`;
+  });
+  $('#roomCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#joinBtn').click(); });
+  const params = new URLSearchParams(location.search);
+  if (params.get('room')) { $('#roomCode').value = params.get('room').toUpperCase().slice(0, 5); pendingRoom = { host: false, code: $('#roomCode').value }; $('#roomStatus').textContent = `Invited to room ${$('#roomCode').value}`; }
+  $('#startBtn').addEventListener('click', startGame);
+}
+let pendingRoom = null;
 
-    // Tappable mute (handy on touch, where there's no M key).
-    if (this.hud.muteIndicator) {
-      this.hud.muteIndicator.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.audio.init();
-        this.hud.setMuted(this.audio.toggleMute());
-      });
-    }
+// ---- Settings panel ----------------------------------------------------------------
+function bindSettings() {
+  const sens = $('#setSens'), inv = $('#setInvert'), vol = $('#setVol'), mute = $('#setMute');
+  sens.value = settings.sensitivity; inv.checked = settings.invertY; vol.value = settings.volume; mute.checked = settings.muted;
+  sens.addEventListener('input', () => { settings.sensitivity = +sens.value; save(); });
+  inv.addEventListener('change', () => { settings.invertY = inv.checked; save(); });
+  vol.addEventListener('input', () => { settings.volume = +vol.value; audio.volume = settings.volume; audio.setMuted(settings.muted); save(); });
+  mute.addEventListener('change', () => { settings.muted = mute.checked; audio.setMuted(settings.muted); save(); });
+}
 
-    addEventListener('resize', () => this._onResize());
-    this.last = performance.now();
-    requestAnimationFrame((t) => this._loop(t));
-  }
+// ---- Game start ---------------------------------------------------------------------
+let game = null;
+const TIMES = { dawn: 0.265, day: 0.4, sunset: 0.735, night: 0.9 };
 
-  _resetRun() {
-    this.ship.reset();
-    this.gates.reset();
-    this.rift.reset(this.ship.z);
-    this.particles.reset(this.ship.z);
-    this.distance = 0;
-    this.style = 0;
-    this.multiplier = 1;
-    this.chain = 0;
-    this.boost = CFG.boostMax;
-    this.speed = CFG.startSpeed;
-    this.topSpeed = CFG.startSpeed;
-    this.gatesHit = 0;
-    this.grazeTimer = 0;
-    this.danger = 0;
-  }
-
-  _startGame() {
-    this.audio.init();
-    this.audio.resume();
-    this.input.consumeAction(); // clear any queued press so we start clean
-    this._resetRun();
-    this.ship.setVisible(true);
-    this.state = 'playing';
-    this.hud.hideOverlay();
-    this.audio.boost();
-    this.fovKick = 6;
-  }
-
-  _die(caught) {
-    if (this.state !== 'playing') return;
-    this.state = 'dead';
-    this.deadTimer = 0;
-    this.impulse = 3.2;
-    // Discard any Space presses queued during the run (boost also uses Space),
-    // so the game never auto-restarts without a fresh press.
-    this.input.consumeAction();
-    this.ship.worldPos(this._look);
-    this.particles.crash(this._look);
-    this.ship.setVisible(false);
-    this.audio.crash();
-
-    const newBest = this.distance > this.best;
-    if (newBest) {
-      this.best = Math.floor(this.distance);
-      try { localStorage.setItem(BEST_KEY, String(this.best)); } catch (e) {}
-    }
-    this.hud.showGameOver({
-      caught,
-      distance: this.distance,
-      style: this.style,
-      topSpeed: this.topSpeed,
-      gates: this.gatesHit,
-      best: this.best,
-      newBest,
+async function startGame() {
+  if (!renderer) return;
+  audio.init();
+  audio.click();
+  $('#menu').classList.add('out');
+  $('#loading').classList.add('on');
+  settings.quality = settings.quality || 'auto';
+  const q = resolveQuality();
+  renderer.setPixelRatio(pixelRatio());
+  renderer.setSize(innerWidth, innerHeight);
+  game = new Game({ renderer, input, audio, settings: { ...settings, quality: q, get sensitivity() { return settings.sensitivity; }, get invertY() { return settings.invertY; } } });
+  try {
+    await game.build((f, label) => {
+      $('#loadBar').style.width = Math.round(f * 100) + '%';
+      $('#loadLabel').textContent = label;
     });
+  } catch (err) {
+    console.error(err);
+    $('#loadLabel').textContent = 'Something went wrong while building the world: ' + err.message;
+    return;
   }
-
-  _onGate(hit, idx) {
-    if (this.state !== 'playing') return;
-    if (hit) {
-      this.chain += 1;
-      this.gatesHit += 1;
-      this.multiplier = Math.min(CFG.multiplierMax, 1 + Math.floor(this.chain / CFG.chainPerMultiplier));
-      this.style += CFG.gateScore * this.multiplier;
-      this.boost = Math.min(CFG.boostMax, this.boost + CFG.gateBoostRefill);
-      this.rift.knockback(CFG.gateKnockback);
-      this.fovKick = 5;
-      this.impulse = 1.0;
-      this.audio.gate(true);
-      this.ship.worldPos(this._look);
-      this.particles.spawn(this._look.x, this._look.y, this._look.z, 0.3, 1.0, 0.6, 26, 26, 0.5);
-      this.hud.popup(this.chain > 1 ? `CHAIN x${this.multiplier}` : 'GATE!', '#39ff8a');
-    } else {
-      if (this.chain > 2) this.hud.popup('CHAIN LOST', '#ff3b5c');
-      this.chain = 0;
-      this.multiplier = 1;
-      this.audio.gate(false);
-    }
-  }
-
-  _onResize() {
-    this.camera.aspect = innerWidth / innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(innerWidth, innerHeight);
-    this.post.setSize(innerWidth, innerHeight);
-  }
-
-  _loop(now) {
-    const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
-    this.last = now;
-    this.time += dt;
-
-    if (this.input.consumeMute()) {
-      this.audio.init();
-      this.hud.setMuted(this.audio.toggleMute());
-    }
-
-    if (this.state === 'menu') this._updateMenu(dt);
-    else if (this.state === 'playing') this._updatePlaying(dt);
-    else this._updateDead(dt);
-
-    // Shared visual updates.
-    this.canyon.update(this.ship.z);
-    this.gates.update(this.ship.z, this.ship.u, this.ship.v, dt, this.time);
-    this.particles.update(dt, this.ship.z, this.speed);
-    this.env.update(this.camera, this.time);
-
-    this._updateCamera(dt);
-
-    const speed01 = THREE.MathUtils.clamp((this.speed - CFG.startSpeed) / (CFG.maxSpeed - CFG.startSpeed), 0, 1);
-    this.post.update(dt, this.time, speed01, this.boostVis, this.danger);
-    this.audio.setEngine(speed01, this.boostVis, this.state !== 'dead');
-
-    this.post.render();
-    requestAnimationFrame((t) => this._loop(t));
-  }
-
-  _updateMenu(dt) {
-    // Attract-mode auto cruise so the title sits over live flight.
-    this.speed = CFG.startSpeed * 0.7;
-    this.ship.z += this.speed * dt;
-    this.ship.u = Math.sin(this.time * 0.4) * 8;
-    this.ship.v = CFG.wallHeight * 0.4 + Math.sin(this.time * 0.3) * 4;
-    this.ship.velU = Math.cos(this.time * 0.4) * 8;
-    this.ship.syncTransform(dt, 0.6);
-    this.rift.mesh.visible = false;
-    this.rift.light.intensity = 0;
-    this.boostVis += (0 - this.boostVis) * Math.min(1, dt * 4);
-    this.danger = 0;
-
-    if (this.input.consumeAction()) this._startGame();
-  }
-
-  _updatePlaying(dt) {
-    this.rift.mesh.visible = true;
-
-    // Boost economy.
-    const wantBoost = this.input.isBoost() && this.boost > 0;
-    if (wantBoost) this.boost = Math.max(0, this.boost - CFG.boostDrain * dt);
-    else this.boost = Math.min(CFG.boostMax, this.boost + CFG.boostRegen * dt);
-    this.boostVis += ((wantBoost ? 1 : 0) - this.boostVis) * Math.min(1, dt * 6);
-
-    // Forward speed: ramps with distance, plus boost and a chain bonus.
-    const baseSpeed = Math.min(
-      CFG.maxSpeed - CFG.boostSpeed,
-      CFG.startSpeed + Math.sqrt(Math.max(0, this.distance)) * CFG.speedRamp
-    );
-    this.speed = THREE.MathUtils.clamp(
-      baseSpeed + (wantBoost ? CFG.boostSpeed : 0) + this.multiplier * 1.4,
-      0,
-      CFG.maxSpeed
-    );
-    this.topSpeed = Math.max(this.topSpeed, this.speed);
-
-    // Fly.
-    const ax = this.input.axisX();
-    const ay = this.input.axisY();
-    const report = this.ship.update(dt, ax, ay, this.speed);
-    this.distance = this.ship.z;
-    this.style += this.speed * dt * 0.35 * this.multiplier; // passive distance-style
-
-    if (report.crash) {
-      this._die(false);
-      this.ship.syncTransform(dt, this.boostVis);
-      return;
-    }
-
-    // Graze handling (continuous, rate-limited sparks).
-    this.grazeTimer -= dt;
-    if (report.graze) {
-      this.style += CFG.grazeScore * this.multiplier * dt * 2.2;
-      if (this.grazeTimer <= 0) {
-        this.grazeTimer = CFG.grazeCooldown;
-        this.ship.worldPos(this._look);
-        this.particles.graze(this._look, report.side);
-        this.rift.knockback(CFG.grazeKnockback * 0.35);
-        this.impulse = Math.max(this.impulse, 0.5);
-      }
-    }
-
-    // Rift chase.
-    const progress = THREE.MathUtils.clamp(this.distance / CFG.riftRampDist, 0, 1);
-    const gap = this.rift.update(dt, this.ship.z, baseSpeed, progress, this.time);
-    this.danger = this.rift.danger();
-    if (gap <= 0) { this._die(true); this.ship.syncTransform(dt, this.boostVis); return; }
-
-    // Exhaust trail.
-    this.ship.syncTransform(dt, 0.55 + this.boostVis * 0.45);
-    this.ship.tailWorld(this._look);
-    this.particles.trail(this._look, this.boostVis);
-
-    this._pushHud();
-  }
-
-  _updateDead(dt) {
-    this.deadTimer += dt;
-    // Let the wreck coast and the rift keep advancing for drama.
-    this.speed *= Math.max(0, 1 - dt * 1.5);
-    this.rift.mesh.visible = true;
-    const progress = THREE.MathUtils.clamp(this.distance / CFG.riftRampDist, 0, 1);
-    this.rift.update(dt, this.ship.z + 2, 40, progress, this.time);
-    this.danger = Math.min(1, this.danger + dt * 0.6);
-    this.boostVis += (0 - this.boostVis) * Math.min(1, dt * 3);
-
-    if (this.deadTimer > 0.7 && this.input.consumeAction()) this._startGame();
-  }
-
-  _updateCamera(dt) {
-    const shipPos = this.ship.worldPos(this._look).clone();
-    const fwd = this.ship.forward().clone();
-    const { up } = localBasis(this.ship.z, new THREE.Vector3(), this._up);
-
-    const desired = shipPos.clone()
-      .addScaledVector(fwd, -CFG.camDist)
-      .addScaledVector(up, CFG.camHeight);
-
-    const k = 1 - Math.exp(-CFG.camLerp * dt);
-    this.camPos.lerp(desired, k);
-
-    // Shake from speed / boost / danger / impulses.
-    const speed01 = THREE.MathUtils.clamp((this.speed - CFG.startSpeed) / (CFG.maxSpeed - CFG.startSpeed), 0, 1);
-    const baseShake = speed01 * CFG.shakeSpeed + this.boostVis * CFG.shakeBoost + this.danger * 0.4;
-    this.impulse *= Math.max(0, 1 - dt * 4);
-    const shake = baseShake * 0.18 + this.impulse;
-    this._rand.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).multiplyScalar(shake);
-
-    this.camera.position.copy(this.camPos).add(this._rand);
-    this.camera.up.copy(up);
-    this._look.copy(shipPos).addScaledVector(fwd, CFG.camLookAhead).addScaledVector(up, CFG.camLookUp);
-    this.camera.lookAt(this._look);
-
-    // FOV surge.
-    this.fovKick *= Math.max(0, 1 - dt * 3);
-    const targetFov = CFG.fovBase + speed01 * CFG.fovSpeed + this.boostVis * CFG.fovBoost + this.fovKick;
-    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
-    this.camera.updateProjectionMatrix();
-  }
-
-  _pushHud() {
-    this.hud.setStats({
-      distance: this.distance,
-      speed: this.speed,
-      style: this.style,
-      multiplier: this.multiplier,
-      chain: this.chain,
-      boost01: this.boost / CFG.boostMax,
-      danger: this.danger,
-    });
+  game.onRoomChange = (code, host) => {
+    $('#roomBadge').textContent = code ? `ROOM ${code}` : '';
+    $('#roomBadge').style.display = code ? 'block' : 'none';
+    $('#invite').style.display = code ? 'inline-block' : 'none';
+    $('#invite').dataset.code = code || '';
+  };
+  $('#loading').classList.remove('on');
+  $('#menu').style.display = 'none';
+  document.body.classList.add('playing');
+  if (isTouch()) document.body.classList.add('touch');
+  game.start({ spawn: settings.spawn, time: TIMES[settings.time] ?? 0.4 });
+  game.fade(1.4);
+  if (pendingRoom) {
+    if (pendingRoom.host) game.net.host(settings.profile.name);
+    else game.net.join(pendingRoom.code, settings.profile.name);
   }
 }
 
-// Kick everything off once the DOM is ready.
-window.addEventListener('DOMContentLoaded', () => {
-  try {
-    window.__game = new Game();
-  } catch (err) {
-    console.error(err);
-    const el = document.getElementById('overlay');
-    if (el) {
-      el.className = 'show';
-      el.innerHTML = `<div class="panel"><h1>WebGL failed to start</h1>
-        <p style="opacity:.7">${err && err.message ? err.message : err}</p></div>`;
-    }
+// ---- Pause / chat ------------------------------------------------------------------------
+function setPaused(p) {
+  if (!game) return;
+  game.paused = p;
+  $('#pause').classList.toggle('on', p);
+  if (p) input.releaseLock();
+}
+
+addEventListener('keydown', (e) => {
+  if (!game || !game.running) return;
+  const chat = $('#chatInput');
+  if (e.target === chat) {
+    if (e.key === 'Enter') {
+      const text = chat.value.trim();
+      if (text) {
+        if (game.net.online) { game.net.chat(text); game.chatLine(settings.profile.name, text, '#7dffd6'); }
+        else game.chatLine('', 'You are playing solo · create or join a room from the pause menu to chat', '#ffb45a');
+      }
+      chat.value = ''; chat.blur(); $('#chat').classList.remove('typing'); input.enabled = true;
+    } else if (e.key === 'Escape') { chat.value = ''; chat.blur(); $('#chat').classList.remove('typing'); input.enabled = true; }
+    return;
+  }
+  if (e.key === 'Enter' && !game.paused) {
+    e.preventDefault();
+    $('#chat').classList.add('typing'); input.enabled = false; input.held.clear(); input.releaseLock();
+    setTimeout(() => chat.focus(), 0);
+  }
+  if (e.key === 'Escape') {
+    if (game.hud.mapOpen) { game.hud.toggleMap(false); return; }
+    if (game.hud.journalOpen) { game.hud.toggleJournal(false); return; }
+    setPaused(!game.paused);
   }
 });
+document.addEventListener('pointerlockchange', () => {
+  if (!game || !game.running) return;
+  $('#lockHint').classList.toggle('on', !document.pointerLockElement && !game.paused && !isTouch() && !$('#chat').classList.contains('typing'));
+});
+
+function bindPause() {
+  $('#resumeBtn').addEventListener('click', () => { setPaused(false); canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0 })); });
+  $('#titleBtn').addEventListener('click', () => { game?.net?.leave(true); location.reload(); });
+  $('#pauseHost').addEventListener('click', () => { game.net.host(settings.profile.name); });
+  $('#pauseJoin').addEventListener('click', () => { game.net.join($('#pauseCode').value, settings.profile.name); });
+  $('#pauseLeave').addEventListener('click', () => { game.net.leave(); });
+  $('#invite').addEventListener('click', async () => {
+    const url = location.origin + location.pathname + '?room=' + $('#invite').dataset.code;
+    try { await navigator.clipboard.writeText(url); game.hud.toast('Invite link copied'); } catch (e) { game.hud.toast(url, 6); }
+  });
+  $('#journalClose').addEventListener('click', () => game.hud.toggleJournal(false));
+  $('#mapClose').addEventListener('click', () => game.hud.toggleMap(false));
+  $('#helpClose').addEventListener('click', () => $('#help').classList.remove('on'));
+  $('#lockHint').addEventListener('click', () => canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+  // Touch shortcuts.
+  document.querySelectorAll('[data-hud]').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.hud;
+    if (k === 'map') game.hud.toggleMap();
+    if (k === 'journal') game.hud.toggleJournal();
+    if (k === 'pause') setPaused(!game.paused);
+    if (k === 'view' && game.player) game.player.cockpit = !game.player.cockpit;
+  }));
+}
+
+// ---- Adaptive resolution: trade pixels for a steady frame rate. ----------------------------
+const perf = { acc: 0, n: 0, scale: 1, cooldown: 4 };
+function adaptResolution(rawDt) {
+  perf.acc += rawDt; perf.n++;
+  perf.cooldown -= rawDt;
+  if (perf.acc < 2) return;
+  const avg = perf.acc / perf.n;
+  perf.acc = 0; perf.n = 0;
+  if (perf.cooldown > 0 || document.hidden) return;
+  let next = perf.scale;
+  if (avg > 1 / 38 && perf.scale > 0.55) next = Math.max(0.55, perf.scale - 0.15);
+  else if (avg < 1 / 58 && perf.scale < 1) next = Math.min(1, perf.scale + 0.1);
+  if (next !== perf.scale) {
+    perf.scale = next;
+    perf.cooldown = 3;
+    renderer.setPixelRatio(pixelRatio() * perf.scale);
+    renderer.setSize(innerWidth, innerHeight);
+    game?.resize(innerWidth, innerHeight);
+  }
+}
+
+// ---- Loop ------------------------------------------------------------------------------
+let last = performance.now();
+function loop(now) {
+  const rawDt = (now - last) / 1000;
+  const dt = Math.min(0.05, rawDt);
+  last = now;
+  const t = now / 1000;
+  if (game && game.running && !game.paused) adaptResolution(Math.min(rawDt, 0.25));
+  if (game && game.running) game.frame(dt, t);
+  else {
+    renderMenu(dt, t);
+    audio.update({ dt, menu: true, night: 1, altitude: 0, coast: 0, speed: 0 });
+    input.endFrame();
+  }
+  requestAnimationFrame(loop);
+}
+
+addEventListener('resize', () => {
+  if (!renderer) return;
+  renderer.setPixelRatio(pixelRatio() * perf.scale);
+  renderer.setSize(innerWidth, innerHeight);
+  layoutMenuCamera();
+  game?.resize(innerWidth, innerHeight);
+});
+
+buildMenu();
+bindSettings();
+bindPause();
+requestAnimationFrame(loop);
+document.body.classList.add('ready');
+window.__csaf = { get game() { return game; }, settings, Net };

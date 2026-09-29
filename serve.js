@@ -1,4 +1,4 @@
-// Zero-dependency static file server for RIFTBREAK VELOCITY.
+// Zero-dependency static file server for Counterstrike Air Force.
 // Usage: `npm start` (or `node serve.js`) then open the printed URL.
 // ES modules require an http(s) origin, so opening index.html via file://
 // will not work in most browsers -- this tiny server solves that with no
@@ -21,6 +21,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.ico': 'image/x-icon',
   '.wasm': 'application/wasm',
 };
@@ -51,8 +52,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log('\n  RIFTBREAK VELOCITY');
-  console.log('  ------------------');
+  console.log('\n  Counterstrike Air Force');
+  console.log('  -----------------------');
   console.log(`  Running at  http://localhost:${PORT}\n`);
   console.log('  Press Ctrl+C to stop.\n');
 });
