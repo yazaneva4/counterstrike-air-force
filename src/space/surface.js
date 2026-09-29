@@ -19,12 +19,12 @@ const V = GRID + 1;
 
 const CFG = {
   moon: {
-    name: 'The Moon', gravity: 0.165, air: 0, seed: 71, rockiness: 0.15, detail: 0.55,
+    name: 'The Moon', gravity: 0.165, air: 0, seed: 71, rockiness: 0.15, detail: 0.55, relief: 0.22,
     sun: new THREE.Vector3(0.62, 0.3, 0.42).normalize(), sunColor: 0xffffff, sunI: 4.2,
     region: 'Mare Serenitatis',
   },
   mars: {
-    name: 'Mars', gravity: 0.38, air: 0.02, seed: 97, rockiness: 0.5, detail: 1,
+    name: 'Mars', gravity: 0.38, air: 0.02, seed: 97, rockiness: 0.5, detail: 1, relief: 0.6,
     sun: new THREE.Vector3(-0.45, 0.52, 0.5).normalize(), sunColor: 0xfff0dc, sunI: 2.8,
     region: 'Jezero Crater',
   },
@@ -258,7 +258,7 @@ export class SurfaceWorld {
           {
             vec3 dn = texture2D(uDetailN, vWPos.xz * 0.13).xyz * 2.0 - 1.0;
             vec3 dm = texture2D(uDetailN, vWPos.xz * 0.019).xyz * 2.0 - 1.0;
-            vec3 nw = normalize(vWNrm + (vec3(dn.x, 0.0, -dn.y) * 0.6 * nearF + vec3(dm.x, 0.0, -dm.y) * 0.35));
+            vec3 nw = normalize(vWNrm + (vec3(dn.x, 0.0, -dn.y) * ${this.cfg.relief.toFixed(2)} * nearF + vec3(dm.x, 0.0, -dm.y) * ${(this.cfg.relief * 0.6).toFixed(2)}));
             normal = normalize((viewMatrix * vec4(nw, 0.0)).xyz);
           }`);
     };

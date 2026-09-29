@@ -434,17 +434,28 @@ export class HUD {
     cv.width = r.width * d; cv.height = r.height * d;
     const S = Math.min(cv.width, cv.height);
     const ox = (cv.width - S) / 2, oy = (cv.height - S) / 2;
-    ctx.fillStyle = '#082a3c'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const onEarth = G.location === 'earth';
+    $('#mapOverlay h2').textContent = onEarth ? 'Kestrel Island' : G.location === 'space' ? 'In orbit' : G.surface.name;
+    ctx.fillStyle = onEarth ? '#082a3c' : '#05080c'; ctx.fillRect(0, 0, cv.width, cv.height);
+    if (G.location === 'space') {
+      ctx.fillStyle = '#9fc4d8'; ctx.font = `600 ${14 * d}px 'DM Mono', monospace`; ctx.textAlign = 'center';
+      G.space.targets().forEach((t, i) => ctx.fillText(`[${t.key}] ${t.name}  ·  ${Math.round(t.dist * 6.4).toLocaleString()} km`, cv.width / 2, cv.height / 2 - 30 * d + i * 26 * d));
+      ctx.fillText('Press 1, 2 or 3 to warp · dive towards a world to land', cv.width / 2, cv.height / 2 + 70 * d);
+      return;
+    }
+    const MS = G.world.terrain.mapSize || MAP_SIZE, HF = MS / 2;
     ctx.drawImage(G.world.terrain.mapCanvas, ox, oy, S, S);
-    const X = (x) => ox + ((x + HALF) / MAP_SIZE) * S, Z = (z) => oy + ((z + HALF) / MAP_SIZE) * S;
+    const X = (x) => ox + ((x + HF) / MS) * S, Z = (z) => oy + ((z + HF) / MS) * S;
     ctx.font = `600 ${12 * d}px 'DM Mono', monospace`;
     ctx.textAlign = 'center';
-    const labels = [PLACES.airbase, PLACES.village, PLACES.farm, PLACES.lighthouse, PLACES.beach, PLACES.stones, PLACES.turbines, PLACES.spaceport, { name: 'Red Mesa', x: -1300, z: -60 }, { name: 'Mount Kestrel', x: PLACES.peak.x, z: PLACES.peak.z + 160 }];
+    const labels = onEarth
+      ? [PLACES.airbase, PLACES.village, PLACES.farm, PLACES.lighthouse, PLACES.beach, PLACES.stones, PLACES.turbines, PLACES.spaceport, { name: 'Red Mesa', x: -1300, z: -60 }, { name: 'Mount Kestrel', x: PLACES.peak.x, z: PLACES.peak.z + 160 }]
+      : G.location === 'moon' ? [{ name: 'Kestrel-1 site', x: 70, z: -70 }, { name: 'Mare Serenitatis', x: 900, z: -900 }] : [{ name: 'Ares Station', x: 160, z: 170 }, { name: 'Jezero Crater Rim', x: 0, z: 2300 }, { name: 'Ares Vallis', x: 1200, z: -1150 }];
     for (const l of labels) {
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(l.name, X(l.x) + d, Z(l.z) + d);
       ctx.fillStyle = '#f4efe0'; ctx.fillText(l.name, X(l.x), Z(l.z));
     }
-    for (const [id, s] of Object.entries(G.mysteries.sites)) {
+    for (const [id, s] of Object.entries(onEarth ? G.mysteries.sites : G.surface.sites)) {
       const found = G.mysteries.found.has(id);
       if (found) {
         ctx.fillStyle = '#7dffd6'; ctx.font = `700 ${16 * d}px sans-serif`; ctx.fillText('✦', X(s.pos.x), Z(s.pos.z) + 5 * d);
@@ -453,12 +464,12 @@ export class HUD {
         const off = (id.charCodeAt(0) * 37) % 360 * Math.PI / 180;
         const rr = 180;
         ctx.strokeStyle = 'rgba(255,211,106,0.8)'; ctx.setLineDash([5 * d, 4 * d]); ctx.lineWidth = 1.5 * d;
-        ctx.beginPath(); ctx.arc(X(s.pos.x + Math.cos(off) * rr * 0.5), Z(s.pos.z + Math.sin(off) * rr * 0.5), (rr / MAP_SIZE) * S * 1.6, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(X(s.pos.x + Math.cos(off) * rr * 0.5), Z(s.pos.z + Math.sin(off) * rr * 0.5), (rr / MS) * S * 1.6, 0, Math.PI * 2); ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = '#ffd36a'; ctx.font = `700 ${14 * d}px 'DM Mono', monospace`; ctx.fillText('?', X(s.pos.x + Math.cos(off) * rr * 0.5), Z(s.pos.z + Math.sin(off) * rr * 0.5) + 5 * d);
       }
     }
-    for (const r of G.remotes.values()) { ctx.fillStyle = r.color; ctx.beginPath(); ctx.arc(X(r.pos.x), Z(r.pos.z), 5 * d, 0, Math.PI * 2); ctx.fill(); ctx.fillText(r.name, X(r.pos.x), Z(r.pos.z) - 10 * d); }
+    for (const r of G.remotes.values()) { if (!r.here) continue; ctx.fillStyle = r.color; ctx.beginPath(); ctx.arc(X(r.pos.x), Z(r.pos.z), 5 * d, 0, Math.PI * 2); ctx.fill(); ctx.fillText(r.name, X(r.pos.x), Z(r.pos.z) - 10 * d); }
     const p = G.focusPos();
     ctx.fillStyle = '#7dffd6'; ctx.beginPath(); ctx.arc(X(p.x), Z(p.z), 6 * d, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#06121c'; ctx.lineWidth = 2 * d; ctx.stroke();

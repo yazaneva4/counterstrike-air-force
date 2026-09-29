@@ -42,7 +42,24 @@ export const LINES = {
   scientist: [
     'The monolith on the summit of Mount Kestrel hums at exactly 440 hertz. Every hour, on the hour.',
     'Radiation readings spike near the crash site in the Red Mesa. Whatever came down is still warm.',
-    'If you ever get past the atmosphere, look at the Moon. Our instruments picked up an echo from its surface.',
+    'If you ever get past the atmosphere, go to the Moon. Our instruments picked up an echo from a crater near the old landing site.',
+  ],
+  spaceport: [
+    'Aurora is on the pad at LC-1. Walk up to the launch mount, press F, then Space to start the countdown.',
+    'Watch the booster after staging. It flips around and flies itself back to the landing zone. Every time.',
+    'Keep the throttle up until the booster runs dry, or press Space to stage early. Orbit starts at three thousand metres.',
+    'The service arm swings away at ignition. Don\'t steer into the tower on the way up.',
+  ],
+  mission: [
+    'From orbit, press 1, 2 or 3 to warp to Earth, the Moon or Mars. Then point at the surface and dive.',
+    'Landing on the Moon: gravity is a sixth of ours. Kill your speed early, hold R to stay upright and touch down under eight metres a second.',
+    'Our lander left a flag at the Kestrel-1 site. The crater to the south-west has something in it that we did not put there.',
+    'Ares Station keeps reporting a pulse from the canyon south-east of their landing site. Every 1.7 seconds.',
+  ],
+  astronaut: [
+    'The Odyssey on the O-pad takes off like a helicopter and keeps climbing. Hold Space past three thousand metres for orbit.',
+    'On Mars you weigh about a third of what you do here. Jumping is the fun part.',
+    'The Earth from the Moon looks four times bigger than the Moon does from here. You never get used to it.',
   ],
   keeper: [
     'My light points out to sea. Theirs points at the sky. Look above the clouds, past eighteen hundred metres.',
@@ -63,7 +80,7 @@ export class NPC {
     this.rnd = rnd;
     this.world = world;
     this.name = FIRST[Math.floor(rnd() * FIRST.length)];
-    this.title = ROLE_TITLE[role] || 'Resident';
+    this.title = home.title || ROLE_TITLE[role] || 'Resident';
     this.human = new Human(outfitFor(role, rnd));
     this.root = this.human.root;
     this.heading = rnd() * TAU;
@@ -114,7 +131,7 @@ export class NPC {
   }
 
   nextLine() {
-    const lines = LINES[this.role] || LINES.villager;
+    const lines = LINES[this.home.lines || this.role] || LINES.villager;
     const line = lines[this.lineIndex % lines.length];
     this.lineIndex++;
     return line;
@@ -240,6 +257,10 @@ export class NPCManager {
     add('keeper', { x: P.lighthouse.x - 8, z: P.lighthouse.z + 8, r: 18 }, 1);
     add('scientist', { x: P.stones.x + 30, z: P.stones.z + 30, r: 25 }, 2);
     add('hiker', { x: P.stones.x - 60, z: P.stones.z + 90, r: 90 }, 3);
+    const C = P.spaceport;
+    add('crew', { x: C.x - 40, z: C.z + 40, r: 55, lines: 'spaceport', title: 'Launch engineer' }, 3);
+    add('scientist', { x: C.x - 70, z: C.z + 92, r: 14, lines: 'mission', title: 'Flight director' }, 2);
+    add('astronaut', { x: C.x - 12, z: C.z + 62, r: 22, lines: 'astronaut', title: 'Astronaut' }, 2);
     const out = new THREE.Vector2(Math.cos(P.beach.angle), Math.sin(P.beach.angle));
     add('beach', { x: P.beach.x - out.x * 25, z: P.beach.z - out.y * 25, r: 90 }, 5);
     (S.beachSpots || []).slice(0, 7).forEach((b, i) => add('beach', { x: b.x, z: b.z, r: 1, mode: i % 3 === 0 ? 'sit' : 'lie' }, 1));
