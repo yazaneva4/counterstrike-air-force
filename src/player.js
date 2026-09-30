@@ -81,6 +81,18 @@ export class Player {
     this.mode = 'foot';
     this.root.visible = true;
     this.human.state = 'idle';
+    this.onGround = true; this.swimming = false;
+    this.root.visible = !this.cockpit;
+  }
+
+  toggleView() {
+    if (this.mode === 'dead') return;
+    this.cockpit = !this.cockpit;
+    this.game.hud.toast(this.cockpit ? 'First-person view · V to switch' : 'Third-person view · V to switch', 2);
+    this.game.camera.near = this.cockpit ? 0.08 : 0.3;
+    this.game.camera.updateProjectionMatrix();
+    if (this.vehicle) this.vehicle.hidePilot = this.cockpit;
+    if (this.mode === 'foot' || this.mode === 'chute' || this.mode === 'fall') this._footCamera(1);
   }
 
   // ---- Per-frame --------------------------------------------------------------
@@ -89,7 +101,6 @@ export class Player {
     const G = this.game, I = G.input;
     this.fireCD -= dt;
     this.shake = Math.max(0, this.shake - dt * 1.8);
-    if (I.hit('KeyV')) this.cockpit = !this.cockpit;
     if (this.mode === 'foot') this._foot(dt);
     else if (this.mode === 'vehicle') this._drive(dt);
     else if (this.mode === 'chute' || this.mode === 'fall') this._chute(dt);
@@ -158,7 +169,8 @@ export class Player {
     } else if (!this.swimming && pos.y > g + 0.25) this.onGround = false;
     if (this.swimming && terrainH > -1.0) { pos.y = g; }
     const hs = Math.hypot(this.vel.x, this.vel.z);
-    if (hs > 0.3) this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), 10, dt);
+    if (this.cockpit) this.yaw = this.camYaw;
+    else if (hs > 0.3) this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), 10, dt);
     this.root.rotation.y = this.yaw;
     const H = this.human;
     H.speed = hs;
@@ -169,7 +181,8 @@ export class Player {
     H.lookPitch = clamp(-this.camPitch * 0.4, -0.3, 0.4);
     H.lookLocked = true;
     this._interactions();
-    this._footCamera(dt);
+    if (this.mode === 'vehicle') this._vehicleCamera(dt);
+    else this._footCamera(dt);
   }
 
   _interactions() {
@@ -197,6 +210,7 @@ export class Player {
     const G = this.game;
     this.vehicle = v;
     v.occupied = true;
+    v.hidePilot = this.cockpit;
     this.mode = 'vehicle';
     this.root.visible = false;
     this.stick.x = this.stick.y = 0;
@@ -215,6 +229,7 @@ export class Player {
     const agl = v.pos.y - v.ground - W.groundAt(v.pos.x, v.pos.z);
     if (!force && !v.onGround && agl < 20 && v.speed > 4) { G.hud.toast('Too low to bail out. Land first.'); return; }
     v.occupied = false;
+    v.hidePilot = false;
     this.vehicle = null;
     this.root.visible = true;
     if (v.onGround || agl < 3) {
@@ -304,8 +319,10 @@ export class Player {
       };
       if ((v.kind === 'ufo' || v.kind === 'ship') && up && v.pos.y - G.world.groundAt(v.pos.x, v.pos.z) > (G.location === 'earth' ? 3000 : 1500)) G.enterSpace();
     }
+    if (G.space.active) return;
     if (I.hit('KeyF') || I.thit('veh')) this.exitVehicle();
-    this._vehicleCamera(dt);
+    if (this.vehicle) this._vehicleCamera(dt);
+    else this._footCamera(dt);
   }
 
   _chute(dt) {
@@ -353,17 +370,36 @@ export class Player {
   _footCamera(dt, extra = 0) {
     const G = this.game, cam = G.camera, W = G.world;
     const pivot = tv.copy(this.pos);
-    pivot.y += this.swimming ? 0.6 : 1.55;
+    pivot.y += this.swimming ? 1.1 : 1.55;
+    this.root.visible = !this.cockpit && ['foot', 'chute', 'fall'].includes(this.mode);
     const dist = this.camDist + extra;
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
     const dx = Math.sin(this.camYaw) * cp, dz = Math.cos(this.camYaw) * cp;
+    if (this.cockpit) {
+      cam.position.copy(pivot);
+      this.camPos.copy(pivot);
+      cam.up.set(0, 1, 0);
+      cam.lookAt(pivot.x + dx, pivot.y + sp, pivot.z + dz);
+      this.fov = damp(this.fov, 72, 3, dt);
+      this._applyShake(cam);
+      return;
+    }
     const rightX = -Math.cos(this.camYaw), rightZ = Math.sin(this.camYaw);
     const shoulder = 0.5 * smoothstep(2, 8, dist) * (extra ? 0 : 1);
     tv2.set(pivot.x - dx * dist + rightX * shoulder, pivot.y - sp * dist, pivot.z - dz * dist + rightZ * shoulder);
     const gh = W.groundAt(tv2.x, tv2.z);
     if (tv2.y < gh + 0.5) tv2.y = gh + 0.5;
     if (tv2.y < -0.5 && W.terrain.heightAt(tv2.x, tv2.z) < 0) tv2.y = Math.max(tv2.y, 0.4);
-    this.camPos.lerp(tv2, 1 - Math.exp(-18 * dt));
+    // Pull the chase camera in before a wall or hillside can block the player.
+    const desired = tv2.clone();
+    let obstructed = false;
+    for (let i = 1; i <= 16; i++) {
+      const probe = pivot.clone().lerp(desired, i / 16);
+      const blocked = W.groundAt(probe.x, probe.z) > probe.y - 0.2 || W.structures.collide(probe, 0.18, probe.y);
+      if (blocked) { obstructed = true; tv2.copy(pivot).lerp(desired, Math.max(0.06, (i - 1) / 16)); break; }
+    }
+    if (obstructed) this.camPos.copy(tv2);
+    else this.camPos.lerp(tv2, 1 - Math.exp(-18 * dt));
     if (this.camPos.distanceToSquared(tv2) > 400) this.camPos.copy(tv2);
     cam.position.copy(this.camPos);
     cam.up.set(0, 1, 0);

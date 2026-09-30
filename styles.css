@@ -185,6 +185,8 @@ body.css-vignette::after { content: ''; position: fixed; inset: 0; pointer-event
 #lockHint { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 35; padding: 12px 20px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--panel-strong); font: 500 13px var(--body); display: none; }
 #lockHint.on { display: block; }
 
+#viewToggle { position: absolute; right: 20px; bottom: calc(44px + var(--safe-b)); pointer-events: auto; z-index: 20; font: 500 11px var(--mono); background: var(--panel-strong); }
+body.touch #viewToggle { display: none; }
 /* ---------- Touch ---------- */
 #touchUI { display: none; }
 body.touch #touchUI { display: block; }

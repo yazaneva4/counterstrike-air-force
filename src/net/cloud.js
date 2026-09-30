@@ -60,7 +60,9 @@ export const cloud = {
       const body = JSON.stringify(this.snapshot(settings, game));
       if (body === this.sent) return; // nothing new to store
       this.sent = body;
-      fetch(`${API}?id=${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body, keepalive }).catch(() => { this.sent = null; });
+      fetch(`${API}?id=${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body, keepalive })
+        .then((r) => { if (!r.ok && this.sent === body) this.sent = null; })
+        .catch(() => { if (this.sent === body) this.sent = null; });
     } catch (e) { /* ignore */ }
   },
 };

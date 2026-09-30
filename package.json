@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node serve.js",
-    "dev": "node serve.js"
+    "dev": "node serve.js",
+    "test": "node --import ./tests/register-three.js --test tests/*.test.js"
   },
   "keywords": [
     "three.js",

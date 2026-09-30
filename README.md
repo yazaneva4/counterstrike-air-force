@@ -70,3 +70,11 @@ Developed by **SkyCoder YazanPK**.
 ## License
 
 MIT
+
+## Camera views and flight realism
+
+Press **V** or tap **View** to switch between first-person and third-person views on foot, in vehicles, under a parachute, and in orbit. Desktop players can also use the view button at the bottom right. First-person walking uses eye height and hides your local avatar; cockpit views hide the local pilot, and third-person walking draws the camera closer when a wall or hillside blocks the view.
+
+Fixed-wing aircraft turn according to airspeed and bank angle. Steep banks raise stall speed; live wind drifts airborne aircraft without changing their indicated airspeed. Cloud puffs now use their texture opacity for soft edges, and rain darkens pavement and lowers its roughness. Flight remains an accessible game model.
+
+Run `npm test` (Node.js 22.15+ or 24+) for the offline gameplay regression checks. They use the vendored Three.js modules and require no test dependencies.

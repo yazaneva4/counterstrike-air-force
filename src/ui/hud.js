@@ -131,6 +131,9 @@ export class HUD {
       $('#peerBox').style.display = peers.length ? 'block' : 'none';
       $('#modeTag').textContent = G.modeLabel();
     }
+    const viewButton = $('#viewToggle');
+    viewButton.textContent = G.player.cockpit ? '1ST PERSON · V' : '3RD PERSON · V';
+    viewButton.setAttribute('aria-label', G.player.cockpit ? 'Switch to third-person view' : 'Switch to first-person view');
     this._minimap(heading);
     this._flight(dt);
     this._labels();

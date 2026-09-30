@@ -99,6 +99,11 @@ export class Game {
     this.clouds = new Clouds({ count: q === 'low' ? 26 : 46 });
     this.scene.add(this.clouds.mesh);
     this.weather = new Weather(this.scene, { rain: q === 'low' ? 700 : 1600 });
+    const pavement = new Set();
+    this.structures.group.traverse((o) => {
+      for (const m of [o.material].flat()) if (m?.isMeshStandardMaterial && m.polygonOffset && m.roughness >= 0.8) pavement.add(m);
+    });
+    this.weather.pavedMaterials = [...pavement].map(material => ({ material, color: material.color.clone(), roughness: material.roughness }));
 
     await step(0.58, 'Hiding mysteries');
     this.mysteries = new Mysteries(W, this.scene);
@@ -415,7 +420,7 @@ export class Game {
     this.space.active = true;
     this.spaceVehicle = v;
     this.location = 'space';
-    this.camera.near = 1; this.camera.far = 200000; this.camera.updateProjectionMatrix();
+    this.camera.near = this.player.cockpit ? 0.08 : 1; this.camera.far = 200000; this.camera.updateProjectionMatrix();
     this.post.setScene(this.space.scene, this.camera);
     this.hud.toast(from === 'earth' ? 'Orbit reached · press 1 Earth · 2 Moon · 3 Mars to warp · dive towards a world to land' : 'Back in orbit · 1 Earth · 2 Moon · 3 Mars', 5);
     if (v.parts.beam) v.parts.beam.visible = false;
@@ -440,7 +445,7 @@ export class Game {
     if (v.kind === 'rocket') { v.prepareDescent(v.heading); v.vel.set(0, -70, 0); }
     else v.quat.setFromEuler(new THREE.Euler(0, v.heading, 0, 'YXZ'));
     v.onGround = false;
-    this.camera.near = 0.3; this.camera.far = 30000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
+    this.camera.near = this.player.cockpit ? 0.08 : 0.3; this.camera.far = 30000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
     this.post.setScene(this.scene, this.camera);
     this.player.camPos.copy(v.pos).add(tv.set(0, 20, 60));
     this.reentry = 4;
@@ -469,7 +474,7 @@ export class Game {
     v.onGround = false;
     if (v.kind === 'rocket') { v.prepareDescent(0); v.vel.set(0, -45, 0); }
     else { v.quat.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ')); v.vel.set(0, -30, -10); }
-    this.camera.near = 0.3; this.camera.far = 60000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
+    this.camera.near = this.player.cockpit ? 0.08 : 0.3; this.camera.far = 60000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
     this.post.setScene(S.scene, this.camera);
     this.player.camPos.copy(v.pos).add(tv.set(0, 25, 70));
     this.fade(1.4, '#000');
@@ -510,7 +515,7 @@ export class Game {
       v.reset();
       if (v === this.ufo) this._lockUfo(false);
     }
-    this.camera.near = 0.3; this.camera.far = 30000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
+    this.camera.near = this.player.cockpit ? 0.08 : 0.3; this.camera.far = 30000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
     this.post.setScene(this.scene, this.camera);
     const S = this.structures.spawns.spaceport;
     this.player.spawnAt({ x: S.x, z: S.z }, S.heading);
@@ -621,6 +626,7 @@ export class Game {
   _surfaceFrame(dt, t) {
     const S = this.surface, p = this.player, I = this.input;
     p.update(dt);
+    if (this.space.active || this.location !== S.body) { I.endFrame(); return; }
     // The world clock keeps running on other worlds (and stays in step for multiplayer).
     this.sky.advance(dt);
     for (const v of this.vehicles) {
@@ -644,7 +650,7 @@ export class Game {
     }
     // Climb high enough and you are back in orbit.
     const v = p.vehicle;
-    if (v && !v.destroyed && v.kind === 'rocket' && v.launched && v.vel.y > 0 && v.pos.y - this.world.groundAt(v.pos.x, v.pos.z) > 1500) this.enterSpace();
+    if (v && !v.destroyed && v.kind === 'rocket' && v.launched && v.vel.y > 0 && v.pos.y - this.world.groundAt(v.pos.x, v.pos.z) > 1500) { this.enterSpace(); I.endFrame(); return; }
     this._remotes(dt, S.scene);
     this.net.update(dt, p.netState(), this.sky.time);
     this.audio.update({ dt, vehicle: p.mode === 'vehicle' && v ? v.type : null, throttle: v?.throttle || 0, speed: v ? v.speed : 0, rpm: v?.rpm || 0, boosting: v?.boosting, night: 0, altitude: 0, coast: 0, space: true, vacuum: S.world.air < 0.01, menu: false, thrust: v?.thrustAcc > 0 });
@@ -662,15 +668,15 @@ export class Game {
     this.t = t;
     const I = this.input, p = this.player;
     this._hotkeys();
-    if (this.paused) { this._render(dt); I.endFrame(); return; }
+    if (this.paused) { this.post.render(); I.endFrame(); return; }
     this.world.night = this.sky.night;
 
     if (this.location === 'moon' || this.location === 'mars') { this._surfaceFrame(dt, t); return; }
     if (this.space.active) {
       if (this.sky.real) this.space.setTimeOfDay(this.sky.time, Math.sin(this.sky.decl));
-      const res = this.space.update(dt, this._spaceControls(), this.camera);
-      if (res === 'reentry') this.exitSpace();
-      else if (res && res.startsWith('land:')) this.enterSurface(res.slice(5));
+      const res = this.space.update(dt, { ...this._spaceControls(), firstPerson: p.cockpit }, this.camera);
+      if (res === 'reentry') { this.exitSpace(); I.endFrame(); return; }
+      else if (res && res.startsWith('land:')) { this.enterSurface(res.slice(5)); I.endFrame(); return; }
       const sv = this.spaceVehicle;
       if (sv && this.space.active) {
         const th = this.space.thrust || 0;
@@ -690,6 +696,7 @@ export class Game {
     }
 
     p.update(dt);
+    if (this.location !== 'earth') { I.endFrame(); return; }
     // Vehicles (the player's gets the controls).
     for (const v of this.vehicles) {
       const res = v.update(dt, v === p.vehicle ? p.ctl : null, this.world);
@@ -715,6 +722,7 @@ export class Game {
     this.sky.shadowRadius = p.mode === 'vehicle' ? 220 : 110;
     this.sky.update(dt, cam, focus, this.renderer, alt);
     this.weather.update(dt, cam, this.sky, this.clouds, this.scene.fog, this.ocean, alt);
+    this.world.wind = this.clouds.wind;
     this.ocean.update(dt, this.sky, this.scene.fog);
     this.clouds.update(dt, this.sky, this.scene.fog);
     this.vegetation.update(dt, this.camera.position);
@@ -839,6 +847,7 @@ export class Game {
 
   _hotkeys() {
     const I = this.input, H = this.hud;
+    if (!this.paused && I.hit('KeyV')) this.player.toggleView();
     if (I.hit('KeyM')) H.toggleMap();
     if (I.hit('KeyJ')) H.toggleJournal();
     if (I.hit('KeyH')) document.querySelector('#help').classList.toggle('on');

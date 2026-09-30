@@ -145,18 +145,18 @@ function buildMenu() {
   segmented($('#spawnSel'), 'spawn', [['airbase', 'Airbase'], ['spaceport', 'Spaceport'], ['village', 'Village'], ['beach', 'Beach'], ['farm', 'Farm']]);
   segmented($('#timeSel'), 'time', [['live', 'Real time'], ['dawn', 'Dawn'], ['day', 'Day'], ['sunset', 'Sunset'], ['night', 'Night']]);
   segmented($('#qualitySel'), 'quality', [['auto', 'Auto'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]);
-  $('#hostBtn').addEventListener('click', () => { audio.init(); pendingRoom = { host: true }; $('#roomStatus').textContent = 'A room will open when you enter the island'; $('#roomCode').value = ''; });
-  $('#joinBtn').addEventListener('click', () => {
+  $('#hostBtn').onclick = () => { audio.init(); pendingRoom = { host: true }; $('#roomStatus').textContent = 'A room will open when you enter the island'; $('#roomCode').value = ''; };
+  $('#joinBtn').onclick = () => {
     audio.init();
     const code = $('#roomCode').value.trim().toUpperCase();
     if (!/^[A-Z0-9]{5}$/.test(code)) { $('#roomStatus').textContent = 'Enter a 5-character room code'; return; }
     pendingRoom = { host: false, code };
     $('#roomStatus').textContent = `You will join ${code} when you enter the island`;
-  });
-  $('#roomCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#joinBtn').click(); });
+  };
+  $('#roomCode').onkeydown = (e) => { if (e.key === 'Enter') $('#joinBtn').click(); };
   const params = new URLSearchParams(location.search);
   if (params.get('room')) { $('#roomCode').value = params.get('room').toUpperCase().slice(0, 5); pendingRoom = { host: false, code: $('#roomCode').value }; $('#roomStatus').textContent = `Invited to room ${$('#roomCode').value}`; }
-  $('#startBtn').addEventListener('click', startGame);
+  $('#startBtn').onclick = startGame;
 }
 let pendingRoom = null;
 
@@ -184,8 +184,10 @@ function toggleFullscreen(force) {
   } catch (e) { /* not supported (iPhone Safari): use Add to Home Screen */ }
 }
 
+let starting = false;
 async function startGame() {
-  if (!renderer) return;
+  if (!renderer || starting || game?.running) return;
+  starting = true;
   if (isTouch()) toggleFullscreen(true);
   audio.init();
   audio.click();
@@ -230,6 +232,8 @@ function setPaused(p) {
   if (!game) return;
   game.paused = p;
   $('#pause').classList.toggle('on', p);
+  input.clear();
+  input.enabled = !p && !$('#chat').classList.contains('typing');
   if (p) input.releaseLock();
 }
 
@@ -249,7 +253,7 @@ addEventListener('keydown', (e) => {
   }
   if (e.key === 'Enter' && !game.paused) {
     e.preventDefault();
-    $('#chat').classList.add('typing'); input.enabled = false; input.held.clear(); input.releaseLock();
+    $('#chat').classList.add('typing'); input.clear(); input.enabled = false; input.releaseLock();
     setTimeout(() => chat.focus(), 0);
   }
   if (e.key === 'Escape') {
@@ -264,7 +268,7 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 function bindPause() {
-  $('#resumeBtn').addEventListener('click', () => { setPaused(false); canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0 })); });
+  $('#resumeBtn').addEventListener('click', () => { setPaused(false); input.requestLock(); });
   $('#titleBtn').addEventListener('click', () => { game?.net?.leave(true); location.reload(); });
   $('#pauseHost').addEventListener('click', () => { game.net.host(settings.profile.name); });
   $('#pauseJoin').addEventListener('click', () => { game.net.join($('#pauseCode').value, settings.profile.name); });
@@ -276,16 +280,16 @@ function bindPause() {
   $('#journalClose').addEventListener('click', () => game.hud.toggleJournal(false));
   $('#mapClose').addEventListener('click', () => game.hud.toggleMap(false));
   $('#helpClose').addEventListener('click', () => $('#help').classList.remove('on'));
-  $('#lockHint').addEventListener('click', () => canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+  $('#lockHint').addEventListener('click', () => input.requestLock());
   // Touch shortcuts.
   document.querySelectorAll('[data-hud]').forEach((b) => b.addEventListener('click', () => {
     const k = b.dataset.hud;
     if (k === 'map') game.hud.toggleMap();
     if (k === 'journal') game.hud.toggleJournal();
     if (k === 'pause') setPaused(!game.paused);
-    if (k === 'view' && game.player) game.player.cockpit = !game.player.cockpit;
+    if (k === 'view' && game.player && !game.paused) { game.player.toggleView(); b.blur(); }
     if (k === 'help') $('#help').classList.toggle('on');
-    if (k === 'chat') { $('#chat').classList.add('typing'); input.enabled = false; input.held.clear(); setTimeout(() => $('#chatInput').focus(), 0); }
+    if (k === 'chat') { $('#chat').classList.add('typing'); input.clear(); input.enabled = false; setTimeout(() => $('#chatInput').focus(), 0); }
     if (k === 'full') toggleFullscreen();
   }));
 }

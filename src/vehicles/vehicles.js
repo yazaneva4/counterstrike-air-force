@@ -11,6 +11,7 @@ import { clamp, damp, lerp, smoothstep } from '../core/util.js';
 import { buildFighter, buildProp, buildHelicopter, buildSaucer, buildNova } from './models.js';
 import { buildRocket, buildShip, AURORA } from './spacecraft.js';
 import { buildCar, CAR_NAMES, animateCarParts } from './cars.js';
+import { coordinatedTurnRate, bankedStallSpeed } from './flight.js';
 
 export const VEHICLE_DEFS = {
   jet: { name: 'F-7 Falcon', role: 'Air-superiority jet', kind: 'plane', maxSpeed: 280, stall: 58, takeoff: 70, thrust: 15, pitchRate: 1.15, rollRate: 2.6, yawRate: 0.45, turn: 0.8, boost: 1.35, weapons: true },
@@ -107,6 +108,8 @@ export class Vehicle {
     this.beamActive = false;
     this.idleTime = 0;
     this.stalling = false;
+    this.hidePilot = false;
+    this.loadFactor = 1;
     this.group.visible = true;
     if (this.kind === 'heli') this.lights = true;
     if (this.kind === 'rocket') this._rocketReset();
@@ -220,7 +223,7 @@ export class Vehicle {
       p.x += hx * this.speed * dt;
       p.z += hz * this.speed * dt;
       const ng = world.groundAt(p.x, p.z);
-      p.y = ng + this.ground;
+      p.y = (ng < ground - 1.5 && this.speed > d.stall ? ground : ng) + this.ground;
       this.quat.setFromEuler(e3.set(-this.pitch, this.heading, 0));
       this.vel.set(hx * this.speed, 0, hz * this.speed);
       if (this.pitch > 0.12 && this.speed > d.takeoff) {
@@ -231,26 +234,28 @@ export class Vehicle {
       if (ng < ground - 1.5 && this.speed > d.stall) this.onGround = false;
       tv2.copy(p);
       if (this.speed > 8 && world.structures.collide(tv2, this.radius * 0.45, p.y)) return 'building';
-      if (world.terrain.heightAt(p.x, p.z) < -0.3 && world.structures.platformAt(p.x, p.z) === -Infinity) return this.speed > 4 ? 'water' : null;
+      if ((this.onGround || p.y - this.ground < 0.2) && world.terrain.heightAt(p.x, p.z) < -0.3 && world.structures.platformAt(p.x, p.z) === -Infinity) return 'water';
       return null;
     }
 
     // Airborne.
-    const auth = clamp((this.speed - d.stall * 0.35) / d.stall, 0.12, 1);
-    let rollIn = clamp(ctl.roll, -1, 1);
     const bank = this.bankAngle();
+    const stall = bankedStallSpeed(d.stall, bank);
+    this.loadFactor = (stall / d.stall) ** 2;
+    const auth = clamp((this.speed - stall * 0.35) / stall, 0.12, 1);
+    let rollIn = clamp(ctl.roll, -1, 1);
     if (Math.abs(ctl.roll) < 0.05 && Math.abs(bank) < 1.35) rollIn = clamp(-bank * 1.2, -0.6, 0.6);
     const pitchIn = clamp(ctl.pitch, -1, 1);
     tq.setFromAxisAngle(X, -pitchIn * d.pitchRate * auth * dt); this.quat.multiply(tq);
     tq.setFromAxisAngle(Z, rollIn * d.rollRate * auth * dt); this.quat.multiply(tq);
     tq.setFromAxisAngle(Y, -ctl.yaw * d.yawRate * dt); this.quat.multiply(tq);
     // Banked flight turns the aircraft (coordinated turn).
-    tq.setFromAxisAngle(Y, -Math.sin(bank) * d.turn * auth * dt); this.quat.premultiply(tq);
+    tq.setFromAxisAngle(Y, -coordinatedTurnRate(this.speed, bank) * auth * dt); this.quat.premultiply(tq);
     // An abandoned aircraft slowly noses over and goes down.
     if (!occupied) { const fwd0 = tv2.copy(Z).applyQuaternion(this.quat); if (fwd0.y > -0.7) { tq.setFromAxisAngle(X, 0.18 * dt); this.quat.multiply(tq); } }
     // Stall: the nose falls and the aircraft sinks.
-    const lift = clamp(this.speed / d.stall, 0, 1);
-    this.stalling = lift < 0.85;
+    const lift = clamp(this.speed / stall, 0, 1);
+    this.stalling = lift < 1;
     if (lift < 1) {
       const fwd = tv2.copy(Z).applyQuaternion(this.quat);
       if (fwd.y > -0.6) { tq.setFromAxisAngle(X, (1 - lift) * 0.9 * dt); this.quat.multiply(tq); }
@@ -258,6 +263,7 @@ export class Vehicle {
     this.quat.normalize();
     const fw = tv.copy(Z).applyQuaternion(this.quat);
     this.vel.copy(fw).multiplyScalar(this.speed);
+    if (world.wind && (world.air ?? 1) > 0) { this.vel.x += world.wind.x; this.vel.z += world.wind.z; }
     this.vel.y -= (1 - lift) * 22;
     p.addScaledVector(this.vel, dt);
     if (p.y > 9000) p.y = 9000;
@@ -754,7 +760,7 @@ export class Vehicle {
       for (const l of P.lifts) l.glow.material.opacity = P.liftMat.uniforms.uThrottle.value * 0.9;
     }
     if (this.kind === 'car') this._animCar(dt, world);
-    if (P.pilot) P.pilot.root.visible = this.occupied;
+    if (P.pilot) P.pilot.root.visible = this.occupied && !this.hidePilot;
   }
 
   _animCar(dt, world) {

@@ -274,10 +274,11 @@ export class Space {
     const upc = new THREE.Vector3(0, 1, 0).applyQuaternion(c.quaternion);
     const back = tv.copy(Z).applyQuaternion(c.quaternion).multiplyScalar(-this.cam.back);
     const want = c.position.clone().add(back).addScaledVector(upc, this.cam.up);
-    camera.position.lerp(want, this.warp ? 1 : 1 - Math.exp(-5 * dt));
+    if (ctl.firstPerson) camera.position.copy(c.position).addScaledVector(upc, 2).addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(c.quaternion), this.cam.look + 16);
+    else camera.position.lerp(want, this.warp ? 1 : 1 - Math.exp(-5 * dt));
     camera.up.copy(upc);
     const fwd2 = new THREE.Vector3(0, 0, 1).applyQuaternion(c.quaternion);
-    camera.lookAt(c.position.clone().addScaledVector(upc, 3).addScaledVector(fwd2, this.cam.look));
+    camera.lookAt(ctl.firstPerson ? camera.position.clone().addScaledVector(fwd2, 100) : c.position.clone().addScaledVector(upc, 3).addScaledVector(fwd2, this.cam.look));
     this.starDome.position.copy(camera.position);
     this.stars.position.copy(camera.position);
     this.tunnel.position.copy(camera.position);

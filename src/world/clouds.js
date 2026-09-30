@@ -93,7 +93,7 @@ export class Clouds {
         uniform sampler2D uMap; uniform vec3 uSunDir, uLit, uShade, uFogColor; uniform float uFogDensity, uOpacity, uDark;
         varying vec2 vUv; varying float vSeed; varying float vDepth; varying vec3 vCenter;
         void main(){
-          float a = texture2D(uMap, vUv).r;
+          float a = texture2D(uMap, vUv).a;
           if (a < 0.01) discard;
           // Treat the puff as a sphere: reconstruct a view-space normal.
           vec2 q = vUv * 2.0 - 1.0;

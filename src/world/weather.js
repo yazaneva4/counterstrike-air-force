@@ -77,6 +77,7 @@ export class Weather {
     if (fog) fog.density *= 1 + over * 0.5 + N.rain * 1.2 + N.fog * 6 * (1 - smoothstep(0, 800, altitude));
     // Trees and sea respond to wind.
     windUniforms.uAmp.value = clamp(0.35 + N.wind / 5, 0.3, 2.4);
+    if (this.pavedMaterials) for (const m of this.pavedMaterials) { m.material.roughness = m.roughness * (1 - N.rain * 0.6); m.material.color.copy(m.color).multiplyScalar(1 - N.rain * 0.22); }
     if (ocean) ocean.uniforms.uChop.value = clamp(0.55 + N.wind / 8, 0.5, 2);
     // Rain streaks.
     const inten = N.rain * (altitude < 1500 ? 1 : 0);
