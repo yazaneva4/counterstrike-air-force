@@ -156,10 +156,10 @@ export class Space {
   }
 
   // Sun direction consistent with the island's local time of day.
-  setTimeOfDay(frac) {
+  setTimeOfDay(frac, tilt = 0.15) {
     const n = this.islandPoint.clone().normalize();
     const d = n.clone().applyAxisAngle(Y, -(frac - 0.5) * Math.PI * 2);
-    d.y += 0.15; d.normalize();
+    d.y += tilt; d.normalize();
     this.sunDir.copy(d);
     this.earth.setSun(d);
     this.mars.setSun(d);
@@ -169,8 +169,8 @@ export class Space {
   }
 
   // Place the craft leaving `from` (earth | moon | mars).
-  enter(craftGroup, timeFrac, from = 'earth', cam = {}) {
-    this.setTimeOfDay(timeFrac);
+  enter(craftGroup, timeFrac, from = 'earth', cam = {}, tilt = 0.15) {
+    this.setTimeOfDay(timeFrac, tilt);
     this.craft = craftGroup;
     this.scene.add(craftGroup);
     Object.assign(this.cam, { back: 34, up: 11, look: 3 }, cam);

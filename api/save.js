@@ -9,7 +9,7 @@ const ID = /^[a-f0-9]{32}$/;
 const MYSTERIES = ['monolith', 'crop', 'crash', 'pyramid', 'stones', 'vortex', 'mothership', 'moon', 'ares'];
 const CHARACTERS = ['pilot', 'explorer', 'scientist', 'crew'];
 const SPAWNS = ['airbase', 'spaceport', 'village', 'beach', 'farm'];
-const TIMES = ['dawn', 'day', 'sunset', 'night'];
+const TIMES = ['live', 'dawn', 'day', 'sunset', 'night'];
 const int = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
 
 function clean(b, old = {}) {
@@ -27,7 +27,7 @@ function clean(b, old = {}) {
       skin: int(p.skin ?? old.profile?.skin, 5),
     },
     spawn: SPAWNS.includes(b.spawn) ? b.spawn : old.spawn || 'airbase',
-    time: TIMES.includes(b.time) ? b.time : old.time || 'day',
+    time: TIMES.includes(b.time) ? b.time : old.time || 'live',
     updated: Date.now(),
   };
 }

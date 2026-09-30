@@ -18,7 +18,7 @@ const canvas = $('#game');
 
 // ---- Settings ------------------------------------------------------------------
 const STORE = 'csaf-settings-v2';
-const defaults = { sensitivity: 1, invertY: false, volume: 0.8, muted: false, quality: 'auto', profile: { name: '', character: 'pilot', skin: 1 }, spawn: 'airbase', time: 'day' };
+const defaults = { sensitivity: 1, invertY: false, volume: 0.8, muted: false, quality: 'auto', profile: { name: '', character: 'pilot', skin: 1 }, spawn: 'airbase', time: 'live' };
 let settings = defaults;
 try { settings = Object.assign({}, defaults, JSON.parse(localStorage.getItem(STORE) || '{}')); settings.profile = Object.assign({}, defaults.profile, settings.profile); } catch (e) { /* ignore */ }
 let saveTimer = 0;
@@ -143,7 +143,7 @@ function buildMenu() {
     sk.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
   }));
   segmented($('#spawnSel'), 'spawn', [['airbase', 'Airbase'], ['spaceport', 'Spaceport'], ['village', 'Village'], ['beach', 'Beach'], ['farm', 'Farm']]);
-  segmented($('#timeSel'), 'time', [['dawn', 'Dawn'], ['day', 'Day'], ['sunset', 'Sunset'], ['night', 'Night']]);
+  segmented($('#timeSel'), 'time', [['live', 'Real time'], ['dawn', 'Dawn'], ['day', 'Day'], ['sunset', 'Sunset'], ['night', 'Night']]);
   segmented($('#qualitySel'), 'quality', [['auto', 'Auto'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]);
   $('#hostBtn').addEventListener('click', () => { audio.init(); pendingRoom = { host: true }; $('#roomStatus').textContent = 'A room will open when you enter the island'; $('#roomCode').value = ''; });
   $('#joinBtn').addEventListener('click', () => {
@@ -174,8 +174,19 @@ function bindSettings() {
 let game = null;
 const TIMES = { dawn: 0.265, day: 0.4, sunset: 0.735, night: 0.9 };
 
+// Full screen (and landscape where the browser allows it) for touch play.
+function toggleFullscreen(force) {
+  try {
+    const el = document.documentElement;
+    if (document.fullscreenElement) { if (force !== true) document.exitFullscreen?.(); return; }
+    const p = el.requestFullscreen?.({ navigationUI: 'hide' }) || el.webkitRequestFullscreen?.();
+    Promise.resolve(p).then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+  } catch (e) { /* not supported (iPhone Safari): use Add to Home Screen */ }
+}
+
 async function startGame() {
   if (!renderer) return;
+  if (isTouch()) toggleFullscreen(true);
   audio.init();
   audio.click();
   $('#menu').classList.add('out');
@@ -206,7 +217,7 @@ async function startGame() {
   $('#menu').style.display = 'none';
   document.body.classList.add('playing');
   if (isTouch()) document.body.classList.add('touch');
-  game.start({ spawn: settings.spawn, time: TIMES[settings.time] ?? 0.4 });
+  game.start({ spawn: settings.spawn, time: settings.time === 'live' ? 'live' : TIMES[settings.time] ?? 0.4 });
   game.fade(1.4);
   if (pendingRoom) {
     if (pendingRoom.host) game.net.host(settings.profile.name);
@@ -273,6 +284,9 @@ function bindPause() {
     if (k === 'journal') game.hud.toggleJournal();
     if (k === 'pause') setPaused(!game.paused);
     if (k === 'view' && game.player) game.player.cockpit = !game.player.cockpit;
+    if (k === 'help') $('#help').classList.toggle('on');
+    if (k === 'chat') { $('#chat').classList.add('typing'); input.enabled = false; input.held.clear(); setTimeout(() => $('#chatInput').focus(), 0); }
+    if (k === 'full') toggleFullscreen();
   }));
 }
 

@@ -64,13 +64,15 @@ export class Clouds {
       uFogColor: { value: new THREE.Color() },
       uFogDensity: { value: 0.0002 },
       uOpacity: { value: 0.92 },
+      uCover: { value: 0.5 },     // fraction of puffs shown (live cloud cover)
+      uDark: { value: 0 },        // overcast / rain darkening
     };
     const mat = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
       transparent: true, depthWrite: false,
       vertexShader: /* glsl */`
         attribute vec3 offset; attribute float scale; attribute float seed;
-        uniform vec2 uWind;
+        uniform vec2 uWind; uniform float uCover;
         varying vec2 vUv; varying float vSeed; varying float vDepth; varying vec3 vCenter;
         void main(){
           vec3 c = offset;
@@ -82,13 +84,13 @@ export class Clouds {
           float rot = seed * 6.2831;
           vec2 p = position.xy;
           p = vec2(p.x * cos(rot) - p.y * sin(rot), p.x * sin(rot) + p.y * cos(rot));
-          mv.xy += p * scale;
+          mv.xy += p * scale * step(seed, uCover);
           vDepth = -mv.z;
           vUv = uv; vSeed = seed;
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */`
-        uniform sampler2D uMap; uniform vec3 uSunDir, uLit, uShade, uFogColor; uniform float uFogDensity, uOpacity;
+        uniform sampler2D uMap; uniform vec3 uSunDir, uLit, uShade, uFogColor; uniform float uFogDensity, uOpacity, uDark;
         varying vec2 vUv; varying float vSeed; varying float vDepth; varying vec3 vCenter;
         void main(){
           float a = texture2D(uMap, vUv).r;
@@ -102,6 +104,7 @@ export class Clouds {
           vec3 col = mix(uShade, uLit, smoothstep(0.1, 0.95, diff * 0.8 + up * 0.35));
           // Silver lining.
           col += uLit * pow(1.0 - a, 3.0) * 0.25;
+          col *= 1.0 - uDark;
           float near = smoothstep(18.0, 140.0, vDepth);
           float fog = 1.0 - exp(-uFogDensity * uFogDensity * vDepth * vDepth * 0.45);
           col = mix(col, uFogColor, fog);
@@ -114,11 +117,12 @@ export class Clouds {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 5;
     this.windX = 0; this.windZ = 0;
+    this.wind = { x: 6, z: 2.5 };
   }
 
   update(dt, sky, fog) {
     const u = this.uniforms;
-    this.windX += dt * 6; this.windZ += dt * 2.5;
+    this.windX += dt * this.wind.x; this.windZ += dt * this.wind.z;
     u.uWind.value.set(this.windX, this.windZ);
     u.uSunDir.value.copy(sky.lightDir);
     const night = sky.night;

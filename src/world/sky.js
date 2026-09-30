@@ -5,6 +5,12 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { clamp, lerp, smoothstep, canvasTexture, glowTexture } from '../core/util.js';
+import { skyAt, horizontalToWorld } from '../core/astro.js';
+
+// Kestrel Island sits at 20.5°N 158.5°W; islanders keep UTC-10.
+const LAT = 20.5, LON = -158.5, ISLAND_UTC = -10;
+const POLE = new THREE.Vector3(0, Math.sin(LAT * Math.PI / 180), -Math.cos(LAT * Math.PI / 180));
+const hv = {};
 
 const tmpC = new THREE.Color();
 
@@ -33,6 +39,10 @@ export class SkySystem {
     this.time = 0.36;          // fraction of a day, 0.25 = sunrise, 0.5 = noon
     this.dayLength = 900;      // seconds per full day
     this.timeScale = 1;
+    this.real = false;         // live sky: real Sun, Moon and stars for the real date and time
+    this.offsetMs = 0;         // time-lapse drift away from real time
+    this.phase = 0.5; this.illumination = 1; this.decl = 0.2;
+    this._moonPhaseDrawn = -1;
     this.sunDir = new THREE.Vector3();
     this.moonDir = new THREE.Vector3();
     this.lightDir = new THREE.Vector3();
@@ -125,8 +135,30 @@ export class SkySystem {
     this.scene.add(this.stars);
   }
 
+  _drawMoon(phase) {
+    const c = this.moonCanvas, ctx = c.getContext('2d'), w = c.width, h = c.height, R = w / 2 - 2;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(this.moonBase, 0, 0);
+    if (phase == null) return;
+    // Shade the unlit part: waxing lights the right side (northern sky), waning the left.
+    const k = Math.cos(phase * Math.PI * 2), waxing = phase < 0.5;
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    if (!waxing) ctx.scale(-1, 1);
+    ctx.beginPath();
+    ctx.arc(0, 0, R, Math.PI / 2, Math.PI * 1.5, false);
+    for (let i = 0; i <= 40; i++) { const t = -Math.PI / 2 + (i / 40) * Math.PI; ctx.lineTo(R * k * Math.cos(t), R * Math.sin(t)); }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(6,8,16,0.93)';
+    ctx.fill();
+    ctx.restore();
+    this.moonTex.needsUpdate = true;
+  }
+
   _buildMoon() {
-    const tex = canvasTexture(256, 256, (ctx, w, h) => {
+    this.moonBase = document.createElement('canvas'); this.moonBase.width = this.moonBase.height = 256;
+    {
+      const ctx = this.moonBase.getContext('2d'), w = 256, h = 256;
       const g = ctx.createRadialGradient(w * 0.45, h * 0.42, 5, w / 2, h / 2, w / 2);
       g.addColorStop(0, '#fbfaf2'); g.addColorStop(0.85, '#d9d6cb'); g.addColorStop(1, '#bdb9ae');
       ctx.fillStyle = g;
@@ -137,8 +169,12 @@ export class SkySystem {
         ctx.fillStyle = `rgba(120,118,112,${a})`;
         ctx.beginPath(); ctx.arc(x * w, y * h, r * w, 0, Math.PI * 2); ctx.fill();
       }
-    });
-    this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: 0xffffff, transparent: true, depthWrite: false, fog: false }));
+    }
+    this.moonCanvas = document.createElement('canvas'); this.moonCanvas.width = this.moonCanvas.height = 256;
+    this.moonTex = new THREE.CanvasTexture(this.moonCanvas);
+    this.moonTex.colorSpace = THREE.SRGBColorSpace;
+    this._drawMoon(null);
+    this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.moonTex, color: 0xffffff, transparent: true, depthWrite: false, fog: false }));
     this.moon.scale.setScalar(420);
     this.moon.renderOrder = -8;
     this.moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0x8fb0ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
@@ -147,18 +183,54 @@ export class SkySystem {
     this.scene.add(this.moon, this.moonGlow);
   }
 
-  setTime(frac) { this.time = ((frac % 1) + 1) % 1; }
+  setTime(frac) { this.real = false; this.time = ((frac % 1) + 1) % 1; }
+
+  // Follow the real Sun, Moon and stars for the real date and time.
+  setLive(on = true) {
+    this.real = on;
+    if (on) { this.offsetMs = 0; this._moonPhaseDrawn = -1; } else this._drawMoon(null);
+  }
+
+  // Advance the clock only (used on other worlds and in orbit, where the sky is not drawn).
+  advance(dt) {
+    if (this.real) {
+      if (this.timeScale !== 1) this.offsetMs += dt * 1000 * (this.timeScale - 1);
+      const date = this.now();
+      this.time = ((date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600 + LON / 15) / 24 % 1 + 1) % 1;
+      this.decl = skyAt(date, LAT, LON).sun.dec;
+    } else this.time = (this.time + (dt * this.timeScale) / this.dayLength) % 1;
+  }
+
+  // The moment being shown (real time plus any time-lapse drift).
+  now() { return new Date(Date.now() + this.offsetMs); }
 
   clockString() {
-    const mins = Math.floor(this.time * 24 * 60);
+    let mins = Math.floor(this.time * 24 * 60);
+    if (this.real) { const d = new Date(this.now().valueOf() + ISLAND_UTC * 3600000); mins = d.getUTCHours() * 60 + d.getUTCMinutes(); }
     return String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
   }
 
   update(dt, camera, focus, renderer, altitude = 0) {
-    this.time = (this.time + (dt * this.timeScale) / this.dayLength) % 1;
-    const a = (this.time - 0.25) * Math.PI * 2;
-    this.sunDir.set(Math.cos(a), Math.sin(a) * 0.92, Math.sin(a) * 0.38 + 0.08).normalize();
-    this.moonDir.set(-this.sunDir.x * 0.9, Math.max(-this.sunDir.y * 0.8 + 0.12, -0.3), -this.sunDir.z * 0.4 - 0.35).normalize();
+    let astro = null;
+    if (this.real) {
+      // Live mode: the sky is a pure function of the real clock (holding T drifts away from it).
+      if (this.timeScale !== 1) this.offsetMs += dt * 1000 * (this.timeScale - 1);
+      const date = this.now();
+      astro = skyAt(date, LAT, LON);
+      this.time = ((date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600 + LON / 15) / 24 % 1 + 1) % 1;
+      const su = horizontalToWorld(astro.sun.alt, astro.sun.az, hv);
+      this.sunDir.set(su.x, su.y, su.z);
+      const mo = horizontalToWorld(astro.moon.alt, astro.moon.az, hv);
+      this.moonDir.set(mo.x, mo.y, mo.z);
+      this.phase = astro.phase; this.illumination = astro.illumination; this.decl = astro.sun.dec;
+      if (Math.abs(this.phase - this._moonPhaseDrawn) > 0.004) { this._moonPhaseDrawn = this.phase; this._drawMoon(this.phase); }
+    } else {
+      this.time = (this.time + (dt * this.timeScale) / this.dayLength) % 1;
+      const a = (this.time - 0.25) * Math.PI * 2;
+      this.sunDir.set(Math.cos(a), Math.sin(a) * 0.92, Math.sin(a) * 0.38 + 0.08).normalize();
+      this.moonDir.set(-this.sunDir.x * 0.9, Math.max(-this.sunDir.y * 0.8 + 0.12, -0.3), -this.sunDir.z * 0.4 - 0.35).normalize();
+      this.illumination = 1;
+    }
     const sy = this.sunDir.y;
 
     this.night = smoothstep(0.02, -0.2, sy);
@@ -183,7 +255,7 @@ export class SkySystem {
     } else {
       this.lightDir.copy(this.moonDir);
       L.color.set(0xa8bcff);
-      L.intensity = 0.9 * moonI;
+      L.intensity = 0.9 * moonI * (0.15 + 0.85 * this.illumination) * smoothstep(-0.06, 0.14, this.moonDir.y);
     }
     if (this.lightDir.y < 0.08) this.lightDir.y = 0.08;
     this.lightDir.normalize();
@@ -214,7 +286,8 @@ export class SkySystem {
 
     // Stars and moon ride with the camera, fading in at dusk.
     this.stars.position.copy(camera.position);
-    this.stars.rotation.y = this.time * Math.PI * 2 * 0.25;
+    if (astro) this.stars.quaternion.setFromAxisAngle(POLE, -astro.siderealTime);
+    else this.stars.rotation.y = this.time * Math.PI * 2 * 0.25;
     this.starMat.uniforms.uTime.value += dt;
     this.starMat.uniforms.uOpacity.value = smoothstep(-0.02, -0.2, sy) * (altitude > 3000 ? 1 : 0.95);
     this.starMat.uniforms.uPixel.value = renderer ? renderer.getPixelRatio() : 1;
@@ -222,7 +295,7 @@ export class SkySystem {
     this.moonGlow.position.copy(this.moon.position);
     const moonVis = smoothstep(-0.05, 0.1, this.moonDir.y);
     this.moon.material.opacity = moonVis * lerp(0.35, 1, this.night);
-    this.moonGlow.material.opacity = moonVis * 0.3 * this.night;
+    this.moonGlow.material.opacity = moonVis * 0.3 * this.night * (0.1 + 0.9 * this.illumination);
 
     if (renderer) renderer.toneMappingExposure = lerp(0.62, 0.95, this.night);
   }

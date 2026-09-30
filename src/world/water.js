@@ -25,6 +25,7 @@ export class Ocean {
   constructor(heightTex) {
     this.uniforms = {
       uNormals: waterNormals(),
+      uChop: { value: 1 },
       uTime: { value: 0 },
       uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSunColor: { value: new THREE.Color(1, 1, 1) },
@@ -50,7 +51,7 @@ export class Ocean {
           gl_Position = projectionMatrix * viewMatrix * w;
         }`,
       fragmentShader: /* glsl */`
-        uniform float uTime, uDay, uNight, uMapSize, uFogDensity;
+        uniform float uTime, uDay, uNight, uMapSize, uFogDensity, uChop;
         uniform vec3 uSunDir, uSunColor, uHorizon, uZenith, uFogColor, uMoonDir;
         uniform sampler2D uHeight, uNormals;
         varying vec3 vW;
@@ -88,7 +89,7 @@ export class Ocean {
           vec3 V = toCam / dist;
           float fade = smoothstep(150.0, 2600.0, dist);
 
-          vec2 g = waves(vW.xz, uTime, fade);
+          vec2 g = waves(vW.xz, uTime, fade) * uChop;
           vec3 N = normalize(vec3(-g.x * 6.0, 1.0, -g.y * 6.0));
           N = normalize(mix(N, vec3(0.0, 1.0, 0.0), fade * 0.65));
 

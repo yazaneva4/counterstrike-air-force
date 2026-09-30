@@ -82,8 +82,25 @@ export class HUD {
 
   // ---- Per-frame ----------------------------------------------------------------
 
+  // Which set of touch buttons fits what the player is doing.
+  _touchContext() {
+    const G = this.game, p = G.player;
+    let ctx = 'foot';
+    if (G.space.active) ctx = 'space';
+    else if (p.mode === 'vehicle' && p.vehicle) ctx = p.vehicle.kind;
+    if (ctx === this._ctx) return;
+    this._ctx = ctx;
+    document.body.dataset.ctx = ctx;
+    document.querySelectorAll('.tbtns [data-labels]').forEach((b) => {
+      const l = JSON.parse(b.dataset.labels);
+      if (!b.dataset.base) b.dataset.base = b.textContent;
+      b.textContent = l[ctx] || b.dataset.base;
+    });
+  }
+
   update(dt) {
     const G = this.game;
+    this._touchContext();
     if (this.toastTimer > 0) { this.toastTimer -= dt; if (this.toastTimer <= 0) this.toastEl.classList.remove('on'); }
     if (this.dialogTimer > 0) {
       this.dialogTimer -= dt;
@@ -105,7 +122,7 @@ export class HUD {
       this.textTimer = 0.2;
       const p = G.focusPos();
       $('#locName').textContent = G.locationName();
-      $('#clock').textContent = G.sky.clockString();
+      $('#clock').textContent = G.sky.clockString() + (G.sky.real ? ' HST' : '');
       $('#dayIcon').textContent = G.sky.night > 0.5 ? '☾' : G.sky.golden > 0.4 ? '◐' : '☀';
       $('#mysteryCount').textContent = G.mysteries.count + ' / ' + MYSTERY_INFO.length;
       $('#score').textContent = String(G.score).padStart(5, '0');
@@ -338,7 +355,7 @@ export class HUD {
         c.fillText(`[${tg.key}] ${tg.name.toUpperCase()}  ${km < 1000 ? Math.round(km) + ' KM' : (km / 1000).toFixed(1) + 'K KM'}`, cx, y);
       });
       c.fillStyle = dim;
-      c.fillText('W THRUST · MOUSE STEER · SPACE/C UP/DOWN · SHIFT BOOST · 1/2/3 WARP · DIVE AT A WORLD TO LAND', cx, H * 0.74 + list.length * 17 * d + 6 * d);
+      c.fillText('W THRUST · MOUSE/I/K PITCH · ←/→ YAW · ↑/↓ OR SPACE/C UP/DOWN · SHIFT BOOST · 1/2/3 WARP', cx, H * 0.74 + list.length * 17 * d + 6 * d);
     }
   }
 

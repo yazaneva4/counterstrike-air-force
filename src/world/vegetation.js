@@ -13,7 +13,7 @@ import { tint, smoothstep } from '../core/util.js';
 import { barkTexture, leafCard, needleCard, frondCard } from '../core/textures.js';
 import { HALF } from './terrain.js';
 
-export const windUniforms = { uTime: { value: 0 } };
+export const windUniforms = { uTime: { value: 0 }, uAmp: { value: 1 } };
 
 function jitter(geo, amount, seed = 1) {
   const p = geo.attributes.position;
@@ -277,8 +277,9 @@ function broadLo() { return merge([tint(T(new THREE.CylinderGeometry(0.3, 0.45, 
 function applySway(m, sway, { leaf = false } = {}) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = windUniforms.uTime;
+    shader.uniforms.uAmp = windUniforms.uAmp;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uAmp;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         #ifdef USE_INSTANCING
           vec3 ip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
@@ -287,8 +288,8 @@ function applySway(m, sway, { leaf = false } = {}) {
         #endif
         float sw = sin(uTime * 1.25 + ip.x * 0.05 + ip.z * 0.07) * 0.6 + sin(uTime * 2.9 + ip.x * 0.13) * 0.25;
         float bend = max(transformed.y - 2.0, 0.0);
-        transformed.x += sw * bend * bend * ${(0.0016 * sway).toFixed(5)};
-        transformed.z += sw * bend * bend * ${(0.0011 * sway).toFixed(5)};
+        transformed.x += sw * uAmp * bend * bend * ${(0.0016 * sway).toFixed(5)};
+        transformed.z += sw * uAmp * bend * bend * ${(0.0011 * sway).toFixed(5)};
         ${leaf ? `float flutter = sin(uTime * 7.0 + transformed.x * 3.1 + transformed.y * 2.3 + ip.z) * 0.04 * ${sway.toFixed(2)};
         transformed.y += flutter * step(3.0, transformed.y);` : ''}`);
     if (leaf && shader.fragmentShader.includes('#include <normal_fragment_begin>')) {

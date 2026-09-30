@@ -200,6 +200,27 @@ body.touch #keysHint { display: none; }
 .tmenu button { height: 36px; padding: 0 10px; font-size: 11px; border-radius: 10px; }
 body.touch #miniWrap { left: auto; right: 16px; bottom: auto; top: 128px; width: 120px; height: 120px; }
 body.touch #chat { bottom: calc(190px + var(--safe-b)); }
+/* Touch buttons follow what you are doing (body[data-ctx]). */
+.tbtns button[data-for] { display: none; }
+body[data-ctx="foot"] .tbtns [data-for~="foot"], body[data-ctx="car"] .tbtns [data-for~="car"], body[data-ctx="plane"] .tbtns [data-for~="plane"],
+body[data-ctx="heli"] .tbtns [data-for~="heli"], body[data-ctx="ufo"] .tbtns [data-for~="ufo"], body[data-ctx="ship"] .tbtns [data-for~="ship"],
+body[data-ctx="rocket"] .tbtns [data-for~="rocket"], body[data-ctx="space"] .tbtns [data-for~="space"] { display: block; }
+.tbtns [data-key] { font-size: 10px; letter-spacing: 0.02em; }
+.tbtns [data-btn="fire"], .tbtns [data-btn="act"], .tbtns [data-btn="veh"], .tbtns [data-btn="boost"] { font-size: 11px; }
+.tmenu { flex-wrap: wrap; justify-content: flex-end; max-width: 220px; }
+#rotate { display: none; position: fixed; inset: 0; z-index: 90; align-items: center; justify-content: center; text-align: center; background: rgba(3, 8, 18, 0.94); color: #dff9ff; font: 500 15px var(--body); }
+#rotate b { display: block; font: 700 22px var(--head, var(--body)); margin-bottom: 8px; }
+@media (orientation: portrait) { body.touch.playing #rotate { display: flex; } }
+@media (pointer: coarse) and (max-height: 480px) {
+  #stick { width: 112px; height: 112px; left: 22px; bottom: calc(18px + var(--safe-b)); }
+  #stickKnob { left: 31px; top: 31px; }
+  .tbtns { grid-template-columns: repeat(4, 50px); gap: 6px; right: 12px; bottom: calc(12px + var(--safe-b)); }
+  .tbtns button { height: 50px; border-radius: 14px; }
+  #miniWrap, body.touch #miniWrap { width: 96px; height: 96px; top: 62px; right: 12px; left: auto; bottom: auto; }
+  .tmenu { top: 164px; right: 12px; }
+  #compass { top: 8px; }
+  #chat, body.touch #chat { bottom: calc(150px + var(--safe-b)); }
+}
 
 /* ---------- Responsive ---------- */
 @media (max-width: 760px) {

@@ -243,8 +243,9 @@ export class Player {
     const look = I.consumeLook();
     const S = G.settings;
     const mv = I.moveAxes(), ar = I.arrows();
-    const up = (I.down('Space') || I.tdown('up')) ? 1 : 0;
-    const down = (I.down('KeyC') || I.down('ControlLeft') || I.tdown('down')) ? 1 : 0;
+    const lift = v.kind === 'heli' || v.kind === 'ufo' || v.kind === 'ship'; // arrows climb and descend here
+    const up = (I.down('Space') || (lift && I.down('ArrowUp')) || I.tdown('up')) ? 1 : 0;
+    const down = (I.down('KeyC') || (lift && I.down('ArrowDown')) || I.down('ControlLeft') || I.tdown('down')) ? 1 : 0;
     const boost = I.down('ShiftLeft') || I.down('ShiftRight') || I.tdown('boost');
     const freeLook = I.mouseRight;
     if (freeLook) {
@@ -266,7 +267,7 @@ export class Player {
       this.stick.x = damp(this.stick.x, 0, 2.5, dt); this.stick.y = damp(this.stick.y, 0, 2.5, dt);
       const touch = I.touch.active;
       this.ctl = {
-        throttle: touch ? (up - down) : (I.down('KeyW') ? 1 : 0) - (I.down('KeyS') ? 1 : 0),
+        throttle: clamp((I.down('KeyW') ? 1 : 0) - (I.down('KeyS') ? 1 : 0) + (I.tdown('up') ? 1 : 0) - (I.tdown('down') ? 1 : 0), -1, 1),
         full: boost,
         pitch: clamp(this.stick.y + ar.y + (touch ? I.touch.y : 0), -1, 1),
         yaw: clamp(this.stick.x + ar.x + (touch ? I.touch.x : ((I.down('KeyD') ? 1 : 0) - (I.down('KeyA') ? 1 : 0))), -1, 1),
@@ -286,13 +287,12 @@ export class Player {
       this.stick.x = damp(this.stick.x, 0, 2.2, dt); this.stick.y = damp(this.stick.y, 0, 2.2, dt);
       const touchPlane = I.touch.active;
       this.ctl = {
-        throttle: touchPlane ? (up - down) : (I.down('KeyW') ? 1 : 0) - (I.down('KeyS') ? 1 : 0) + (up - down) * 0,
+        throttle: clamp((I.down('KeyW') ? 1 : 0) - (I.down('KeyS') ? 1 : 0) + (I.tdown('up') ? 1 : 0) - (I.tdown('down') ? 1 : 0), -1, 1),
         pitch: clamp(this.stick.y + ar.y + (touchPlane ? I.touch.y : 0), -1, 1),
         roll: clamp(this.stick.x + (touchPlane ? I.touch.x : ((I.down('KeyD') ? 1 : 0) - (I.down('KeyA') ? 1 : 0))) + ar.x, -1, 1),
         yaw: (I.down('KeyE') ? 1 : 0) - (I.down('KeyQ') ? 1 : 0),
         boost,
       };
-      if (touchPlane) { this.ctl.throttle = up - down; }
       const firing = (I.mouseLeft && I.locked) || I.down('Space') || I.tdown('fire');
       if (v.def.weapons && firing && this.fireCD <= 0) { this.fireCD = 0.11; G.fireBolt(v); }
     } else {

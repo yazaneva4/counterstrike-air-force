@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#030812">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kestrel">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
 <meta name="description" content="Counterstrike Air Force: First Contact. An open-world island on Earth with real people, NPC islanders, jets, helicopters, a flying saucer, aliens, a spaceport with rockets and a spaceplane, the Moon, Mars and nine mysteries.">
 <meta property="og:title" content="Counterstrike Air Force · First Contact">
 <meta property="og:description" content="Walk, fly and uncover what landed on Kestrel Island. Play solo or with friends in the browser.">
@@ -107,14 +113,20 @@
     <div id="lookZone"></div>
     <div id="stick"><div id="stickKnob"></div></div>
     <div class="tbtns">
-      <button type="button" data-btn="up">▲</button>
-      <button type="button" data-btn="down">▼</button>
-      <button type="button" data-btn="act">E</button>
-      <button type="button" data-btn="veh">F</button>
-      <button type="button" data-btn="boost">⇧</button>
-      <button type="button" data-btn="fire" class="fire">FIRE</button>
+      <button type="button" data-btn="up" data-for="foot heli ufo ship space plane rocket" aria-label="Up">▲</button>
+      <button type="button" data-btn="down" data-for="heli ufo ship space plane rocket" aria-label="Down">▼</button>
+      <button type="button" data-btn="act" data-for="foot ufo car" data-labels='{"foot":"TALK","ufo":"BEAM","car":"HORN"}'>E</button>
+      <button type="button" data-btn="veh" data-for="foot plane heli ufo ship rocket car" data-labels='{"foot":"ENTER","car":"EXIT"}'>F</button>
+      <button type="button" data-btn="boost" data-for="foot plane heli ufo ship rocket car space" data-labels='{"foot":"RUN","rocket":"FULL","car":"TURBO"}'>⇧</button>
+      <button type="button" data-btn="fire" class="fire" data-for="plane rocket car" data-labels='{"plane":"FIRE","rocket":"LAUNCH","car":"HAND BRAKE"}'>FIRE</button>
+      <button type="button" data-key="KeyL" data-for="car heli">LIGHTS</button>
+      <button type="button" data-key="KeyG" data-for="rocket">LEGS</button>
+      <button type="button" data-key="KeyR" data-for="rocket">LEVEL</button>
+      <button type="button" data-key="Digit1" data-for="space">EARTH</button>
+      <button type="button" data-key="Digit2" data-for="space">MOON</button>
+      <button type="button" data-key="Digit3" data-for="space">MARS</button>
     </div>
-    <div class="tmenu"><button type="button" data-hud="map">Map</button><button type="button" data-hud="journal">Journal</button><button type="button" data-hud="view">View</button><button type="button" data-hud="pause">❚❚</button></div>
+    <div class="tmenu"><button type="button" data-hud="map">Map</button><button type="button" data-hud="journal">Journal</button><button type="button" data-hud="view">View</button><button type="button" data-hud="help">Help</button><button type="button" data-hud="chat">Chat</button><button type="button" data-hud="full">⛶</button><button type="button" data-hud="pause">❚❚</button></div>
   </div>
 </div>
 
@@ -142,7 +154,7 @@
       <section><h4>Helicopter</h4><dl><dt>Space / C</dt><dd>Up / down</dd><dt>WASD</dt><dd>Fly</dd><dt>Mouse / Q E</dt><dd>Turn</dd><dt>Shift</dt><dd>Fast</dd><dt>F</dt><dd>Exit</dd></dl></section>
       <section><h4>Saucer · Odyssey</h4><dl><dt>Space / C</dt><dd>Up / down</dd><dt>WASD</dt><dd>Fly</dd><dt>E</dt><dd>Tractor beam</dd><dt>Shift</dt><dd>Boost</dd><dt>3,000 m+</dt><dd>Hold Space for orbit</dd></dl></section>
       <section><h4>Aurora rocket</h4><dl><dt>Space</dt><dd>Launch / stage</dd><dt>W / S</dt><dd>Throttle</dd><dt>Shift</dt><dd>Full throttle</dd><dt>Mouse / A D</dt><dd>Steer</dd><dt>Q / E</dt><dd>Roll</dd><dt>R</dt><dd>Hold upright</dd><dt>G</dt><dd>Landing legs</dd></dl></section>
-      <section><h4>In space</h4><dl><dt>W</dt><dd>Thrust</dd><dt>Mouse</dt><dd>Steer</dd><dt>Space / C</dt><dd>Up / down</dd><dt>1 / 2 / 3</dt><dd>Warp to Earth / Moon / Mars</dd><dt>Dive in</dt><dd>Land on a world</dd></dl></section>
+      <section><h4>In space</h4><dl><dt>W</dt><dd>Thrust</dd><dt>Mouse</dt><dd>Steer</dd><dt>Space or ↑ · C or ↓</dt><dd>Up · down</dd><dt>← →</dt><dd>Yaw</dd><dt>I · K</dt><dd>Pitch (or mouse)</dd><dt>1 / 2 / 3</dt><dd>Warp to Earth / Moon / Mars</dd><dt>Dive in</dt><dd>Land on a world</dd></dl></section>
       <section><h4>Cars</h4><dl><dt>W / S</dt><dd>Throttle / brake, reverse</dd><dt>A / D</dt><dd>Steer</dd><dt>Space</dt><dd>Handbrake (drift)</dd><dt>Shift</dt><dd>Boost</dd><dt>L</dt><dd>Headlights</dd><dt>B</dt><dd>Horn</dd><dt>V</dt><dd>Driver view</dd><dt>F</dt><dd>Get out</dd></dl></section>
       <section><h4>Gamepad</h4><dl><dt>Left stick</dt><dd>Move / steer / throttle</dd><dt>Right stick</dt><dd>Look / pitch and roll</dd><dt>A · B</dt><dd>Space (jump, up, fire, handbrake) · C (down)</dd><dt>X · Y</dt><dd>F (enter / exit) · E (talk, beam)</dd><dt>LB · RB</dt><dd>Q · R (roll, hold upright)</dd><dt>RT · LT</dt><dd>Boost · G (landing legs)</dd><dt>D-pad</dt><dd>V view · L lights · M map · J journal</dd><dt>Start</dt><dd>Pause</dd></dl></section>
       <section><h4>Everywhere</h4><dl><dt>V</dt><dd>Cockpit view</dd><dt>Right drag</dt><dd>Look around</dd><dt>M / J</dt><dd>Map / Journal</dd><dt>T</dt><dd>Hold for time-lapse</dd><dt>P</dt><dd>Photo mode</dd><dt>Enter</dt><dd>Chat</dd></dl></section>
@@ -170,6 +182,7 @@
   </div>
 </div>
 
+<div id="rotate" aria-hidden="true"><div><b>Rotate your device</b><span>Kestrel Island plays best in landscape.</span></div></div>
 <button type="button" id="lockHint">Click to take control · <kbd>Esc</kbd> for menu</button>
 
 <script type="importmap">{"imports":{"three":"./lib/three.module.min.js","three/addons/":"./lib/jsm/"}}</script>

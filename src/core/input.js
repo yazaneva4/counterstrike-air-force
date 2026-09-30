@@ -101,6 +101,15 @@ export class Input {
     };
     addEventListener('touchend', end);
     addEventListener('touchcancel', end);
+    // Buttons that press a keyboard key (held while touched), so every keyboard control exists on touch.
+    ui.querySelectorAll('[data-key]').forEach((b) => {
+      const code = b.dataset.key;
+      const down = (e) => { e.preventDefault(); if (!this.held.has(code)) this.pressed.add(code); this.held.add(code); b.classList.add('on'); };
+      const up = (e) => { e.preventDefault(); this.held.delete(code); b.classList.remove('on'); };
+      b.addEventListener('touchstart', down, { passive: false });
+      b.addEventListener('touchend', up, { passive: false });
+      b.addEventListener('touchcancel', up, { passive: false });
+    });
     ui.querySelectorAll('[data-btn]').forEach((b) => {
       const name = b.dataset.btn;
       const down = (e) => { e.preventDefault(); this.touchButtons.add(name); this.touchPressed.add(name); b.classList.add('on'); };

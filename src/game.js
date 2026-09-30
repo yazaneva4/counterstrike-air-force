@@ -10,6 +10,7 @@ import { Vegetation } from './world/vegetation.js';
 import { SkySystem } from './world/sky.js';
 import { Ocean } from './world/water.js';
 import { Clouds } from './world/clouds.js';
+import { Weather } from './world/weather.js';
 import { Mysteries, MYSTERY_INFO } from './world/mysteries.js';
 import { NPCManager } from './actors/npc.js';
 import { Animals } from './actors/animals.js';
@@ -97,6 +98,7 @@ export class Game {
     this.scene.add(this.ocean.mesh);
     this.clouds = new Clouds({ count: q === 'low' ? 26 : 46 });
     this.scene.add(this.clouds.mesh);
+    this.weather = new Weather(this.scene, { rain: q === 'low' ? 700 : 1600 });
 
     await step(0.58, 'Hiding mysteries');
     this.mysteries = new Mysteries(W, this.scene);
@@ -215,7 +217,7 @@ export class Game {
         r.apply(s);
       },
       onChat: (name, text, color) => { this.chatLine(name, text, color); this.audio.ping(); },
-      onTime: (v) => { if (Math.abs(v - this.sky.time) > 0.01) this.sky.setTime(v); },
+      onTime: (v) => { if (!this.sky.real && Math.abs(v - this.sky.time) > 0.01) this.sky.setTime(v); },
       onNeedTime: (send) => send(this.sky.time),
       onFx: (m) => { if (m.k === 'crash' && Array.isArray(m.p) && (m.L || 'earth') === this.location) this._explode(tv.fromArray(m.p), false); },
     });
@@ -224,7 +226,7 @@ export class Game {
   // ---- Lifecycle ---------------------------------------------------------------
 
   start({ spawn = 'airbase', time = 0.36 } = {}) {
-    this.sky.setTime(time);
+    if (time === 'live') this.sky.setLive(true); else this.sky.setTime(time);
     const S = this.structures.spawns;
     const where = {
       airbase: { x: -150, z: 590, h: 0 }, village: { x: S.village.x, z: S.village.z, h: Math.PI },
@@ -237,6 +239,7 @@ export class Game {
     this.hud.show(true);
     this.input.wantLock = true;
     this.intro = 2.5;
+    setTimeout(() => { if (this.weather.live) this.hud.toast(this.weather.describe(), 5); }, 7000);
     setTimeout(() => this.hud.toast('Explore Kestrel Island · walk to an aircraft and press F · talk to people with E', 6), 900);
   }
 
@@ -408,7 +411,7 @@ export class Game {
     if (v.kind === 'rocket') v.group.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
     wrap.add(v.group);
     const cam = v.kind === 'rocket' ? { back: 42, up: 12, look: 12 } : v.kind === 'ship' ? { back: 42, up: 12, look: 4 } : {};
-    this.space.enter(wrap, this.sky.time, from, cam);
+    this.space.enter(wrap, this.sky.time, from, cam, Math.sin(this.sky.decl));
     this.space.active = true;
     this.spaceVehicle = v;
     this.location = 'space';
@@ -530,10 +533,11 @@ export class Game {
     return {
       moveY: mv.y,
       yaw: clamp(look.dx * 0.02 * S.sensitivity + mv.x + ar.x, -2, 2),
-      pitch: clamp(-look.dy * 0.02 * S.sensitivity * (S.invertY ? -1 : 1) + ar.y, -2, 2),
+      pitch: clamp(-look.dy * 0.02 * S.sensitivity * (S.invertY ? -1 : 1) + (I.down('KeyI') ? 1 : 0) - (I.down('KeyK') ? 1 : 0), -2, 2),
       roll: (I.down('KeyE') ? 1 : 0) - (I.down('KeyQ') ? 1 : 0),
-      up: I.down('Space') || I.tdown('up') ? 1 : 0,
-      down: I.down('KeyC') || I.tdown('down') ? 1 : 0,
+      // Up and Down arrows climb and descend; Left and Right yaw; I and K pitch.
+      up: I.down('Space') || I.down('ArrowUp') || I.tdown('up') ? 1 : 0,
+      down: I.down('KeyC') || I.down('ArrowDown') || I.down('ControlLeft') || I.tdown('down') ? 1 : 0,
       boost: I.down('ShiftLeft') || I.tdown('boost'),
     };
   }
@@ -618,7 +622,7 @@ export class Game {
     const S = this.surface, p = this.player, I = this.input;
     p.update(dt);
     // The world clock keeps running on other worlds (and stays in step for multiplayer).
-    this.sky.time = (this.sky.time + (dt * this.sky.timeScale) / this.sky.dayLength) % 1;
+    this.sky.advance(dt);
     for (const v of this.vehicles) {
       const res = v.update(dt, v === p.vehicle ? p.ctl : null, this.world);
       if (res) this._vehicleEvent(v, res);
@@ -663,7 +667,7 @@ export class Game {
 
     if (this.location === 'moon' || this.location === 'mars') { this._surfaceFrame(dt, t); return; }
     if (this.space.active) {
-      this.sky.time = (this.sky.time + (dt * this.sky.timeScale) / this.sky.dayLength) % 1;
+      if (this.sky.real) this.space.setTimeOfDay(this.sky.time, Math.sin(this.sky.decl));
       const res = this.space.update(dt, this._spaceControls(), this.camera);
       if (res === 'reentry') this.exitSpace();
       else if (res && res.startsWith('land:')) this.enterSurface(res.slice(5));
@@ -710,6 +714,7 @@ export class Game {
     const alt = cam.position.y;
     this.sky.shadowRadius = p.mode === 'vehicle' ? 220 : 110;
     this.sky.update(dt, cam, focus, this.renderer, alt);
+    this.weather.update(dt, cam, this.sky, this.clouds, this.scene.fog, this.ocean, alt);
     this.ocean.update(dt, this.sky, this.scene.fog);
     this.clouds.update(dt, this.sky, this.scene.fog);
     this.vegetation.update(dt, this.camera.position);
@@ -839,6 +844,7 @@ export class Game {
     if (I.hit('KeyH')) document.querySelector('#help').classList.toggle('on');
     if (I.hit('KeyP')) { this.photo = !this.photo; document.body.classList.toggle('photo', this.photo); }
     this.sky.timeScale = I.down('KeyT') ? 60 : 1;
+    if (I.hit('KeyY') && this.sky.real) { this.sky.offsetMs = 0; this.hud.toast('Back to real time', 1.6); }
     if (I.hit('KeyT')) this.hud.toast('Time-lapse · hold T', 1.2);
     if (H.mapOpen && this.t - (this._mapT || 0) > 0.5) { this._mapT = this.t; H.drawBigMap(); }
   }
