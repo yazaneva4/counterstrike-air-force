@@ -16,6 +16,7 @@ import { Animals } from './actors/animals.js';
 import { Aliens } from './actors/aliens.js';
 import { Traffic } from './actors/traffic.js';
 import { Vehicle } from './vehicles/vehicles.js';
+import { CAR_COLORS } from './vehicles/cars.js';
 import { Player } from './player.js';
 import { Particles, Trail } from './fx/particles.js';
 import { PostFX } from './fx/postfx.js';
@@ -72,7 +73,15 @@ export class Game {
       groundAt: (x, z) => this.structures.groundAt(x, z),
       night: 0,
       farFromPlayers: (p, d) => p.distanceTo(this.player.pos) > d,
+      // Obstacles for road vehicles: other vehicles on the ground and the traffic.
+      others: (self) => {
+        const out = this._others; out.length = 0;
+        for (const v of this.vehicles) if (v !== self && !v.destroyed && v.group.visible && v.onGround) out.push({ x: v.pos.x, z: v.pos.z, r: v.kind === 'car' ? 0.9 : v.radius * 0.4 });
+        if (this.traffic) for (const c of this.traffic.cars) out.push({ x: c.pos.x, z: c.pos.z, r: 0.9 });
+        return out;
+      },
     };
+    this._others = [];
 
     await step(0.32, 'Growing forests');
     this.vegetation = new Vegetation(this.terrain, { density, isBlocked: (x, z) => this.structures.isBlocked(x, z, 3) });
@@ -107,6 +116,7 @@ export class Game {
       new Vehicle('ufo', { x: PLACES.crash.x, y: this.terrain.heightAt(PLACES.crash.x, PLACES.crash.z), z: PLACES.crash.z, heading: 0.7 }),
       new Vehicle('rocket', { ...S.rocketPad, lz: S.lz }),
       new Vehicle('ship', S.shipPad),
+      ...this._parkCars(),
     ];
     this.ufo = this.vehicles.find((v) => v.type === 'ufo');
     this.rocket = this.vehicles.find((v) => v.type === 'rocket');
@@ -160,6 +170,26 @@ export class Game {
     this.hud = new HUD(this);
     this._setupNet();
     onProgress(1, 'Ready');
+  }
+
+  // Cars parked around the island: [type, x, z, heading, colour]. Each is moved
+  // to the nearest spot that is not inside a building.
+  _parkCars() {
+    const S = this.structures, sp = S.spawns, P = PLACES, C = P.spaceport;
+    const list = [
+      ['pickup', 60, 590, Math.PI / 2, 2], ['jeep', -262, 592, -Math.PI / 2, 5],
+      ['sedan', sp.village.x + 30, sp.village.z + 8, 0.4, 0], ['gt', sp.village.x - 26, sp.village.z + 34, -0.6, 6],
+      ['pickup', sp.farm.x + 12, sp.farm.z + 10, 1.2, 3], ['jeep', sp.beach.x + 20, sp.beach.z - 24, 2.5, 7],
+      ['sedan', sp.lighthouse.x - 20, sp.lighthouse.z + 10, 1.0, 1], ['jeep', C.x - 32, C.z + 42, 0.2, 4], ['gt', C.x - 42, C.z + 56, -0.3, 2],
+    ];
+    return list.map(([type, x, z, h, ci]) => {
+      let best = { x, z };
+      search: for (let r = 0; r < 60; r += 4) for (let a = 0; a < 6.28; a += 0.8) {
+        const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+        if (!S.insideBuilding(px, pz, 3.2) && this.terrain.heightAt(px, pz) > 2) { best = { x: px, z: pz }; break search; }
+      }
+      return new Vehicle(type, { x: best.x, y: S.groundAt(best.x, best.z), z: best.z, heading: h }, { color: CAR_COLORS[ci % CAR_COLORS.length] });
+    });
   }
 
   _lockUfo(locked) {
@@ -316,6 +346,14 @@ export class Game {
 
   _vehicleEvent(v, result) {
     const p = this.player;
+    if (result === 'bump') {
+      if (v === p.vehicle) {
+        p.shake = Math.max(p.shake, Math.min(0.9, v.bump * 0.05));
+        this.audio.thump(v.bump);
+        if (v.bump > 9) this.fx.sparks.burst(v.pos, { count: 14, speed: 9, color: 0xffd08a, size: 1.6, life: 0.5, gravity: -9 });
+      }
+      return;
+    }
     if (result === 'landed') {
       if (v === p.vehicle) { this.hud.toast(v.kind === 'plane' ? 'Touchdown · nice landing' : 'Landed', 2); this.audio.land(); this.stats.flights++; }
       return;
@@ -620,7 +658,7 @@ export class Game {
     this.t = t;
     const I = this.input, p = this.player;
     this._hotkeys();
-    if (this.paused) { this._render(dt); return; }
+    if (this.paused) { this._render(dt); I.endFrame(); return; }
     this.world.night = this.sky.night;
 
     if (this.location === 'moon' || this.location === 'mars') { this._surfaceFrame(dt, t); return; }
@@ -697,7 +735,7 @@ export class Game {
     for (const s of this.aliens.saucers) if (s.beaming) beams.push({ pos: s.pos, radius: 11, owner: 'npc' });
     if (this.ufo.beamActive) beams.push({ pos: this.ufo.pos, radius: 12, owner: 'player' });
     this.animals.update(dt, t, beams, { onAbduct: () => { this.audio.moo(); this.hud.toast('A cow floats up into the saucer. It seems fine.'); } });
-    this.traffic.update(dt, t, this.sky.night);
+    this.traffic.update(dt, t, this.sky.night, this.focusPos(), this.vehicles);
     this._updateBolts(dt);
     this._trails(dt);
     this.fx.sparks.update(dt); this.fx.smoke.update(dt);
@@ -762,8 +800,9 @@ export class Game {
     const f = this.focusPos();
     const coastH = this.terrain.heightAt(f.x, f.z);
     const coast = f.y < 60 ? smoothstep(12, 1, Math.abs(coastH)) : 0;
+    this.audio.horn(p.mode === 'vehicle' && !!v && !!v.horn);
     this.audio.update({
-      dt, vehicle: p.mode === 'vehicle' && v ? v.type : null, throttle: v?.throttle || 0, speed: v ? v.speed : Math.hypot(p.vel.x, p.vel.z),
+      dt, vehicle: p.mode === 'vehicle' && v ? (v.kind === 'car' ? 'car' : v.type) : null, skid: v?.skid || 0, throttle: v?.throttle || 0, speed: v ? v.speed : Math.hypot(p.vel.x, p.vel.z),
       rpm: v?.rpm || 0, boosting: v?.boosting, beam: v?.beamActive, night: this.sky.night, altitude: f.y, coast, space: false, menu: false,
     });
   }

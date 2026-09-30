@@ -232,6 +232,7 @@ export class HUD {
     c.shadowColor = 'rgba(0,10,16,0.75)'; c.shadowBlur = 4 * d;
     c.font = `500 ${11 * d}px 'DM Mono', monospace`;
     c.textBaseline = 'middle';
+    if (!inSpace && v.kind === 'car') { this._carHud(c, v, W, H, d, col, dim); return; }
     const speed = inSpace ? Math.min(G.space.speed, 5000) : v.speed;
     const onSurface = !inSpace && G.location !== 'earth';
     const alt = inSpace ? G.space.nearest.alt * 6.4 : onSurface || v.kind === 'rocket' ? v.pos.y - v.ground - G.world.groundAt(v.pos.x, v.pos.z) : v.pos.y;
@@ -339,6 +340,41 @@ export class HUD {
       c.fillStyle = dim;
       c.fillText('W THRUST · MOUSE STEER · SPACE/C UP/DOWN · SHIFT BOOST · 1/2/3 WARP · DIVE AT A WORLD TO LAND', cx, H * 0.74 + list.length * 17 * d + 6 * d);
     }
+  }
+
+  // Speedometer, gear, rev bar and status lamps for road vehicles.
+  _carHud(c, v, W, H, d, col, dim) {
+    const R = Math.min(W, H) * 0.115, cx = W * 0.5, cy = H - R * 1.25;
+    const kmh = Math.abs(v.carVf) * 3.6, top = Math.ceil(v.def.maxSpeed * 3.6 * 1.12 / 20) * 20;
+    const A0 = Math.PI * 0.75, SW = Math.PI * 1.5;
+    c.save();
+    c.fillStyle = 'rgba(6,20,26,0.55)'; c.beginPath(); c.arc(cx, cy, R * 1.12, 0, Math.PI * 2); c.fill();
+    c.lineWidth = 3 * d; c.strokeStyle = dim; c.beginPath(); c.arc(cx, cy, R, A0, A0 + SW); c.stroke();
+    // Redline arc for the last stretch, then ticks and labels.
+    c.strokeStyle = 'rgba(255,106,90,0.85)'; c.beginPath(); c.arc(cx, cy, R, A0 + SW * 0.9, A0 + SW); c.stroke();
+    const step = top > 240 ? 40 : 20;
+    c.font = `500 ${10 * d}px 'DM Mono', monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = dim; c.lineWidth = 1.4 * d;
+    for (let k = 0; k <= top; k += step / 2) {
+      const a = A0 + (k / top) * SW, major = k % step === 0;
+      c.strokeStyle = major ? col : dim;
+      c.beginPath(); c.moveTo(cx + Math.cos(a) * R * (major ? 0.86 : 0.92), cy + Math.sin(a) * R * (major ? 0.86 : 0.92)); c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); c.stroke();
+      if (major) c.fillText(String(k), cx + Math.cos(a) * R * 0.7, cy + Math.sin(a) * R * 0.7);
+    }
+    const a = A0 + clamp(kmh / top, 0, 1) * SW;
+    c.strokeStyle = '#ffb45a'; c.lineWidth = 2.6 * d; c.beginPath(); c.moveTo(cx - Math.cos(a) * R * 0.12, cy - Math.sin(a) * R * 0.12); c.lineTo(cx + Math.cos(a) * R * 0.92, cy + Math.sin(a) * R * 0.92); c.stroke();
+    c.fillStyle = col; c.font = `700 ${R * 0.34}px 'DM Mono', monospace`; c.fillText(String(Math.round(kmh)), cx, cy + R * 0.42);
+    c.font = `500 ${9 * d}px 'DM Mono', monospace`; c.fillStyle = dim; c.fillText('KM/H', cx, cy + R * 0.62);
+    // Gear, rev bar.
+    c.font = `700 ${R * 0.3}px 'DM Mono', monospace`; c.fillStyle = col; c.fillText(v.gear === 0 ? 'R' : Math.abs(v.carVf) < 0.4 && !v.throttle ? 'N' : String(v.gear), cx, cy - R * 0.32);
+    c.strokeStyle = dim; c.lineWidth = 1 * d; c.strokeRect(cx - R * 0.5, cy + R * 0.78, R, 6 * d);
+    c.fillStyle = v.rpm > 0.9 ? '#ff6a5a' : col; c.fillRect(cx - R * 0.5, cy + R * 0.78, R * clamp(v.rpm, 0, 1), 6 * d);
+    // Status lamps.
+    const lamp = (x, txt, on, colr) => { c.font = `700 ${11 * d}px 'DM Mono', monospace`; c.fillStyle = on ? colr : 'rgba(170,255,225,0.25)'; c.fillText(txt, x, cy - R * 0.9); };
+    lamp(cx - R * 0.5, 'LIGHTS', v.lights, '#ffe08a'); lamp(cx + R * 0.5, 'BRAKE', v.braking, '#ff6a5a');
+    if (v.skid > 0.3) { c.fillStyle = '#ffb45a'; c.font = `700 ${11 * d}px 'DM Mono', monospace`; c.fillText('SLIDE', cx, cy - R * 1.25); }
+    c.font = `500 ${11 * d}px 'DM Mono', monospace`; c.fillStyle = dim;
+    c.fillText('W/S THROTTLE · A/D STEER · SPACE HANDBRAKE · L LIGHTS · B HORN', cx, cy + R * 1.42);
+    c.restore();
   }
 
   _rocketHud(c, v, cx, cy, W, H, d, col, dim) {

@@ -5,10 +5,12 @@ import * as THREE from 'three';
 import { Human, outfitFor } from '../actors/human.js';
 import { buildFighter, buildProp, buildHelicopter, buildSaucer, buildNova } from '../vehicles/models.js';
 import { buildRocket, buildShip, AURORA } from '../vehicles/spacecraft.js';
+import { buildCar, animateCarParts } from '../vehicles/cars.js';
 import { mulberry32 } from '../core/noise.js';
 import { CHARACTERS } from '../player.js';
 
-const builders = { jet: () => buildFighter({ color: 0x7a8a96 }), prop: () => buildProp({ stripe: 0x2a8a4a }), heli: () => buildHelicopter({ color: 0x2a6a4a }), ufo: () => buildSaucer({ glow: 0xffa86a }), nova: () => ({ group: buildNova().group, parts: {} }), rocket: () => buildRocket(), ship: () => buildShip() };
+const builders = { jet: () => buildFighter({ color: 0x7a8a96 }), prop: () => buildProp({ stripe: 0x2a8a4a }), heli: () => buildHelicopter({ color: 0x2a6a4a }), ufo: () => buildSaucer({ glow: 0xffa86a }), nova: () => ({ group: buildNova().group, parts: {} }), rocket: () => buildRocket(), ship: () => buildShip(),
+  sedan: (c) => buildCar('sedan', { color: c }), gt: (c) => buildCar('gt', { color: c }), pickup: (c) => buildCar('pickup', { color: c }), jeep: (c) => buildCar('jeep', { color: c }) };
 const ROCKET_SIDEWAYS = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 
 export class RemotePlayer {
@@ -41,13 +43,16 @@ export class RemotePlayer {
     this.scene.add(this.human.root);
   }
 
-  _ensureVehicle(type) {
-    if (this.vehicleType === type) return;
+  _ensureVehicle(type, color = 0) {
+    const key = type + ':' + color;
+    if (this.vehicleKey === key) return;
+    this.vehicleKey = key;
+    if (this.vehicleType === type && !/^(sedan|gt|pickup|jeep)$/.test(type)) return;
     if (this.vehicle) this.scene.remove(this.vehicle.group);
     this.vehicle = null;
     this.vehicleType = type;
     if (type && builders[type]) {
-      this.vehicle = builders[type]();
+      this.vehicle = builders[type](color);
       if (this.vehicle.parts?.pilot) this.vehicle.parts.pilot.root.visible = true;
       if (this.vehicle.parts?.gear) this.vehicle.parts.gear.visible = false;
       this.scene.add(this.vehicle.group);
@@ -74,7 +79,7 @@ export class RemotePlayer {
     this.state = s;
     if (s.n) this.name = String(s.n).slice(0, 18);
     this._ensureHuman(String(s.c || 'pilot'), s.k, s.L === 'moon' || s.L === 'mars');
-    this._ensureVehicle(typeof s.v === 'string' && builders[s.v] ? s.v : null);
+    this._ensureVehicle(typeof s.v === 'string' && builders[s.v] ? s.v : null, Number.isFinite(s.cc) ? s.cc : 0);
     this.targetPos.set(s.p[0], s.p[1], s.p[2]);
     this.targetQuat.set(s.q[0], s.q[1], s.q[2], s.q[3]).normalize();
     if (!this.has) { this.pos.copy(this.targetPos); this.quat.copy(this.targetQuat); this.has = true; }
@@ -102,6 +107,7 @@ export class RemotePlayer {
         P.plume2Mat.uniforms.uThrottle.value = upper ? th : 0;
         P.plume1Mat.uniforms.uTime.value += dt; P.plume2Mat.uniforms.uTime.value += dt;
       }
+      if (P.wheels && Array.isArray(s.cv)) animateCarParts(P, this.vehicle.ground, dt, { vf: Number(s.cv[0]) || 0, steer: Number(s.cv[1]) || 0, lit: !!s.cv[2], braking: !!s.cv[3], night: 0.7 });
       if (this.vehicleType === 'ship') { P.liftMat.uniforms.uThrottle.value = th * 0.6; P.liftMat.uniforms.uTime.value += dt; }
       if (P.rotor) { P.rotor.rotation.y += dt * 28 * th; P.tailRotor.rotation.x += dt * 50 * th; P.rDisc.material.opacity = 0.28 * th; }
       if (P.prop) { P.prop.rotation.z += dt * 60 * th; P.disc.material.opacity = 0.3 * th; }

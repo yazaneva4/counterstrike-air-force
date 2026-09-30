@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { buildAirliner, buildFighter, buildHelicopter, buildProp } from '../vehicles/models.js';
 import { Trail } from '../fx/particles.js';
 import { PLACES } from '../world/terrain.js';
+import { buildCar, CAR_COLORS, animateCarParts } from '../vehicles/cars.js';
 
 const up = new THREE.Vector3(0, 1, 0);
 const tA = new THREE.Vector3(), tB = new THREE.Vector3(), tC = new THREE.Vector3(), side = new THREE.Vector3();
@@ -62,9 +63,101 @@ class Flyer {
   }
 }
 
+// A car that drives a road back and forth on the right-hand side: it follows a
+// smoothed centre line, slows for the ends, yields to anything in front of it,
+// stays on the terrain (pitch and roll from its wheels) and switches its
+// lights on at dusk.
+class RoadCar {
+  constructor(scene, world, road, type, color, speed, phase) {
+    this.world = world;
+    this.model = buildCar(type, { color });
+    this.model.parts.pilot.root.visible = true;
+    this.group = this.model.group;
+    scene.add(this.group);
+    const curve = new THREE.CatmullRomCurve3(road.pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
+    const len = curve.getLength();
+    this.pts = curve.getSpacedPoints(Math.max(8, Math.round(len / 6)));
+    this.len = len / (this.pts.length - 1);          // spacing between points
+    this.total = len;
+    this.s = phase * len;
+    this.dir = 1;
+    this.speed = speed;
+    this.v = 0;
+    this.heading = 0;
+    this.steer = 0;
+    this.pos = this.group.position;
+    this.tilt = { x: 0, z: 0 };
+    this.lane = 2.1;
+    this.braking = false;
+    this._sample(this.s, this.dir, true);
+  }
+
+  _sample(s, dir, snap = false) {
+    const f = s / this.len, i = Math.max(0, Math.min(this.pts.length - 2, Math.floor(f))), t = f - i;
+    const a = this.pts[i], b = this.pts[i + 1];
+    const tx = (b.x - a.x) * dir, tz = (b.z - a.z) * dir, l = Math.hypot(tx, tz) || 1;
+    const hx = tx / l, hz = tz / l;
+    // Right of travel: (-hz, hx).
+    this.x = a.x + (b.x - a.x) * t - hz * this.lane;
+    this.z = a.z + (b.z - a.z) * t + hx * this.lane;
+    const h = Math.atan2(hx, hz);
+    if (snap) this.heading = h;
+    return h;
+  }
+
+  update(dt, night, focus, others) {
+    const d = this.pos.distanceTo(focus);
+    this.group.visible = d < 700;
+    if (d > 700) return;
+    // Yield to anything ahead in our lane.
+    const hx = Math.sin(this.heading), hz = Math.cos(this.heading);
+    let clear = 1;
+    const check = (ox, oz, r = 1) => {
+      const dx = ox - this.x, dz = oz - this.z, ahead = dx * hx + dz * hz, side = dx * hz - dz * hx;
+      if (ahead > 0.5 && ahead < 16 && Math.abs(side) < 2.4 + r) clear = Math.min(clear, Math.max(0, (ahead - 5) / 11));
+    };
+    check(focus.x, focus.z);
+    for (const o of others) check(o.x, o.z);
+    const endDist = this.dir > 0 ? this.total - this.s : this.s;
+    const want = this.speed * clear * Math.min(1, 0.25 + endDist / 30) * Math.min(1, 0.3 + (this.dir > 0 ? this.s : this.total - this.s) / 25);
+    const before = this.v;
+    this.v += Math.max(-9 * dt, Math.min(3 * dt, want - this.v));
+    this.braking = this.v < before - 0.02 && want < before - 0.2;
+    this.s += this.v * this.dir * dt;
+    if (this.s > this.total) { this.s = this.total; this.dir = -1; this.v = 0; }
+    if (this.s < 0) { this.s = 0; this.dir = 1; this.v = 0; }
+    const h = this._sample(this.s, this.dir);
+    let dh = h - this.heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    this.heading += dh * Math.min(1, dt * 6);
+    this.steer += (Math.max(-0.5, Math.min(0.5, -dh * 2.2)) - this.steer) * Math.min(1, dt * 8);
+    // Ground contact.
+    const W = this.world, hx2 = Math.sin(this.heading), hz2 = Math.cos(this.heading), wb = this.model.wb / 2, tk = this.model.track / 2;
+    const g = (fx, fz) => W.groundAt(this.x + hx2 * fx + hz2 * fz, this.z + hz2 * fx - hx2 * fz);
+    const fl = g(wb, tk), fr = g(wb, -tk), rl = g(-wb, tk), rr = g(-wb, -tk);
+    this.pos.set(this.x, (fl + fr + rl + rr) / 4 + this.model.ground, this.z);
+    const k = Math.min(1, dt * 8);
+    this.tilt.x += (-Math.atan2((fl + fr) / 2 - (rl + rr) / 2, wb * 2) - this.tilt.x) * k;
+    this.tilt.z += (Math.atan2((fl + rl) / 2 - (fr + rr) / 2, tk * 2) - this.tilt.z) * k;
+    this.group.rotation.set(this.tilt.x, this.heading, this.tilt.z, 'YXZ');
+    animateCarParts(this.model.parts, this.model.ground, dt, { vf: this.v, steer: this.steer, lit: night > 0.3, braking: this.braking, night });
+  }
+}
+
 export class Traffic {
   constructor(scene, world) {
     this.flyers = [];
+    this.cars = [];
+    this.world = world;
+    // Ambient road traffic on every road of the island.
+    const types = ['sedan', 'pickup', 'jeep', 'gt', 'sedan', 'pickup', 'sedan'];
+    world.structures.roads.forEach((road, i) => {
+      if (road.pts.length < 2) return;
+      if (this.cars.length >= 8) return;
+      for (let k = 0; k < (i === 0 ? 2 : 1); k++) {
+        const n = this.cars.length;
+        this.cars.push(new RoadCar(scene, world, road, types[n % types.length], CAR_COLORS[(n * 3 + 1) % CAR_COLORS.length], 11 + (n % 4) * 2.5, (k * 0.5 + 0.13 * n) % 1));
+      }
+    });
     const g = (x, z) => world.groundAt(x, z);
     // Airliner: wide oval at cruise altitude with long contrails.
     const air = buildAirliner();
@@ -97,7 +190,14 @@ export class Traffic {
     }, 52, { phase: 0.3 }));
   }
 
-  update(dt, t, night) { for (const f of this.flyers) f.update(dt, t, night); }
+  update(dt, t, night, focus, vehicles = []) {
+    for (const f of this.flyers) f.update(dt, t, night);
+    if (!focus) return;
+    // Parked vehicles and other traffic count as obstacles.
+    const others = [];
+    for (const v of vehicles) if (v.onGround && !v.destroyed && v.group.visible) others.push({ x: v.pos.x, z: v.pos.z, r: v.kind === 'car' ? 0.9 : v.radius * 0.4 });
+    for (const c of this.cars) { c.update(dt, night, focus, others.concat(this.cars.filter((o) => o !== c).map((o) => ({ x: o.x, z: o.z })))); }
+  }
 
   positions() { return this.flyers.map((f) => f.pos); }
 }

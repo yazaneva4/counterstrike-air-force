@@ -1,6 +1,7 @@
 // Unified input: keyboard (by physical key code), mouse with pointer lock,
-// wheel zoom, and a touch layer (left thumb-stick, right-side look drag and
-// on-screen action buttons). Everything funnels into one small state object
+// wheel zoom, a gamepad (standard mapping: sticks, triggers, face buttons and
+// d-pad are translated into the same key codes) and a touch layer (left
+// thumb-stick, right-side look drag and on-screen action buttons). Everything funnels into one small state object
 // that the player controller reads each frame.
 
 export class Input {
@@ -17,6 +18,7 @@ export class Input {
     this.touchPressed = new Set();
     this.dragging = false;
     this.lookScale = 1;
+    this.pad = { active: false, lx: 0, ly: 0, rx: 0, ry: 0, codes: new Set(), hits: new Set(), start: false };
 
     const ignoreTarget = (e) => e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
     addEventListener('keydown', (e) => {
@@ -112,6 +114,36 @@ export class Input {
     });
   }
 
+  // Gamepad button -> key code. Everything the keyboard can do works on a pad.
+  static PAD = { 0: 'Space', 1: 'KeyC', 2: 'KeyF', 3: 'KeyE', 4: 'KeyQ', 5: 'KeyR', 6: 'KeyG', 7: 'ShiftLeft', 8: 'KeyH', 10: 'KeyB', 11: 'KeyT', 12: 'KeyV', 13: 'KeyL', 14: 'KeyM', 15: 'KeyJ' };
+
+  // Call once per frame before the game reads input.
+  poll(dt) {
+    const pad = this.pad;
+    const list = navigator.getGamepads ? navigator.getGamepads() : [];
+    const gp = [...list].find((g) => g && g.connected);
+    if (!gp) {
+      if (pad.active) { for (const c of pad.codes) this.held.delete(c); pad.codes.clear(); pad.active = false; pad.lx = pad.ly = pad.rx = pad.ry = 0; }
+      return;
+    }
+    pad.active = true;
+    const dz = (v) => { const a = Math.abs(v); return a < 0.16 ? 0 : Math.sign(v) * (a - 0.16) / 0.84; };
+    pad.lx = dz(gp.axes[0] || 0); pad.ly = -dz(gp.axes[1] || 0);
+    pad.rx = dz(gp.axes[2] || 0); pad.ry = dz(gp.axes[3] || 0);
+    const want = new Set();
+    gp.buttons.forEach((b, i) => { if (b.pressed || b.value > 0.5) { const c = Input.PAD[i]; if (c) want.add(c); if (i === 9) { if (!pad.start) pad.hits.add('start'); pad.start = true; } } else if (i === 9) pad.start = false; });
+    // Digital copies of the left stick so throttle-style controls (W/S) work too.
+    if (pad.ly > 0.55) want.add('KeyW'); if (pad.ly < -0.55) want.add('KeyS');
+    for (const c of want) if (!pad.codes.has(c)) { pad.codes.add(c); this.held.add(c); this.pressed.add(c); }
+    for (const c of [...pad.codes]) if (!want.has(c)) { pad.codes.delete(c); this.held.delete(c); }
+    // Right stick looks around like a mouse (quadratic response for fine aim).
+    const k = 900 * (dt || 1 / 60);
+    this.mouseDX += Math.sign(pad.rx) * pad.rx * pad.rx * k;
+    this.mouseDY += Math.sign(pad.ry) * pad.ry * pad.ry * k;
+  }
+
+  padHit(name) { return this.pad.hits.has(name); }
+
   down(code) { return this.enabled && this.held.has(code); }
   hit(code) { return this.enabled && this.pressed.has(code); }
   tdown(name) { return this.touchButtons.has(name); }
@@ -122,6 +154,7 @@ export class Input {
     let x = (this.down('KeyD') ? 1 : 0) - (this.down('KeyA') ? 1 : 0);
     let y = (this.down('KeyW') ? 1 : 0) - (this.down('KeyS') ? 1 : 0);
     if (this.touch.active) { x += this.touch.x; y += this.touch.y; }
+    if (this.pad.active) { x += this.pad.lx; y += this.pad.ly; }
     const l = Math.hypot(x, y);
     if (l > 1) { x /= l; y /= l; }
     return { x, y };
@@ -145,6 +178,7 @@ export class Input {
   endFrame() {
     this.pressed.clear();
     this.touchPressed.clear();
+    this.pad.hits.clear();
   }
 
   releaseLock() { if (document.pointerLockElement) document.exitPointerLock(); }

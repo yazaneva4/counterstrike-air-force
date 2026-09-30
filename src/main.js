@@ -304,6 +304,8 @@ function loop(now) {
   const dt = Math.min(0.05, rawDt);
   last = now;
   const t = now / 1000;
+  input.poll(dt);
+  if (input.padHit('start') && game && game.running) setPaused(!game.paused);
   if (game && game.running && !game.paused) adaptResolution(Math.min(rawDt, 0.25));
   if (game && game.running) game.frame(dt, t);
   else {

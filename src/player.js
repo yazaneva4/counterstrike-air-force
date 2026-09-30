@@ -203,7 +203,7 @@ export class Player {
     this.camYaw = v.headingAngle();
     if (v.kind === 'plane') v.throttle = Math.max(v.throttle, 0);
     G.hud.prompt(null);
-    const help = { plane: 'W throttle, mouse/arrows pitch, A/D roll', heli: 'Space up, C down, WASD fly, mouse turn', ufo: 'Space/C altitude, WASD fly, E tractor beam', ship: 'Space/C altitude, WASD fly, Shift boost · climb past 3,000 m for orbit', rocket: v.onGround && !v.launched ? 'Space to launch · W/S throttle · mouse steer · G legs · R level' : 'W/S throttle · mouse steer · Q/E roll · G legs · R hold level' };
+    const help = { plane: 'W throttle, mouse/arrows pitch, A/D roll', heli: 'Space up, C down, WASD fly, mouse turn', ufo: 'Space/C altitude, WASD fly, E tractor beam', ship: 'Space/C altitude, WASD fly, Shift boost · climb past 3,000 m for orbit', car: 'W/S throttle and brake · A/D steer · Space handbrake · Shift boost · L lights · B horn · V cockpit', rocket: v.onGround && !v.launched ? 'Space to launch · W/S throttle · mouse steer · G legs · R level' : 'W/S throttle · mouse steer · Q/E roll · G legs · R hold level' };
     G.hud.toast(v.def.name + ' · ' + help[v.kind], 5);
     G.audio?.enter(v.type);
     G.onEnterVehicle?.(v);
@@ -252,7 +252,13 @@ export class Player {
     } else {
       this.lookYaw = damp(this.lookYaw, 0, 3, dt); this.lookPitch = damp(this.lookPitch, 0, 3, dt);
     }
-    if (v.kind === 'rocket') {
+    if (I.hit('KeyL') && (v.kind === 'car' || v.kind === 'heli')) { v.lights = !v.lights; G.hud.toast(v.lights ? 'Lights on' : 'Lights off', 1.2); G.audio?.click(); }
+    if (v.kind === 'car') {
+      this.ctl = {
+        steer: clamp(mv.x + ar.x, -1, 1), throttle: clamp(mv.y + ar.y, -1, 1),
+        handbrake: I.down('Space') || I.tdown('fire'), boost, horn: I.down('KeyB') || I.tdown('act'),
+      };
+    } else if (v.kind === 'rocket') {
       if (!freeLook) {
         this.stick.x = clamp(this.stick.x + look.dx * 0.004 * S.sensitivity, -1, 1);
         this.stick.y = clamp(this.stick.y - look.dy * 0.004 * S.sensitivity * (S.invertY ? -1 : 1), -1, 1);
@@ -370,7 +376,7 @@ export class Player {
     const G = this.game, cam = G.camera, v = this.vehicle, W = G.world;
     const fwd = tv.copy(Z).applyQuaternion(v.quat);
     if (this.cockpit) {
-      const seat = { jet: [0, 0.95, 3.4], nova: [0, 1.05, 0.2], prop: [0.3, 0.55, 0.8], heli: [-0.45, 0.4, 1.5], ufo: [0, 2.2, 0], ship: [0, 0.9, 9.4], rocket: [0, 57 + (v.parts.model?.position.y || 0), -1.3] }[v.type] || [0, 1, 0];
+      const seat = v.kind === 'car' ? v.model.spec.eye : { jet: [0, 0.95, 3.4], nova: [0, 1.05, 0.2], prop: [0.3, 0.55, 0.8], heli: [-0.45, 0.4, 1.5], ufo: [0, 2.2, 0], ship: [0, 0.9, 9.4], rocket: [0, 57 + (v.parts.model?.position.y || 0), -1.3] }[v.type] || [0, 1, 0];
       tv2.set(seat[0], seat[1], seat[2]).applyQuaternion(v.quat).add(v.pos);
       cam.position.copy(tv2);
       tq.copy(v.quat).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(this.lookPitch, Math.PI + this.lookYaw, 0, 'YXZ')));
@@ -407,7 +413,7 @@ export class Player {
       const gh = W.groundAt(want.x, want.z);
       if (want.y < gh + 1.5) want.y = gh + 1.5;
       if (want.y < 1.2) want.y = 1.2;
-      const rate = v.kind === 'plane' ? 7 : 5;
+      const rate = v.kind === 'plane' ? 7 : v.kind === 'car' ? 9 : 5;
       this.camPos.lerp(want, 1 - Math.exp(-rate * dt));
       if (this.camPos.distanceToSquared(want) > 90000) this.camPos.copy(want);
       cam.position.copy(this.camPos);
@@ -417,7 +423,7 @@ export class Player {
       look.y += v.camHeight * 0.3;
       cam.lookAt(look);
     }
-    const speedFov = clamp(v.speed / 280, 0, 1) * 14 + (v.boosting ? 6 : 0);
+    const speedFov = clamp(v.speed / (v.kind === 'car' ? v.def.maxSpeed * 1.5 : 280), 0, 1) * (v.kind === 'car' ? 12 : 14) + (v.boosting ? 6 : 0);
     this.fov = damp(this.fov, (this.cockpit ? 70 : 62) + speedFov, 2.5, dt);
     this._applyShake(cam);
   }
@@ -453,6 +459,7 @@ export class Player {
       q: [q.x, q.y, q.z, q.w].map((x) => Math.round(x * 1000) / 1000),
       s: Math.round(this.human.speed * 10) / 10, st: this.human.state, g: this.human.gesture,
       th: v ? Math.round((v.throttle || v.rpm || 0) * 100) / 100 : 0, b: v ? !!v.beamActive : false,
+      cc: v && v.kind === 'car' ? v.color : 0, cv: v && v.kind === 'car' ? [Math.round(v.carVf * 10) / 10, Math.round(v.steer * 100) / 100, v.lights ? 1 : 0, v.braking ? 1 : 0] : 0,
       L: this.game.location || 'earth', sg: v && v.kind === 'rocket' ? v.stage : 0,
     };
   }

@@ -25,17 +25,21 @@ export function loft(sections, { segs = 32, capStart = true, capEnd = true } = {
     const a = i * R + j, b = a + 1, c = a + R, d = c + 1;
     idx.push(a, b, c, b, d, c);
   }
+  // Caps get their own ring of vertices so their normals point straight along the axis.
   const addCap = (i, flip) => {
     const s = sections[i];
     const center = pos.length / 3;
-    pos.push(0, s.y ?? 0, s.z); uv.push(0.5, i === 0 ? 0 : 1);
+    const cv = i === 0 ? 0.08 : 0.92; // sample the body colour just inside the end
+    pos.push(0, s.y ?? 0, s.z); uv.push(0.5, cv);
+    const ring = pos.length / 3;
+    for (let j = 0; j <= segs; j++) { const a = i * R + j; pos.push(pos[a * 3], pos[a * 3 + 1], pos[a * 3 + 2]); uv.push(j / segs, cv); }
     for (let j = 0; j < segs; j++) {
-      const a = i * R + j, b = a + 1;
+      const a = ring + j, b = a + 1;
       if (flip) idx.push(center, b, a); else idx.push(center, a, b);
     }
   };
-  if (capStart && sections[0].w > 0.001) addCap(0, false);
-  if (capEnd && sections[S - 1].w > 0.001) addCap(S - 1, true);
+  if (capStart && sections[0].w > 0.001) addCap(0, true);
+  if (capEnd && sections[S - 1].w > 0.001) addCap(S - 1, false);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));

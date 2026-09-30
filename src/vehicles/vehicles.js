@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { clamp, damp, lerp, smoothstep } from '../core/util.js';
 import { buildFighter, buildProp, buildHelicopter, buildSaucer, buildNova } from './models.js';
 import { buildRocket, buildShip, AURORA } from './spacecraft.js';
+import { buildCar, CAR_NAMES, animateCarParts } from './cars.js';
 
 export const VEHICLE_DEFS = {
   jet: { name: 'F-7 Falcon', role: 'Air-superiority jet', kind: 'plane', maxSpeed: 280, stall: 58, takeoff: 70, thrust: 15, pitchRate: 1.15, rollRate: 2.6, yawRate: 0.45, turn: 0.8, boost: 1.35, weapons: true },
@@ -19,6 +20,11 @@ export const VEHICLE_DEFS = {
   ufo: { name: 'Visitor Craft', role: 'Anti-gravity saucer', kind: 'ufo', maxSpeed: 170, climb: 48, boost: 2.6 },
   ship: { name: 'Odyssey', role: 'Spaceplane · vertical take-off to orbit', kind: 'ship', maxSpeed: 240, climb: 55, boost: 2.4 },
   rocket: { name: 'Aurora', role: 'Two-stage orbital rocket', kind: 'rocket', twr1: 1.75, twr2: 2.1, burn1: 26, burn2: 90 },
+  // Road vehicles. Speeds in m/s, accel/brake in m/s², mu = tyre grip, off = grip factor off the tarmac.
+  sedan: { name: CAR_NAMES.sedan, role: 'Family sedan', kind: 'car', maxSpeed: 52, accel: 6.2, brake: 12, steerMax: 0.58, mu: 1.15, off: 0.72 },
+  gt: { name: CAR_NAMES.gt, role: 'Sports coupe', kind: 'car', maxSpeed: 78, accel: 10, brake: 15, steerMax: 0.5, mu: 1.4, off: 0.62 },
+  pickup: { name: CAR_NAMES.pickup, role: 'Pickup truck', kind: 'car', maxSpeed: 44, accel: 5, brake: 11, steerMax: 0.55, mu: 1.05, off: 0.88 },
+  jeep: { name: CAR_NAMES.jeep, role: 'Off-road 4x4', kind: 'car', maxSpeed: 38, accel: 5.6, brake: 11, steerMax: 0.62, mu: 1.1, off: 0.96 },
 };
 
 const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
@@ -26,7 +32,7 @@ const tq = new THREE.Quaternion();
 const tv = new THREE.Vector3(), tv2 = new THREE.Vector3();
 const e3 = new THREE.Euler(0, 0, 0, 'YXZ');
 
-function buildFor(type) {
+function buildFor(type, opts = {}) {
   switch (type) {
     case 'jet': return buildFighter();
     case 'prop': return buildProp();
@@ -34,6 +40,7 @@ function buildFor(type) {
     case 'ufo': return buildSaucer();
     case 'ship': return buildShip();
     case 'rocket': return buildRocket();
+    case 'sedan': case 'gt': case 'pickup': case 'jeep': return buildCar(type, { color: opts.color });
     case 'nova': {
       const n = buildNova();
       const gear = new THREE.Group();
@@ -54,13 +61,15 @@ function buildFor(type) {
 let nextId = 1;
 
 export class Vehicle {
-  constructor(type, home) {
+  constructor(type, home, opts = {}) {
     this.id = 'v' + nextId++;
     this.type = type;
     this.def = VEHICLE_DEFS[type];
     this.kind = this.def.kind;
-    const m = buildFor(type);
+    this.color = opts.color;
+    const m = buildFor(type, opts);
     this.model = m;
+    this.wb = m.wb; this.track = m.track;
     this.parts = m.parts;
     this.ground = m.ground;
     this.radius = m.radius;
@@ -99,7 +108,13 @@ export class Vehicle {
     this.idleTime = 0;
     this.stalling = false;
     this.group.visible = true;
+    if (this.kind === 'heli') this.lights = true;
     if (this.kind === 'rocket') this._rocketReset();
+    if (this.kind === 'car') {
+      this.steer = 0; this.vy = 0; this.airborne = false; this.gear = 1; this.lights = false; this.horn = false;
+      this.skid = 0; this.bump = 0; this.susp = 0; this.suspV = 0; this.carVf = 0; this.braking = false; this.shift = 0;
+      this.model.group.position.y = 0;
+    }
   }
 
   get forward() { return tv.copy(Z).applyQuaternion(this.quat); }
@@ -132,6 +147,7 @@ export class Vehicle {
     if (this.kind === 'plane') result = this._plane(dt, ctl, world);
     else if (this.kind === 'heli') result = this._heli(dt, ctl, world);
     else if (this.kind === 'rocket') result = this._rocket(dt, ctl, world);
+    else if (this.kind === 'car') result = this._car(dt, ctl, world);
     else if (this.kind === 'ship') result = this._ship(dt, ctl, world);
     else result = this._ufo(dt, ctl, world);
     this._animate(dt, world);
@@ -521,6 +537,160 @@ export class Vehicle {
     return null;
   }
 
+  // ---- Cars ----------------------------------------------------------------------
+  // A bicycle-model car: engine force with a torque fall-off and six gears,
+  // braking, aerodynamic and rolling drag, tyre grip that caps lateral
+  // acceleration (so fast corners slide and the handbrake drifts), road versus
+  // off-road grip, slopes, load transfer, a spring-damper body, air time over
+  // crests, and bumps against buildings, trees and other vehicles.
+
+  _car(dt, ctl, world) {
+    const d = this.def, p = this.pos, G = 9.81 * (world.gravity ?? 1);
+    const occupied = !!ctl;
+    ctl = ctl || { steer: 0, throttle: 0, handbrake: true, boost: false, horn: false };
+    const hb = !!ctl.handbrake;
+    const thr = clamp(ctl.throttle, -1, 1);
+    const hx = Math.sin(this.heading), hz = Math.cos(this.heading);
+    let vf = this.vel.x * hx + this.vel.z * hz, vl = this.vel.x * hz - this.vel.z * hx;
+    const onRoad = world.structures.roadAt ? world.structures.roadAt(p.x, p.z) : true;
+    const surf = onRoad ? 1 : d.off;
+    const grounded = !this.airborne;
+    const maxV = d.maxSpeed * (ctl.boost ? 1.12 : 1);
+
+    // Longitudinal forces.
+    let a = 0, brakingOnly = false;
+    if (grounded) {
+      if (thr > 0.02) {
+        if (vf < -0.8) { a = d.brake * thr; brakingOnly = true; }
+        else a = d.accel * thr * (ctl.boost ? 1.3 : 1) * surf * Math.max(0, 1 - Math.pow(Math.max(vf, 0) / maxV, 2.2));
+      } else if (thr < -0.02) {
+        if (vf > 0.8) { a = d.brake * thr; brakingOnly = true; }
+        else a = d.accel * 0.55 * thr * surf * Math.max(0, 1 - Math.pow(Math.max(-vf, 0) / (maxV * 0.25), 2));
+      }
+      const drag = (0.45 + 0.0011 * vf * vf) * (onRoad ? 1 : 2.4);
+      a -= Math.sign(vf) * drag;
+      if (hb) { a -= Math.sign(vf) * 8.5 * surf; brakingOnly = true; }
+    }
+    const before = vf;
+    vf += a * dt;
+    if ((brakingOnly || thr === 0 || (thr > 0 && before < 0) || (thr < 0 && before > 0)) && Math.sign(vf) !== Math.sign(before) && Math.abs(before) > 0) vf = 0;
+    if (Math.abs(vf) < 0.25 && Math.abs(thr) < 0.02) vf = 0;
+    vf = clamp(vf, -maxV * 0.28, maxV);
+
+    // Slopes.
+    const n = world.terrain.normalAt(p.x, p.z);
+    const slope = Math.hypot(n.x, n.z);
+    const parked = (!occupied || hb || Math.abs(thr) < 0.02) && Math.hypot(vf, vl) < 0.7 && slope < 0.32;
+    if (parked) { vf = 0; vl = 0; } else if (grounded) { vf += G * (n.x * hx + n.z * hz) * dt; vl += G * (n.x * hz - n.z * hx) * dt; }
+
+    // Tyre grip caps how much sideways speed can be removed each step.
+    if (grounded) {
+      const mu = d.mu * surf * (hb ? 0.34 : 1) * (this.stallFromWater ? 0.5 : 1);
+      const cap = mu * G * dt;
+      vl = Math.abs(vl) <= cap ? 0 : vl - Math.sign(vl) * cap;
+    }
+    this.skid = grounded ? clamp((Math.abs(vl) - 1) / 4, 0, 1) * (Math.abs(vf) > 3 ? 1 : 0) : 0;
+
+    // Steering (Ackermann bicycle model), softer at speed.
+    const steerMax = d.steerMax / (1 + Math.pow(Math.abs(vf) / 15, 1.3));
+    const target = clamp(ctl.steer, -1, 1) * steerMax;
+    this.steer += (target - this.steer) * (1 - Math.exp(-(Math.abs(target) > Math.abs(this.steer) ? 7 : 11) * dt));
+    // Tyres cannot turn the car faster than grip allows (understeer instead of spinning);
+    // the handbrake unloads the rear axle so the tail can swing round.
+    const gripYaw = (d.mu * surf * G * (hb ? 1.7 : 1.05)) / Math.max(Math.abs(vf), 4);
+    const yawRate = grounded ? clamp(vf * Math.tan(this.steer) / this.wb * (hb && Math.abs(vf) > 6 ? 1.4 : 1), -Math.min(2.4, gripYaw), Math.min(2.4, gripYaw)) : 0;
+
+    // Rebuild the velocity from the heading it had, then turn the car.
+    this.vel.x = hx * vf + hz * vl;
+    this.vel.z = hz * vf - hx * vl;
+    this.heading -= yawRate * dt;
+    p.x += this.vel.x * dt; p.z += this.vel.z * dt;
+    const lim = world.limit ?? 2650;
+    p.x = clamp(p.x, -lim, lim); p.z = clamp(p.z, -lim, lim);
+
+    // Collisions: buildings, tree trunks and other vehicles.
+    let bump = 0;
+    const push = (dx, dz) => {
+      p.x += dx; p.z += dz;
+      const l = Math.hypot(dx, dz) || 1, nx = dx / l, nz = dz / l;
+      const vn = this.vel.x * nx + this.vel.z * nz;
+      if (vn < 0) { bump = Math.max(bump, -vn); this.vel.x -= vn * nx * 1.35; this.vel.z -= vn * nz * 1.35; }
+    };
+    for (const off of [1.35, -1.35]) {
+      tv.set(p.x + hx * off, p.y, p.z + hz * off);
+      const ox = tv.x, oz = tv.z;
+      if (world.structures.collide(tv, 1.0, p.y + 0.4)) push(tv.x - ox, tv.z - oz);
+    }
+    world.vegetation.near(p.x, p.z, (c) => {
+      if (p.y - this.ground > c.top) return;
+      const dx = p.x - c.x, dz = p.z - c.z, dist = Math.hypot(dx, dz), r = c.r * 0.5 + 1.05;
+      if (dist < r && dist > 1e-4) push(dx / dist * (r - dist), dz / dist * (r - dist));
+    });
+    if (world.others) for (const o of world.others(this)) {
+      const dx = p.x - o.x, dz = p.z - o.z, dist = Math.hypot(dx, dz), r = o.r + 1.7;
+      if (dist < r && dist > 1e-4) push(dx / dist * (r - dist) * 0.6, dz / dist * (r - dist) * 0.6);
+    }
+    // Recompute forward speed after the push (used by everything below).
+    const hx2 = Math.sin(this.heading), hz2 = Math.cos(this.heading);
+    this.carVf = this.vel.x * hx2 + this.vel.z * hz2;
+    this.speed = Math.hypot(this.vel.x, this.vel.z);
+
+    // Ground contact at the four wheels.
+    const wbH = this.wb / 2, tk = this.track / 2;
+    const gAt = (fx, fz) => world.groundAt(p.x + hx2 * fx + hz2 * fz, p.z + hz2 * fx - hx2 * fz);
+    const fl = gAt(wbH, tk), fr = gAt(wbH, -tk), rl = gAt(-wbH, tk), rr = gAt(-wbH, -tk);
+    const gC = (fl + fr + rl + rr) / 4;
+    const th = world.terrain.heightAt(p.x, p.z);
+    if (!this.airborne && th < -1.0 && world.structures.platformAt(p.x, p.z) === -Infinity) return 'water';
+    const targetY = gC + this.ground;
+    const yff = p.y + this.vy * dt - 0.5 * G * dt * dt;
+    if (yff > targetY + 0.12) {
+      p.y = yff; this.vy -= G * dt; this.airborne = true;
+    } else {
+      if (this.airborne) {
+        const impact = -this.vy;
+        if (impact > 3) { this.suspV -= impact * 0.5; if (impact > 9) bump = Math.max(bump, impact * 0.5); }
+        this.airborne = false;
+      }
+      this.vy = clamp((targetY - p.y) / dt, -25, 25);
+      p.y = targetY;
+    }
+    // Body attitude: terrain, plus squat/dive and body roll from load transfer.
+    const aLat = this.carVf * yawRate;
+    const pitchT = -Math.atan2((fl + fr) / 2 - (rl + rr) / 2, this.wb) - a * 0.005;
+    const rollT = Math.atan2((fl + rl) / 2 - (fr + rr) / 2, this.track * 2) - aLat * 0.008;
+    const k = 1 - Math.exp(-9 * dt);
+    this.tilt.x += (pitchT - this.tilt.x) * k;
+    this.tilt.z += (rollT - this.tilt.z) * k;
+    if (this.airborne) { this.tilt.x += (-clamp(this.vy * 0.02, -0.25, 0.25) - this.tilt.x) * 0.02; }
+    this.quat.setFromEuler(e3.set(this.tilt.x, this.heading, this.tilt.z));
+    // Suspension spring: settles after bumps and landings.
+    this.suspV += (-70 * this.susp - 8 * this.suspV) * dt;
+    this.susp += this.suspV * dt;
+    this.model.group.position.y = clamp(this.susp, -0.14, 0.14);
+
+    // Engine: gear from speed, rpm from position in the gear, a dip at each shift.
+    const sp = Math.abs(this.carVf) / d.maxSpeed;
+    const tops = [0.14, 0.27, 0.42, 0.58, 0.78, 1.02];
+    let gi = 0; while (gi < 5 && sp > tops[gi]) gi++;
+    const lo = gi ? tops[gi - 1] : 0;
+    const gear = this.carVf < -0.6 ? 0 : gi + 1;
+    if (gear !== this.gear && gear > 0 && this.gear > 0) this.shift = 0.22;
+    this.gear = gear;
+    this.shift = Math.max(0, this.shift - dt);
+    let want = 0.18 + 0.82 * clamp((sp - lo) / (tops[gi] - lo), 0, 1);
+    if (gear === 0) want = 0.2 + Math.min(0.5, Math.abs(this.carVf) / 6);
+    want += Math.max(0, thr) * 0.05 - (this.shift > 0 ? 0.22 : 0);
+    this.rpm = damp(this.rpm, clamp(want, 0.15, 1), 12, dt);
+    this.throttle = Math.max(0, thr);
+    this.braking = brakingOnly && Math.abs(before) > 0.5;
+    this.horn = occupied && !!ctl.horn;
+    this.boosting = occupied && !!ctl.boost && thr > 0.1;
+    this.bump = bump;
+    this.onGround = !this.airborne;
+    return bump > 3.5 ? 'bump' : null;
+  }
+
   // ---- Visuals ---------------------------------------------------------------
 
   _animate(dt, world) {
@@ -562,7 +732,7 @@ export class Vehicle {
       P.rotor.rotation.y += this.rpm * 28 * dt;
       P.tailRotor.rotation.x += this.rpm * 60 * dt;
       P.rDisc.material.opacity = this.rpm * 0.28;
-      P.beam.material.opacity = night > 0.3 && this.occupied ? 0.1 * night : 0;
+      P.beam.material.opacity = night > 0.3 && this.occupied && this.lights ? 0.1 * night : 0;
     }
     if (P.lights) {
       const on = this.occupied || !this.onGround ? 1 : 0.35;
@@ -583,7 +753,12 @@ export class Vehicle {
       for (const e of P.mains) e.glow.material.opacity = P.plumeMat.uniforms.uThrottle.value;
       for (const l of P.lifts) l.glow.material.opacity = P.liftMat.uniforms.uThrottle.value * 0.9;
     }
+    if (this.kind === 'car') this._animCar(dt, world);
     if (P.pilot) P.pilot.root.visible = this.occupied;
+  }
+
+  _animCar(dt, world) {
+    animateCarParts(this.parts, this.ground, dt, { vf: this.carVf, steer: this.steer, lit: this.occupied ? this.lights : !!this.aiLights, braking: this.braking, night: world.night || 0 });
   }
 
   _animRocket(dt, t) {

@@ -1,6 +1,6 @@
 # Counterstrike Air Force: First Contact
 
-An open-world 3D browser game set on Kestrel Island, a fictional island in the Pacific. You can walk around, talk to the people who live there, fly jets, a light plane and helicopters, and look into the saucers that show up after sunset. From Kestrel Spaceport you can launch a two-stage rocket or a spaceplane into orbit, warp to the Moon and Mars, land there and explore on foot in a space suit. There are nine mysteries to find, two of them on other worlds. You can play alone or with friends in the same world.
+An open-world 3D browser game set on Kestrel Island, a fictional island in the Pacific. You can walk around, talk to the people who live there, fly jets, a light plane and helicopters, and look into the saucers that show up after sunset. You can drive four kinds of car along the island's roads, and from Kestrel Spaceport you can launch a two-stage rocket or a spaceplane into orbit, warp to the Moon and Mars, land there and explore on foot in a space suit. There are nine mysteries to find, two of them on other worlds. You can play alone or with friends in the same world.
 
 ## The world
 
@@ -10,6 +10,7 @@ An open-world 3D browser game set on Kestrel Island, a fictional island in the P
 - **The Moon and Mars.** In orbit, press 1, 2 or 3 to warp to Earth, the Moon or Mars, then dive towards a world to land. The Moon has cratered highlands, a dark mare, black sky, hard-edged shadows, the Earth overhead, a lunar module and a flag. Mars (inside Jezero crater) has dunes, layered buttes, a dry canyon, a butterscotch sky with a blue-white sun halo, the Ares Station habitat, a rover driving its loop and dust devils. Both have local gravity (1.62 and 3.71 m/s²), and you step out in a space suit.
 - **People.** About 50 islanders, all men by default (see `FEMALE_SHARE` in `src/actors/human.js`), with individual faces, skin tones and clothing: ground crew, pilots, villagers, farmers, beachgoers, researchers, hikers, a lighthouse keeper and the spaceport's engineers, flight directors and astronauts. They walk between places, talk to each other, wave at you, sunbathe, and dance in the plaza at night. When a saucer flies over, they stop and point at it. Press **E** to talk; many of them give hints about the mysteries.
 - **Real players.** Create a room and share the 5-character code or the invite link. Everyone in the room plays on the same island and appears as a person or in the aircraft they are flying, with name tags, a shared clock and chat.
+- **Cars.** The Meridian S sedan, the Vanguard GT sports coupe, the Ranger pickup and the Trail 4x4 are parked around the airbase, Harrow, the farm, the beach, the lighthouse and the spaceport. They have clear-coated metallic paint with panel gaps, glass, profiled tyres with alloy rims, brake discs, working headlights, brake lights, a horn and a driver. Driving uses a bicycle-model physics model: gears and engine sound, grip limits that make fast corners slide, a handbrake that drifts, road versus off-road grip, slopes, body roll and squat, air time over crests and bumps against buildings, trees and other vehicles. Ambient cars drive the roads, stop for you and switch their lights on at dusk.
 - **Aircraft.** The F-7 Falcon jet (afterburner, energy bolts against alien drone swarms), the C-2 Skylark light plane, two H-60 Kite helicopters, the Nova X-1 prototype (the original neon starfighter from earlier versions), and the Visitor Craft saucer, which has a tractor beam and can reach orbit.
 - **Air traffic.** An airliner leaves contrails overhead, a pair of jets flies in formation, and a patrol helicopter and a touring plane cross the island.
 - **Aliens.** Two saucers roam the island at night, hover over the crop circles and lift cows (the cows come back unharmed). They escape when an aircraft gets close. Grey visitors keep watch at the crash site and blink away if you get too near. Drone swarms appear for pilots flying armed jets.
@@ -23,10 +24,13 @@ An open-world 3D browser game set on Kestrel Island, a fictional island in the P
 | On foot | WASD walk · mouse look · Shift run · Space jump or swim · E talk · F board an aircraft |
 | Planes | W/S throttle · mouse or ↑↓ pitch · A/D roll · Q/E rudder · Shift afterburner · click or Space to fire · F to exit (eject in flight) |
 | Helicopter | Space/C up and down · WASD fly · mouse or Q/E turn · Shift fast |
+| Cars | W/S throttle, brake and reverse · A/D steer · Space handbrake · Shift boost · L headlights · B horn · V driver view · F get out |
 | Saucer and Odyssey | Space/C up and down · WASD fly · E tractor beam (saucer) · Shift boost · hold Space above 3,000 m for orbit |
 | Aurora rocket | Space launch, then stage · W/S throttle · Shift full throttle · mouse or A/D steer · Q/E roll · R hold upright · G landing legs |
 | In space | W thrust · mouse steer · Space/C up and down · Shift boost · 1/2/3 warp to Earth, Moon or Mars · dive towards a world to land |
 | Anywhere | V cockpit view · right-drag look around · M map · J journal · H help · T time-lapse · P photo mode · Enter chat · Esc menu |
+
+A gamepad works everywhere (standard layout): left stick moves, steers or sets throttle, right stick looks or flies, A/B/X/Y are Space/C/F/E, the bumpers are Q and R, RT boosts, LT works the landing legs, the d-pad switches view, lights, map and journal, and Start pauses.
 
 Touch devices get a virtual stick, a look area and action buttons.
 

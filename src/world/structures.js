@@ -121,6 +121,20 @@ export class Structures {
     return false;
   }
 
+  // Tarmac under (x, z): a road, the runway, an apron or any paved slab.
+  roadAt(x, z) {
+    if (this.platformAt(x, z) > -Infinity) return true;
+    for (const r of this.roads) {
+      const pts = r.pts, hw = r.width / 2 + 0.6;
+      for (let i = 1; i < pts.length; i++) {
+        const ax = pts[i - 1][0], az = pts[i - 1][1], vx = pts[i][0] - ax, vz = pts[i][1] - az;
+        const t = clamp(((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz), 0, 1);
+        if (Math.hypot(x - (ax + vx * t), z - (az + vz * t)) < hw) return true;
+      }
+    }
+    return false;
+  }
+
   insideBuilding(x, z, pad = 0.5) {
     for (const b of this.colliders) {
       const dx = x - b.x, dz = z - b.z;

@@ -94,6 +94,12 @@ export class AudioEngine {
       crackLfo.connect(crackDepth); crackDepth.connect(this.crackleGain.gain); crackLfo.start();
       noise().connect(this.crackleFilter); this.crackleFilter.connect(this.crackleGain); this.crackleGain.connect(this.master);
 
+      // Car horn: a two-tone chord, silent until sounded.
+      this.hornGain = ctx.createGain(); this.hornGain.gain.value = 0;
+      for (const f of [392, 494]) { const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f; const og = ctx.createGain(); og.gain.value = 0.5; o.connect(og); og.connect(this.hornGain); o.start(); }
+      const hornF = ctx.createBiquadFilter(); hornF.type = 'lowpass'; hornF.frequency.value = 1800;
+      this.hornGain.connect(hornF); hornF.connect(this.master);
+
       // Night crickets.
       this.cricketGain = ctx.createGain(); this.cricketGain.gain.value = 0;
       const cr = ctx.createOscillator(); cr.type = 'sine'; cr.frequency.value = 4400;
@@ -152,6 +158,12 @@ export class AudioEngine {
       R(this.chopLfo.frequency, rpm * 18); R(this.chopDepth.gain, chop * 0.9);
       R(this.osc1.frequency, 90 + rpm * 60); R(this.engFilter.frequency, 600);
       R(this.hissFilter.frequency, 3200);
+    } else if (t === 'car') {
+      const rpm = s.rpm || 0;
+      eng = 0.04 + th * 0.05 + rpm * 0.035; hiss = (s.skid || 0) * 0.07 + Math.min(0.02, sp * 0.0004);
+      R(this.osc1.frequency, 36 + rpm * 175); R(this.osc2.frequency, 18 + rpm * 88);
+      R(this.engFilter.frequency, 320 + rpm * 1250 + th * 550);
+      R(this.hissFilter.frequency, 1300 + (s.skid || 0) * 1400);
     } else if (t === 'rocket') {
       // In vacuum you only hear the engine through the structure.
       const k = s.thrust ? th : 0, vac = s.vacuum ? 0.25 : 1;
@@ -212,6 +224,8 @@ export class AudioEngine {
     for (let i = 0; i < 2 + Math.floor(Math.random() * 4); i++) this._tone(base * (0.9 + Math.random() * 0.3), { peak: 0.02, a: 0.01, d: 0.07, when: i * 0.11, slide: 1.3 });
   }
 
+  horn(on) { if (this.ready) this._ramp(this.hornGain.gain, on ? 0.06 : 0, 0.03); }
+  thump(k = 5) { this._noise({ peak: Math.min(0.5, 0.06 * k), d: 0.25, freq: 300 }); this._tone(70, { type: 'sine', peak: Math.min(0.4, 0.04 * k), d: 0.2, slide: 0.5 }); }
   jump() { this._noise({ peak: 0.05, d: 0.12, freq: 900 }); }
   splash() { this._noise({ peak: 0.2, d: 0.6, freq: 1600 }); }
   eject() { this._noise({ peak: 0.35, d: 0.5, freq: 2400, type: 'bandpass' }); this._tone(180, { type: 'sawtooth', peak: 0.08, d: 0.3, slide: 0.4 }); }
