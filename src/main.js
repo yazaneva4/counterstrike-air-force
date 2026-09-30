@@ -28,8 +28,9 @@ const save = () => {
 };
 if (!settings.profile.name) settings.profile.name = 'Pilot ' + Math.floor(100 + Math.random() * 900);
 // Cloud save: pull progress before the title screen is built.
-await cloud.load(settings);
-save();
+// `saved` is hidden from JSON so it is not copied into local storage.
+Object.defineProperty(settings, 'saved', { value: null, writable: true, enumerable: false });
+const cloudReady = cloud.load(settings, 4000).then((s) => { settings.saved = s || cloud.last; return s; });
 
 function resolveQuality() {
   if (settings.quality !== 'auto') return settings.quality;
@@ -126,7 +127,7 @@ function segmented(el, key, values) {
 
 function buildMenu() {
   $('#pilotName').value = settings.profile.name;
-  $('#pilotName').addEventListener('input', (e) => { settings.profile.name = e.target.value.slice(0, 18) || 'Pilot'; save(); });
+  if (!buildMenu.bound) { buildMenu.bound = true; $('#pilotName').addEventListener('input', (e) => { settings.profile.name = e.target.value.slice(0, 18) || 'Pilot'; save(); }); }
   const chars = $('#characters');
   const icons = { pilot: '✈', explorer: '⛰', scientist: '⚗', crew: '⚙' };
   chars.innerHTML = CHARACTERS.map((c) => `<button type="button" data-c="${c.id}" class="${settings.profile.character === c.id ? 'on' : ''}"><span>${icons[c.id]}</span>${c.label}</button>`).join('');
@@ -183,7 +184,7 @@ async function startGame() {
   const q = resolveQuality();
   renderer.setPixelRatio(pixelRatio());
   renderer.setSize(innerWidth, innerHeight);
-  game = new Game({ renderer, input, audio, settings: { ...settings, quality: q, get sensitivity() { return settings.sensitivity; }, get invertY() { return settings.invertY; } } });
+  game = new Game({ renderer, input, audio, settings: { ...settings, saved: settings.saved, quality: q, get sensitivity() { return settings.sensitivity; }, get invertY() { return settings.invertY; } } });
   try {
     await game.build((f, label) => {
       $('#loadBar').style.width = Math.round(f * 100) + '%';
@@ -324,8 +325,9 @@ addEventListener('resize', () => {
 buildMenu();
 bindSettings();
 setInterval(() => cloud.save(settings, game), 60000);
-addEventListener('pagehide', () => cloud.save(settings, game, { keepalive: true }));
 document.addEventListener('visibilitychange', () => { if (document.hidden) cloud.save(settings, game, { keepalive: true }); });
+// Cloud progress arrives after the title screen is up: refresh the pickers.
+cloudReady.then((s) => { if (s && !game) buildMenu(); });
 bindPause();
 requestAnimationFrame(loop);
 document.body.classList.add('ready');

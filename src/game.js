@@ -38,8 +38,8 @@ export class Game {
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.FogExp2(0xbcd3e6, 0.0002);
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.3, 30000);
-    this.score = 0;
-    this.stats = { drones: 0, flights: 0 };
+    this.score = settings.saved?.score || 0;
+    this.stats = { drones: settings.saved?.stats?.drones || 0, flights: settings.saved?.stats?.flights || 0 };
     this.remotes = new Map();
     this.bolts = [];
     this.talkingTo = null;
@@ -484,6 +484,7 @@ export class Game {
     const mv = I.moveAxes(), ar = I.arrows();
     for (const [id, b] of Object.entries(BODIES)) {
       if (I.hit('Digit' + b.key) || I.hit('Numpad' + b.key)) {
+        if (this.space.warp) continue;
         if (this.space.warpTo(id)) { this.hud.toast('Warp drive engaged · ' + b.name, 3); this.audio.teleport(); }
         else this.hud.toast(b.name + ' is right here', 2);
       }
@@ -578,6 +579,8 @@ export class Game {
   _surfaceFrame(dt, t) {
     const S = this.surface, p = this.player, I = this.input;
     p.update(dt);
+    // The world clock keeps running on other worlds (and stays in step for multiplayer).
+    this.sky.time = (this.sky.time + (dt * this.sky.timeScale) / this.sky.dayLength) % 1;
     for (const v of this.vehicles) {
       const res = v.update(dt, v === p.vehicle ? p.ctl : null, this.world);
       if (res) this._vehicleEvent(v, res);
@@ -622,6 +625,7 @@ export class Game {
 
     if (this.location === 'moon' || this.location === 'mars') { this._surfaceFrame(dt, t); return; }
     if (this.space.active) {
+      this.sky.time = (this.sky.time + (dt * this.sky.timeScale) / this.sky.dayLength) % 1;
       const res = this.space.update(dt, this._spaceControls(), this.camera);
       if (res === 'reentry') this.exitSpace();
       else if (res && res.startsWith('land:')) this.enterSurface(res.slice(5));

@@ -28,12 +28,12 @@ export class RemotePlayer {
     this.has = false;
   }
 
-  _ensureHuman(character, skin) {
-    const key = character + ':' + skin;
+  _ensureHuman(character, skin, suit = false) {
+    const key = character + ':' + skin + ':' + suit;
     if (this.human && this._hkey === key) return;
     if (this.human) this.scene.remove(this.human.root);
     const ch = CHARACTERS.find((c) => c.id === character) || CHARACTERS[0];
-    const outfit = Object.assign(outfitFor(ch.role, mulberry32(this.name.length * 131 + 7)), ch.extra);
+    const outfit = suit ? outfitFor('astronaut', mulberry32(this.name.length * 131 + 7)) : Object.assign(outfitFor(ch.role, mulberry32(this.name.length * 131 + 7)), ch.extra);
     const skins = [0xf1c7a5, 0xe0ac86, 0xc68a62, 0xa66d47, 0x7c4c32, 0x5a3825];
     outfit.skin = skins[(skin | 0) % skins.length];
     this.human = new Human(outfit);
@@ -73,7 +73,7 @@ export class RemotePlayer {
     if (!Array.isArray(s.q) || s.q.length !== 4 || !s.q.every(Number.isFinite)) return;
     this.state = s;
     if (s.n) this.name = String(s.n).slice(0, 18);
-    this._ensureHuman(String(s.c || 'pilot'), s.k);
+    this._ensureHuman(String(s.c || 'pilot'), s.k, s.L === 'moon' || s.L === 'mars');
     this._ensureVehicle(typeof s.v === 'string' && builders[s.v] ? s.v : null);
     this.targetPos.set(s.p[0], s.p[1], s.p[2]);
     this.targetQuat.set(s.q[0], s.q[1], s.q[2], s.q[3]).normalize();

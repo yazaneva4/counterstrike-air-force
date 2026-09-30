@@ -36,7 +36,7 @@ Progress (solved mysteries, score, stats, your character and start options) is s
 
 ## Run locally
 
-The project has no dependencies to install and no build step. Three.js r160 and PeerJS are vendored in `lib/`.
+The game itself has no dependencies to install and no build step; Three.js r160 and PeerJS are vendored in `lib/`. Only the cloud-save function in `api/` uses an npm package (`@vercel/blob`), which Vercel installs on deploy. Locally the game simply skips cloud saves.
 
 ```sh
 npm start

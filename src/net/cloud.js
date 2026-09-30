@@ -24,6 +24,9 @@ export const cloud = {
       const t = setTimeout(() => ctl.abort(), timeout);
       const r = await fetch(`${API}?id=${id}`, { signal: ctl.signal, cache: 'no-store' });
       clearTimeout(t);
+      // Only the real API answers with JSON; a plain 404 means this host has no API.
+      const isApi = (r.headers.get('content-type') || '').includes('application/json');
+      if (!isApi) return null;
       if (r.status === 404) { this.online = true; return null; }
       if (!r.ok) return null;
       const s = await r.json();
@@ -44,9 +47,9 @@ export const cloud = {
     let found = [];
     try { found = JSON.parse(localStorage.getItem(MYST) || '[]'); } catch (e) { /* ignore */ }
     return {
-      mysteries: game ? [...game.mysteries.found] : found,
-      score: game ? game.score : this.last?.score || 0,
-      stats: game ? { drones: game.stats.drones, flights: game.stats.flights } : this.last?.stats || {},
+      mysteries: game?.mysteries ? [...game.mysteries.found] : found,
+      score: game?.mysteries ? game.score : this.last?.score || 0,
+      stats: game?.mysteries ? { drones: game.stats.drones, flights: game.stats.flights } : this.last?.stats || {},
       profile: settings.profile, spawn: settings.spawn, time: settings.time,
     };
   },
@@ -54,7 +57,10 @@ export const cloud = {
   save(settings, game, { keepalive = false } = {}) {
     if (!this.online) return;
     try {
-      fetch(`${API}?id=${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.snapshot(settings, game)), keepalive }).catch(() => {});
+      const body = JSON.stringify(this.snapshot(settings, game));
+      if (body === this.sent) return; // nothing new to store
+      this.sent = body;
+      fetch(`${API}?id=${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body, keepalive }).catch(() => { this.sent = null; });
     } catch (e) { /* ignore */ }
   },
 };

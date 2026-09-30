@@ -197,6 +197,12 @@ export class SurfaceWorld {
       H[i] = h;
       pos[i * 3] = x; pos[i * 3 + 1] = h; pos[i * 3 + 2] = z;
     }
+    // Earth-style water checks (height < 0) must never trigger here: lift the
+    // whole surface so even the deepest crater floor stays above zero.
+    let lowest = Infinity;
+    for (let i = 0; i < V * V; i++) lowest = Math.min(lowest, H[i]);
+    const lift = Math.max(0, 8 - lowest);
+    if (lift > 0) { for (let i = 0; i < V * V; i++) { H[i] += lift; pos[i * 3 + 1] += lift; } this.edgeH += lift; }
     const idx = new Uint32Array(GRID * GRID * 6);
     let k = 0;
     for (let iz = 0; iz < GRID; iz++) for (let ix = 0; ix < GRID; ix++) {
