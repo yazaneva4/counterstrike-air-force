@@ -8,7 +8,7 @@ An open-world 3D browser game set on Kestrel Island, a fictional island in the P
 - **Kestrel Spaceport.** On the east coast: a launch pad with a 70 m service tower, lightning masts, propellant spheres, the Vehicle Assembly Building, Mission Control, a spaceplane pad and a booster landing zone.
 - **Rockets and spaceships.** The Aurora is a two-stage rocket that flies on real thrust against gravity: countdown, liftoff clouds, gimballed steering, fuel, stage separation and deployable landing legs. After staging, the booster flips, flies back and lands itself on the landing zone. You can land the upper stage on its engine on Earth, the Moon or Mars. The Odyssey is a spaceplane that takes off vertically on lift thrusters and climbs to orbit.
 - **The Moon and Mars.** In orbit, press 1, 2 or 3 to warp to Earth, the Moon or Mars, then dive towards a world to land. The Moon has cratered highlands, a dark mare, black sky, hard-edged shadows, the Earth overhead, a lunar module and a flag. Mars (inside Jezero crater) has dunes, layered buttes, a dry canyon, a butterscotch sky with a blue-white sun halo, the Ares Station habitat, a rover driving its loop and dust devils. Both have local gravity (1.62 and 3.71 m/s²), and you step out in a space suit.
-- **People.** About 50 islanders with individual faces, skin tones and clothing: ground crew, pilots, villagers, farmers, beachgoers, researchers, hikers, a lighthouse keeper and the spaceport's engineers, flight directors and astronauts. They walk between places, talk to each other, wave at you, sunbathe, and dance in the plaza at night. When a saucer flies over, they stop and point at it. Press **E** to talk; many of them give hints about the mysteries.
+- **People.** About 50 islanders, all men by default (see `FEMALE_SHARE` in `src/actors/human.js`), with individual faces, skin tones and clothing: ground crew, pilots, villagers, farmers, beachgoers, researchers, hikers, a lighthouse keeper and the spaceport's engineers, flight directors and astronauts. They walk between places, talk to each other, wave at you, sunbathe, and dance in the plaza at night. When a saucer flies over, they stop and point at it. Press **E** to talk; many of them give hints about the mysteries.
 - **Real players.** Create a room and share the 5-character code or the invite link. Everyone in the room plays on the same island and appears as a person or in the aircraft they are flying, with name tags, a shared clock and chat.
 - **Aircraft.** The F-7 Falcon jet (afterburner, energy bolts against alien drone swarms), the C-2 Skylark light plane, two H-60 Kite helicopters, the Nova X-1 prototype (the original neon starfighter from earlier versions), and the Visitor Craft saucer, which has a tractor beam and can reach orbit.
 - **Air traffic.** An airliner leaves contrails overhead, a pair of jets flies in formation, and a patrol helicopter and a touring plane cross the island.
@@ -29,6 +29,10 @@ An open-world 3D browser game set on Kestrel Island, a fictional island in the P
 | Anywhere | V cockpit view · right-drag look around · M map · J journal · H help · T time-lapse · P photo mode · Enter chat · Esc menu |
 
 Touch devices get a virtual stick, a look area and action buttons.
+
+## Cloud saves
+
+Progress (solved mysteries, score, stats, your character and start options) is saved to a private Vercel Blob store through `api/save.js`. Each browser gets a random save id, so there are no accounts; the same id on another device is what carries progress across. Saves merge, so nothing is lost when two devices play. If the API is unreachable (for example when running locally), the game keeps using local storage. The Blob store is connected through the `BLOB_READ_WRITE_TOKEN` environment variable.
 
 ## Run locally
 

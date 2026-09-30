@@ -10,6 +10,7 @@ import { buildSaucer } from './vehicles/models.js';
 import { CHARACTERS } from './player.js';
 import { Game } from './game.js';
 import { Net } from './net/net.js';
+import { cloud } from './net/cloud.js';
 import { glowSprite, isTouch, clamp } from './core/util.js';
 
 const $ = (s) => document.querySelector(s);
@@ -20,8 +21,15 @@ const STORE = 'csaf-settings-v2';
 const defaults = { sensitivity: 1, invertY: false, volume: 0.8, muted: false, quality: 'auto', profile: { name: '', character: 'pilot', skin: 1 }, spawn: 'airbase', time: 'day' };
 let settings = defaults;
 try { settings = Object.assign({}, defaults, JSON.parse(localStorage.getItem(STORE) || '{}')); settings.profile = Object.assign({}, defaults.profile, settings.profile); } catch (e) { /* ignore */ }
-const save = () => { try { localStorage.setItem(STORE, JSON.stringify(settings)); } catch (e) { /* ignore */ } };
+let saveTimer = 0;
+const save = () => {
+  try { localStorage.setItem(STORE, JSON.stringify(settings)); } catch (e) { /* ignore */ }
+  clearTimeout(saveTimer); saveTimer = setTimeout(() => cloud.save(settings, game), 1500);
+};
 if (!settings.profile.name) settings.profile.name = 'Pilot ' + Math.floor(100 + Math.random() * 900);
+// Cloud save: pull progress before the title screen is built.
+await cloud.load(settings);
+save();
 
 function resolveQuality() {
   if (settings.quality !== 'auto') return settings.quality;
@@ -186,6 +194,7 @@ async function startGame() {
     $('#loadLabel').textContent = 'Something went wrong while building the world: ' + err.message;
     return;
   }
+  game.onProgress = () => save();
   game.onRoomChange = (code, host) => {
     $('#roomBadge').textContent = code ? `ROOM ${code}` : '';
     $('#roomBadge').style.display = code ? 'block' : 'none';
@@ -314,6 +323,9 @@ addEventListener('resize', () => {
 
 buildMenu();
 bindSettings();
+setInterval(() => cloud.save(settings, game), 60000);
+addEventListener('pagehide', () => cloud.save(settings, game, { keepalive: true }));
+document.addEventListener('visibilitychange', () => { if (document.hidden) cloud.save(settings, game, { keepalive: true }); });
 bindPause();
 requestAnimationFrame(loop);
 document.body.classList.add('ready');

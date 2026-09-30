@@ -345,6 +345,7 @@ export class Game {
     this.hud.discovery(info, this.mysteries.count, MYSTERY_INFO.length);
     this.audio.discover();
     this.score += 1000;
+    this.onProgress?.();
     if (id === 'crash') {
       this._lockUfo(false);
       this.fx.sparks.burst(this.ufo.pos, { count: 120, speed: 30, color: 0x7dffd6, size: 3, life: 1.5, gravity: 0 });

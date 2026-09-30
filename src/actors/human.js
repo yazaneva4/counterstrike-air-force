@@ -153,10 +153,13 @@ const EYE_COLORS = ['#3b2414', '#5a3a1e', '#2f6a8a', '#4a7a4a', '#6b5a30', '#2a1
 const SHIRTS = [0x2e5c8a, 0xb23a3a, 0xf0f0ea, 0x3c7a4a, 0xe0b040, 0x5a4a8a, 0x2a2a2e, 0xd98a50, 0x6fa8c8, 0xc86a8a, 0x8a9a5a];
 const PANTS = [0x2b3a55, 0x3a3a3a, 0x5a4a38, 0x6e7a8a, 0x2a2a2a, 0xa89a7a, 0x384a3a];
 
+// Share of generated people who are women. Everyone is a man by default.
+export const FEMALE_SHARE = 0;
+
 // Pick a believable outfit for a role using a seeded random source.
 export function outfitFor(role, rnd) {
   const pick = (a) => a[Math.floor(rnd() * a.length)];
-  const female = rnd() < 0.5;
+  const female = rnd() < FEMALE_SHARE;
   const o = {
     skin: pick(SKIN_TONES), hair: pick(HAIR_COLORS), eye: pick(EYE_COLORS), shirt: pick(SHIRTS), pants: pick(PANTS), shoes: pick([0x222222, 0x5a3a22, 0xe8e8e8, 0x3a3a50]),
     hairStyle: female ? pick(['long', 'long', 'bun', 'short']) : pick(['short', 'short', 'bald', 'short']),
