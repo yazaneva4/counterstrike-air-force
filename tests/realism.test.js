@@ -15,7 +15,7 @@ const flatWorld = {
 
 function walker(world = flatWorld) {
   const p = Object.create(Player.prototype);
-  const input = { moveAxes: () => ({ x: 0, y: 0 }), consumeWheel: () => 0, down: () => false, hit: () => false, thit: () => false };
+  const input = { moveAxes: () => ({ x: 0, y: 0 }), consumeWheel: () => 0, down: () => false, hit: () => false, thit: () => false, tdown: () => false };
   Object.assign(p, {
     root: new THREE.Group(), vel: new THREE.Vector3(), human: { phase: 0, speed: 0 },
     camDist: 5.2, camYaw: 0, camPitch: 0, yaw: 0, cockpit: false, onGround: true, mode: 'foot',
