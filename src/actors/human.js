@@ -155,8 +155,8 @@ const EYE_COLORS = ['#3b2414', '#5a3a1e', '#2f6a8a', '#4a7a4a', '#6b5a30', '#2a1
 const SHIRTS = [0x2e5c8a, 0xb23a3a, 0xf0f0ea, 0x3c7a4a, 0xe0b040, 0x5a4a8a, 0x2a2a2e, 0xd98a50, 0x6fa8c8, 0xc86a8a, 0x8a9a5a];
 const PANTS = [0x2b3a55, 0x3a3a3a, 0x5a4a38, 0x6e7a8a, 0x2a2a2a, 0xa89a7a, 0x384a3a];
 
-// Share of generated people who are women. Everyone is a man by default.
-export const FEMALE_SHARE = 0;
+// A mixed island population makes the same roles feel like a lived-in place.
+export const FEMALE_SHARE = 0.5;
 
 // Pick a believable outfit for a role using a seeded random source.
 export function outfitFor(role, rnd) {
@@ -284,9 +284,9 @@ const matCache = new Map();
 function cloth(color, rough = 0.88) {
   const key = 'cloth' + color + rough;
   if (!matCache.has(key)) {
-    const f = fabric().normal;
-    f.repeat.set(6, 6);
-    matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, normalMap: f, normalScale: new THREE.Vector2(0.24, 0.24) }));
+    const f = fabric();
+    f.map.repeat.set(6, 6); f.normal.repeat.set(6, 6);
+    matCache.set(key, new THREE.MeshStandardMaterial({ color, map: f.map, roughness: rough, metalness: 0, normalMap: f.normal, normalScale: new THREE.Vector2(0.24, 0.24) }));
   }
   return matCache.get(key);
 }

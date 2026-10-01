@@ -5,6 +5,8 @@ import { Player } from '../src/player.js';
 import { Vehicle, VEHICLE_DEFS } from '../src/vehicles/vehicles.js';
 import { Weather } from '../src/world/weather.js';
 import { animateCarParts } from '../src/vehicles/cars.js';
+import { FEMALE_SHARE, outfitFor } from '../src/actors/human.js';
+import { mulberry32 } from '../src/core/noise.js';
 
 const flatWorld = {
   groundAt: () => 0,
@@ -34,6 +36,13 @@ function jumpPeak(gravity) {
   assert.equal(p.pos.y, 0);
   return peak;
 }
+test('generated islanders have a mixed, varied population', () => {
+  assert.equal(FEMALE_SHARE, 0.5);
+  let women = 0;
+  for (let i = 0; i < 200; i++) women += outfitFor('crew', mulberry32(i + 1)).female ? 1 : 0;
+  assert.ok(women > 70 && women < 130);
+});
+
 test('walking falls with Earth gravity and jumping responds to lunar gravity', () => {
   const p = walker(); p.pos.y = 10; p.onGround = false;
   p._foot(0.05); assert.ok(Math.abs(p.vel.y + 0.4905) < 1e-10);

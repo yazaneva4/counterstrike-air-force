@@ -63,6 +63,16 @@ function buildFor(type, opts = {}) {
 
 let nextId = 1;
 
+function finiteCarState(v) {
+  return [
+    v.pos.x, v.pos.y, v.pos.z, v.vel.x, v.vel.y, v.vel.z,
+    v.heading, v.speed, v.throttle, v.carVf, v.carYawRate, v.steer,
+    v.rearGrip, v.driftAngle, v.driftTime, v.vy, v.susp, v.suspV,
+    v.tilt.x, v.tilt.z, v.model.group.position.y,
+    v.quat.x, v.quat.y, v.quat.z, v.quat.w,
+  ].every(Number.isFinite);
+}
+
 export class Vehicle {
   constructor(type, home, opts = {}) {
     this.id = 'v' + nextId++;
@@ -143,6 +153,7 @@ export class Vehicle {
 
   // Returns 'crash' | null.
   update(dt, ctl, world) {
+    if (!Number.isFinite(dt) || dt <= 0) return null;
     if (this.booster) this.booster.update(dt, world);
     if (this.destroyed) {
       this.respawn -= dt;
@@ -156,6 +167,9 @@ export class Vehicle {
     else if (this.kind === 'car') result = this._car(dt, ctl, world);
     else if (this.kind === 'ship') result = this._ship(dt, ctl, world);
     else result = this._ufo(dt, ctl, world);
+    // A corrupt physics value must never reach the camera or renderer. Restore
+    // a car to its parking spot before the next frame can inherit NaN telemetry.
+    if (this.kind === 'car' && !finiteCarState(this)) { this.reset(); result = null; }
     this._animate(dt, world);
     // Return abandoned vehicles to base after a while.
     if (!this.occupied && this.onGround) {
@@ -554,16 +568,19 @@ export class Vehicle {
   // crests, and bumps against buildings, trees and other vehicles.
 
   _car(dt, ctl, world) {
-    if (dt <= 0) return null;
-    const d = this.def, p = this.pos, G = 9.81 * (world.gravity ?? 1);
+    if (!Number.isFinite(dt) || dt <= 0) return null;
+    const d = this.def, p = this.pos;
+    const gravity = Number.isFinite(world.gravity) ? clamp(world.gravity, 0.05, 4) : 1;
+    const G = 9.81 * gravity;
     const occupied = !!ctl;
     ctl = ctl || { steer: 0, throttle: 0, handbrake: true, boost: false, horn: false };
     const hb = !!ctl.handbrake;
-    const thr = clamp(ctl.throttle, -1, 1);
+    const thr = clamp(Number.isFinite(ctl.throttle) ? ctl.throttle : 0, -1, 1);
+    const steerInput = clamp(Number.isFinite(ctl.steer) ? ctl.steer : 0, -1, 1);
     const hx = Math.sin(this.heading), hz = Math.cos(this.heading);
     let vf = this.vel.x * hx + this.vel.z * hz, vl = this.vel.x * hz - this.vel.z * hx;
     const onRoad = world.structures.roadAt ? world.structures.roadAt(p.x, p.z) : true;
-    const wet = clamp(world.wetness ?? 0, 0, 1);
+    const wet = clamp(Number.isFinite(world.wetness) ? world.wetness : 0, 0, 1);
     const surf = onRoad ? 1 - wet * 0.28 : d.off * (1 - wet * 0.18);
     const grounded = !this.airborne;
     // Shift is full engine effort, without a fictional turbo speed multiplier.
@@ -598,7 +615,7 @@ export class Vehicle {
     // Front and rear tyre forces are independent. Rear-axle lock and
     // power oversteer can initiate a slide; countersteer restores balance.
     const steerMax = d.steerMax / (1 + Math.pow(Math.abs(vf) / (d.driftTune ? 26 : 18), 1.2));
-    const target = clamp(ctl.steer, -1, 1) * steerMax;
+    const target = steerInput * steerMax;
     this.steer = damp(this.steer, target, Math.abs(target) > Math.abs(this.steer) ? 7 : 11, dt);
     const powerSlide = d.driftTune && thr > 0.65 && Math.abs(vf) > 8 && (Math.abs(this.steer) > 0.07 || Math.abs(vl) > 1.5);
     const rearTarget = hb ? 0.16 : powerSlide ? 0.56 : 1;

@@ -19,7 +19,7 @@ function car(type = 'drift', speed = 20) {
     id: 'test-car', kind: 'car', def: VEHICLE_DEFS[type], pos: new THREE.Vector3(0, 0.345, 0),
     vel: new THREE.Vector3(0, 0, speed), quat: new THREE.Quaternion(), heading: 0, wb: 2.68, track: 1.76,
     ground: 0.345, airborne: false, steer: 0, vy: 0, susp: 0, suspV: 0, tilt: { x: 0, z: 0 },
-    model: { group: new THREE.Group(), spec: { tyreW: 0.265, eye: [0.42, 0.68, -0.16] } },
+    model: { group: new THREE.Group(), spec: { tyreW: 0.265, eye: [0.38, 0.9, -0.28] } },
     gear: 1, shift: 0, rpm: 0, camDist: 8.5, camHeight: 2.4, parts: { pilot: { root: new THREE.Group() } },
   });
   return v;
@@ -75,11 +75,42 @@ test('car cockpit looks with the mouse, respects invert and follows the updated 
   p.lookPitch = 0; p.game.settings.invertY = true; p._drive(1 / 60); assert.ok(p.lookPitch < 0);
   p.lookYaw = p.lookPitch = 0; v.pos.set(12, 3, 40); v.model.group.position.y = 0.08;
   p._vehicleCamera(1 / 60);
-  assert.ok(p.game.camera.position.distanceTo(new THREE.Vector3(12.42, 3.76, 39.84)) < 1e-8);
+  assert.ok(p.game.camera.position.distanceTo(new THREE.Vector3(12.38, 3.98, 39.72)) < 1e-8);
   assert.ok(p.game.camera.getWorldDirection(new THREE.Vector3()).z > 0.99);
   assert.equal(v.parts.pilot.root.visible, false); assert.equal(p.game.camera.near, 0.05); assert.equal(p.fov, 70);
   p.toggleView(); assert.equal(v.parts.pilot.root.visible, true); assert.equal(p.game.camera.near, 0.3);
 });
+test('invalid car inputs stay finite instead of poisoning vehicle telemetry', () => {
+  const v = car('gtr');
+  v._car(1 / 60, { throttle: NaN, steer: NaN, handbrake: false, boost: false }, world);
+  assert.ok([v.speed, v.carVf, v.heading, v.steer, v.rpm, v.driftAngle, v.pos.x, v.pos.z].every(Number.isFinite));
+  const before = v.pos.clone();
+  v._car(NaN, { throttle: 1, steer: 1 }, world);
+  assert.ok(v.pos.distanceTo(before) < 1e-12);
+});
+
+test('third-person camera recovers from invalid speed and FOV telemetry', () => {
+  const v = car('gtr'); v.speed = NaN;
+  const p = driver(v); p.cockpit = false; p.fov = NaN; p.game.camera.fov = NaN;
+  p._vehicleCamera(1 / 60);
+  assert.ok(Number.isFinite(p.fov));
+  assert.ok([p.game.camera.position.x, p.game.camera.position.y, p.game.camera.position.z].every(Number.isFinite));
+});
+
+test('boarding clears the nearby-vehicle prompt immediately', () => {
+  const v = { pos: new THREE.Vector3(0, 0, 0), radius: 2.4, def: { name: 'Test car', role: 'Car' }, destroyed: false, occupied: false, locked: false };
+  const prompts = [];
+  const p = Object.create(Player.prototype);
+  Object.assign(p, { root: new THREE.Group(), game: {
+    vehicles: [v], input: { hit: key => key === 'KeyF', thit: () => false },
+    npcs: { nearest: () => null }, hud: { prompt: value => prompts.push(value) },
+  } });
+  p.enter = car => { car.occupied = true; };
+  p._interactions();
+  assert.equal(v.occupied, true);
+  assert.equal(prompts.at(-1), null);
+});
+
 test('skid ribbons break at grip recovery, expire and cannot grow without bound', () => {
   const marks = new SkidMarks(new THREE.Scene(), { capacity: 8, lifetime: 1 }), v = car();
   v.onGround = true; v.skid = 1; v.speed = 20;

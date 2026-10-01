@@ -211,7 +211,7 @@ export class Player {
     if (vehicle) {
       if (vehicle.locked) prompt = { key: 'F', text: 'The saucer is dormant. Something here is still undiscovered.' };
       else prompt = { key: 'F', text: 'Board ' + vehicle.def.name + ' · ' + vehicle.def.role };
-      if ((I.hit('KeyF') || I.thit('veh')) && !vehicle.locked) this.enter(vehicle);
+      if ((I.hit('KeyF') || I.thit('veh')) && !vehicle.locked) { this.enter(vehicle); prompt = null; }
     } else if (npc) {
       prompt = { key: 'E', text: 'Talk to ' + npc.name + ' · ' + npc.title };
       if (I.hit('KeyE') || I.thit('act')) G.talk(npc);
@@ -474,7 +474,8 @@ export class Player {
       let dir;
       if (flat) dir = tv2.set(Math.sin(heading + this.lookYaw), 0, Math.cos(heading + this.lookYaw));
       else dir = tv2.copy(fwd).applyAxisAngle(UP, this.lookYaw);
-      const speedK = clamp(v.speed / 150, 0, 1);
+      const speed = Number.isFinite(v.speed) ? Math.max(0, v.speed) : 0;
+      const speedK = clamp(speed / 150, 0, 1);
       const dist = v.camDist * (1 + speedK * 0.25);
       const want = new THREE.Vector3().copy(v.pos).addScaledVector(dir, -dist);
       want.y += v.camHeight + (flat ? 0 : 0) - this.lookPitch * dist * 0.8;
@@ -492,8 +493,13 @@ export class Player {
       look.y += v.camHeight * 0.3;
       cam.lookAt(look);
     }
-    const speedFov = (this.cockpit && v.kind === 'car' ? 0 : clamp(v.speed / (v.kind === 'car' ? v.def.maxSpeed * 1.5 : 280), 0, 1) * (v.kind === 'car' ? 12 : 14) + (v.boosting && v.kind !== 'car' ? 6 : 0));
-    this.fov = damp(this.fov, (this.cockpit ? 70 : 62) + speedFov, 2.5, dt);
+    const speed = Number.isFinite(v.speed) ? Math.max(0, v.speed) : 0;
+    const maxSpeed = Number.isFinite(v.def?.maxSpeed) && v.def.maxSpeed > 0 ? v.def.maxSpeed : 280;
+    const speedFov = (this.cockpit && v.kind === 'car' ? 0 : clamp(speed / (v.kind === 'car' ? maxSpeed * 1.5 : 280), 0, 1) * (v.kind === 'car' ? 12 : 14) + (v.boosting && v.kind !== 'car' ? 6 : 0));
+    if (!Number.isFinite(this.fov)) this.fov = Number.isFinite(cam.fov) ? cam.fov : 62;
+    const targetFov = (this.cockpit ? 70 : 62) + speedFov;
+    this.fov = damp(this.fov, targetFov, 2.5, dt);
+    if (!Number.isFinite(this.fov)) this.fov = targetFov;
     this._applyShake(cam);
   }
 

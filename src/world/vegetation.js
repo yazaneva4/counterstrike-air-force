@@ -269,8 +269,29 @@ function cactusGeo() {
 }
 
 // Cheap far-distance silhouettes (vertex coloured).
-function pineLo() { return merge([tint(T(new THREE.CylinderGeometry(0.3, 0.4, 3, 4), 0, 1.5, 0), 0x3a2c22), tint(T(new THREE.ConeGeometry(3.2, 12, 6, 1), 0, 7.8, 0), 0x21401f)].map((g) => { g.deleteAttribute('uv'); return g; })); }
-function broadLo() { return merge([tint(T(new THREE.CylinderGeometry(0.3, 0.45, 5, 4), 0, 2.5, 0), 0x3f3024), tint(jitter(T(new THREE.IcosahedronGeometry(3.8, 0), 0, 7.6, 0), 0.6, 2), 0x355a24)].map((g) => { g.deleteAttribute('uv'); return g; })); }
+function pineLo() {
+  const branches = [
+    tint(T(new THREE.ConeGeometry(3.7, 6.2, 10, 2), 0, 4.5, 0), 0x203d20),
+    tint(T(new THREE.ConeGeometry(3.0, 6.4, 10, 2), 0, 7.2, 0), 0x254723),
+    tint(T(new THREE.ConeGeometry(2.0, 6.3, 10, 2), 0, 9.8, 0), 0x2c5128),
+    tint(T(new THREE.CylinderGeometry(0.3, 0.4, 3, 8), 0, 1.5, 0), 0x3a2c22),
+  ];
+  return merge(branches.map((g) => { g.deleteAttribute('uv'); return g; }));
+}
+function broadLo() {
+  const parts = [tint(T(new THREE.CylinderGeometry(0.3, 0.45, 5, 8), 0, 2.5, 0), 0x3f3024)];
+  for (const [x, y, z, sx, sy, sz, color] of [
+    [0, 7.3, 0, 3.2, 2.9, 3.1, 0x355a24],
+    [-1.7, 6.6, 0.3, 2.2, 2.1, 2.3, 0x41672c],
+    [1.5, 7.1, -0.5, 2.3, 2.2, 2.2, 0x3b6128],
+    [0.2, 8.7, 0.6, 2.1, 1.8, 2.0, 0x456b30],
+  ]) {
+    const crown = new THREE.SphereGeometry(1, 12, 8);
+    crown.scale(sx, sy, sz); crown.translate(x, y, z);
+    parts.push(tint(jitter(crown, 0.16, Math.round((x + y + z) * 17)), color));
+  }
+  return merge(parts.map((g) => { g.deleteAttribute('uv'); return g; }));
+}
 
 // ---- Materials ---------------------------------------------------------------------
 

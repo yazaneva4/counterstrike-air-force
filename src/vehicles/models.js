@@ -144,7 +144,7 @@ function fighterLivery(tailNo) {
 export function buildFighter({ tailNo = '88-0412' } = {}) {
   const g = new THREE.Group();
   const lv = once('fighterLivery' + tailNo, () => fighterLivery(tailNo));
-  const skin = new THREE.MeshStandardMaterial({ map: lv.map, normalMap: lv.normalMap, roughnessMap: lv.roughnessMap, roughness: 1, metalness: 0.15 });
+  const skin = new THREE.MeshPhysicalMaterial({ map: lv.map, normalMap: lv.normalMap, roughnessMap: lv.roughnessMap, roughness: 1, metalness: 0.15, clearcoat: 0.24, clearcoatRoughness: 0.42 });
   const surf = once('fighterSurf', () => panelSurface('#78838c', { rough: 0.62, metal: 0.12, repeat: 0.3 }));
   const dark = stdMat(0x3a4146, { rough: 0.55, metal: 0.3 });
   const metal = stdMat(0x5a5550, { rough: 0.35, metal: 1 });
@@ -269,7 +269,7 @@ export function buildProp({ stripe = 0xc8302a, reg = 'N172KI' } = {}) {
   const g = new THREE.Group();
   const stripeHex = '#' + new THREE.Color(stripe).getHexString();
   const lv = once('prop' + reg + stripeHex, () => propLivery(reg, stripeHex));
-  const skin = new THREE.MeshStandardMaterial({ map: lv.map, normalMap: lv.normalMap, roughnessMap: lv.roughnessMap, roughness: 1, metalness: 0.05 });
+  const skin = new THREE.MeshPhysicalMaterial({ map: lv.map, normalMap: lv.normalMap, roughnessMap: lv.roughnessMap, roughness: 1, metalness: 0.05, clearcoat: 0.32, clearcoatRoughness: 0.34 });
   const white = once('propSurf', () => panelSurface('#f1f0ea', { rough: 0.5, metal: 0.05, repeat: 0.35, cell: 120 }));
   const red = stdMat(stripe, { rough: 0.45 });
   const metal = stdMat(0x5a5e62, { rough: 0.35, metal: 0.9 });
@@ -358,7 +358,7 @@ export function buildHelicopter({ color = 0xc8302a, trim = 0xf0f0f0 } = {}) {
   const g = new THREE.Group();
   const mainHex = '#' + new THREE.Color(color).getHexString(), trimHex = '#' + new THREE.Color(trim).getHexString();
   const lv = once('heli' + mainHex + trimHex, () => heliLivery(mainHex, trimHex));
-  const skin = new THREE.MeshStandardMaterial({ map: lv.map, normalMap: lv.normalMap, roughnessMap: lv.roughnessMap, roughness: 1, metalness: 0.1 });
+  const skin = new THREE.MeshPhysicalMaterial({ map: lv.map, normalMap: lv.normalMap, roughnessMap: lv.roughnessMap, roughness: 1, metalness: 0.1, clearcoat: 0.28, clearcoatRoughness: 0.4 });
   const paint = stdMat(color, { rough: 0.42, metal: 0.1 });
   const light = stdMat(trim, { rough: 0.45, metal: 0.1 });
   const metal = stdMat(0x2e3134, { rough: 0.35, metal: 0.85 });
@@ -518,7 +518,7 @@ export function buildAirliner({ livery = 0x1d4f91 } = {}) {
   const g = new THREE.Group();
   const liveryHex = '#' + new THREE.Color(livery).getHexString();
   const lv = once('airliner' + liveryHex, () => airlinerLivery(liveryHex));
-  const winMat = new THREE.MeshStandardMaterial({ map: lv.map, normalMap: lv.normalMap, roughnessMap: lv.roughnessMap, roughness: 1, metalness: 0.15, emissive: 0xffd9a0, emissiveMap: lv.emissiveMap, emissiveIntensity: 0 });
+  const winMat = new THREE.MeshPhysicalMaterial({ map: lv.map, normalMap: lv.normalMap, roughnessMap: lv.roughnessMap, roughness: 1, metalness: 0.15, clearcoat: 0.2, clearcoatRoughness: 0.38, emissive: 0xffd9a0, emissiveMap: lv.emissiveMap, emissiveIntensity: 0 });
   const white = once('airSurf', () => panelSurface('#e9ecef', { rough: 0.45, metal: 0.2, repeat: 0.18, cell: 110 }));
   const blue = stdMat(livery, { rough: 0.4, metal: 0.1 });
   const grey = stdMat(0xb4bac0, { rough: 0.3, metal: 0.8 });

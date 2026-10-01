@@ -270,11 +270,16 @@ export function corrugated() {
 export function fabric() {
   return once('fabric', () => {
     const S = 128, h = new Float32Array(S * S), n = tileNoise(S, 32, 2, 111);
+    const c = canvasOf(S), ctx = c.getContext('2d'), img = ctx.createImageData(S, S);
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-      const weave = (Math.sin((x / S) * Math.PI * 2 * 32) * Math.sin((y / S) * Math.PI * 2 * 32)) * 0.5;
-      h[y * S + x] = weave * 0.6 + (n[y * S + x] - 0.5) * 0.4;
+      const i = y * S + x;
+      const weave = Math.sin((x / S) * Math.PI * 2 * 32) * Math.sin((y / S) * Math.PI * 2 * 32) * 0.5;
+      h[i] = weave * 0.6 + (n[i] - 0.5) * 0.4;
+      const tone = 234 + Math.round((n[i] - 0.5) * 22 + weave * 5);
+      img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = tone; img.data[i * 4 + 3] = 255;
     }
-    return { normal: toTexture(normalCanvas(h, S, 1.4), { srgb: false }) };
+    ctx.putImageData(img, 0, 0);
+    return { map: toTexture(c), normal: toTexture(normalCanvas(h, S, 1.4), { srgb: false }) };
   });
 }
 

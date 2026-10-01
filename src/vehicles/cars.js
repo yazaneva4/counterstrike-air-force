@@ -43,7 +43,7 @@ const SPECS = {
       [0.5, 0.73, 0.3, 0.74, 3.1], [1.0, 0.7, 0.16, 0.6, 3], [1.28, 0.66, 0.05, 0.49, 2.8],
     ],
     roofV: [0.24, 0.74], win: [[0.18, 0.44], [0.495, 0.81]], doors: [[-0.15, 0.95], [-1.2, -0.2]], hood: [1.15, 2.2], trunk: [-2.22, -1.55],
-    lamps: { head: [0.66, 0.1, 2.3, 0.2], tail: [0.7, 0.2, -2.36, 0.22] }, grille: { w: 0.5, y: 0.02, z: 2.4 }, exhaust: 1, mirrors: [0.9, 0.55, 0.95], seat: [0.4, -0.12, -0.35], eye: [0.4, 0.78, -0.02],
+    lamps: { head: [0.66, 0.1, 2.3, 0.2], tail: [0.7, 0.2, -2.36, 0.22] }, grille: { w: 0.5, y: 0.02, z: 2.4 }, exhaust: 1, mirrors: [0.9, 0.55, 0.95], seat: [0.4, -0.12, -0.35], eye: [0.36, 0.94, -0.35],
     cab: { camDist: 9, camHeight: 2.8 },
   },
   gt: {
@@ -57,7 +57,7 @@ const SPECS = {
       [0.75, 0.66, 0.14, 0.52, 2.8], [1.15, 0.6, 0.04, 0.4, 2.5],
     ],
     roofV: [0.3, 0.72], win: [[0.245, 0.83]], doors: [[-0.6, 0.85]], hood: [1.25, 2.1], trunk: [-2.1, -1.5],
-    lamps: { head: [0.72, 0.03, 2.08, 0.12], tail: [0.78, 0.2, -2.24, 0.16] }, grille: { w: 0.55, y: -0.03, z: 2.3 }, exhaust: 2, mirrors: [0.96, 0.46, 0.6], seat: [0.42, -0.34, -0.2], eye: [0.42, 0.64, 0.02],
+    lamps: { head: [0.72, 0.03, 2.08, 0.12], tail: [0.78, 0.2, -2.24, 0.16] }, grille: { w: 0.55, y: -0.03, z: 2.3 }, exhaust: 2, mirrors: [0.96, 0.46, 0.6], seat: [0.42, -0.34, -0.2], eye: [0.38, 0.86, -0.28],
     wing: true, cab: { camDist: 8.5, camHeight: 2.4 },
   },
   pickup: {
@@ -92,8 +92,8 @@ const SPECS = {
 
 // Two motorsport builds share the coupe shell, with their own chassis,
 // tyres, aero, cockpit and livery.
-SPECS.gtr = { ...SPECS.gt, name: 'Vanguard GT-R', track: 1.8, tyreW: 0.315, clearance: 0.09, tag: 'GT-R 27', race: true, number: '27', accent: '#dc3d28', wing: true, eye: [0.42, 0.68, -0.16] };
-SPECS.drift = { ...SPECS.gt, name: 'Vanguard D-Spec', track: 1.76, tyreW: 0.265, clearance: 0.12, tag: 'D-SPEC 86', race: true, number: '86', accent: '#24bfc2', wing: true, eye: [0.42, 0.68, -0.16] };
+SPECS.gtr = { ...SPECS.gt, name: 'Vanguard GT-R', track: 1.8, tyreW: 0.315, clearance: 0.09, tag: 'GT-R 27', race: true, number: '27', accent: '#dc3d28', wing: true, eye: [0.38, 0.9, -0.28] };
+SPECS.drift = { ...SPECS.gt, name: 'Vanguard D-Spec', track: 1.76, tyreW: 0.265, clearance: 0.12, tag: 'D-SPEC 86', race: true, number: '86', accent: '#24bfc2', wing: true, eye: [0.38, 0.9, -0.28] };
 
 export const CAR_TYPES = Object.keys(SPECS);
 export const CAR_NAMES = Object.fromEntries(CAR_TYPES.map((k) => [k, SPECS[k].name]));
