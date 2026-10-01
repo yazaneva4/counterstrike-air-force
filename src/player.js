@@ -52,6 +52,7 @@ export class Player {
     if (!this.suit) Object.assign(outfit, ch.extra);
     const skins = [0xf1c7a5, 0xe0ac86, 0xc68a62, 0xa66d47, 0x7c4c32, 0x5a3825];
     outfit.skin = skins[this.skinIndex % skins.length];
+    this.eyeHeight = outfit.height * 0.94;
     const old = this.human;
     this.human = new Human(outfit);
     this.root = this.human.root;
@@ -134,7 +135,7 @@ export class Player {
     const plat = W.structures.platformAt(pos.x, pos.z);
     this.swimming = terrainH < -1.25 && plat === -Infinity && pos.y < 0.2;
     const grav = W.gravity ?? 1;
-    const speed = (this.swimming ? 1.9 : sprint ? 6.4 : 2.6) * (grav < 1 ? 0.8 : 1);
+    const speed = (this.swimming ? 1.5 : sprint ? 5.8 : 1.65) * (grav < 1 ? 0.8 : 1);
     const accel = this.onGround || this.swimming ? 12 : 2.5;
     this.vel.x = damp(this.vel.x, wx * speed, accel, dt);
     this.vel.z = damp(this.vel.z, wz * speed, accel, dt);
@@ -143,10 +144,17 @@ export class Player {
       pos.y = damp(pos.y, -0.95, 4, dt);
       if (I.hit('Space') || I.thit('up')) G.audio?.splash();
     } else {
-      this.vel.y -= 22 * grav * dt;
-      if ((I.hit('Space') || I.thit('up')) && this.onGround) { this.vel.y = 7.2 * (grav < 1 ? 0.62 : 1); this.onGround = false; G.audio?.jump(); }
+      this.vel.y -= 9.81 * grav * dt;
+      if ((I.hit('Space') || I.thit('up')) && this.onGround) { this.vel.y = 3.2; this.onGround = false; G.audio?.jump(); }
     }
+    const previousX = pos.x, previousZ = pos.z, previousGround = W.groundAt(pos.x, pos.z);
     pos.x += this.vel.x * dt; pos.z += this.vel.z * dt;
+    // Feet cannot climb a cliff simply by snapping up to the height field.
+    const nextGround = W.groundAt(pos.x, pos.z);
+    const normal = W.terrain.normalAt?.(pos.x, pos.z);
+    if (this.onGround && !this.swimming && nextGround > previousGround + 1e-4 && normal && normal.y < 0.62) {
+      pos.x = previousX; pos.z = previousZ; this.vel.x = this.vel.z = 0;
+    }
     if (!this.swimming) pos.y += this.vel.y * dt;
     // Collisions: buildings, trunks, parked vehicles.
     W.structures.collide(pos, 0.35, pos.y + 0.9);
@@ -217,7 +225,7 @@ export class Player {
     this.camYaw = v.headingAngle();
     if (v.kind === 'plane') v.throttle = Math.max(v.throttle, 0);
     G.hud.prompt(null);
-    const help = { plane: 'W throttle, mouse/arrows pitch, A/D roll', heli: 'Space up, C down, WASD fly, mouse turn', ufo: 'Space/C altitude, WASD fly, E tractor beam', ship: 'Space/C altitude, WASD fly, Shift boost · climb past 3,000 m for orbit', car: 'W/S throttle and brake · A/D steer · Space handbrake · Shift boost · L lights · B horn · V cockpit', rocket: v.onGround && !v.launched ? 'Space to launch · W/S throttle · mouse steer · G legs · R level' : 'W/S throttle · mouse steer · Q/E roll · G legs · R hold level' };
+    const help = { plane: 'W throttle, mouse/arrows pitch, A/D roll', heli: 'Space up, C down, WASD fly, mouse turn', ufo: 'Space/C altitude, WASD fly, E tractor beam', ship: 'Space/C altitude, WASD fly, Shift boost · climb past 3,000 m for orbit', car: 'W/S throttle and brake · A/D steer · Space handbrake · Shift full throttle · L lights · B horn · V cockpit', rocket: v.onGround && !v.launched ? 'Space to launch · W/S throttle · mouse steer · G legs · R level' : 'W/S throttle · mouse steer · Q/E roll · G legs · R hold level' };
     G.hud.toast(v.def.name + ' · ' + help[v.kind], 5);
     G.audio?.enter(v.type);
     G.onEnterVehicle?.(v);
@@ -370,7 +378,11 @@ export class Player {
   _footCamera(dt, extra = 0) {
     const G = this.game, cam = G.camera, W = G.world;
     const pivot = tv.copy(this.pos);
-    pivot.y += this.swimming ? 1.1 : 1.55;
+    pivot.y += this.swimming ? 1.1 : (this.eyeHeight ?? 1.65);
+    if (this.cockpit && this.onGround && !this.swimming && this.human) {
+      // Small gait-linked head motion, in centimetres.
+      pivot.y += Math.sin(this.human.phase * 2) * 0.015 * clamp(this.human.speed / 1.65, 0, 1);
+    }
     this.root.visible = !this.cockpit && ['foot', 'chute', 'fall'].includes(this.mode);
     const dist = this.camDist + extra;
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
@@ -459,7 +471,7 @@ export class Player {
       look.y += v.camHeight * 0.3;
       cam.lookAt(look);
     }
-    const speedFov = clamp(v.speed / (v.kind === 'car' ? v.def.maxSpeed * 1.5 : 280), 0, 1) * (v.kind === 'car' ? 12 : 14) + (v.boosting ? 6 : 0);
+    const speedFov = clamp(v.speed / (v.kind === 'car' ? v.def.maxSpeed * 1.5 : 280), 0, 1) * (v.kind === 'car' ? 12 : 14) + (v.boosting && v.kind !== 'car' ? 6 : 0);
     this.fov = damp(this.fov, (this.cockpit ? 70 : 62) + speedFov, 2.5, dt);
     this._applyShake(cam);
   }

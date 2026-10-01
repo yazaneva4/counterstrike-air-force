@@ -559,18 +559,20 @@ export class Vehicle {
     const hx = Math.sin(this.heading), hz = Math.cos(this.heading);
     let vf = this.vel.x * hx + this.vel.z * hz, vl = this.vel.x * hz - this.vel.z * hx;
     const onRoad = world.structures.roadAt ? world.structures.roadAt(p.x, p.z) : true;
-    const surf = onRoad ? 1 : d.off;
+    const wet = clamp(world.wetness ?? 0, 0, 1);
+    const surf = onRoad ? 1 - wet * 0.28 : d.off * (1 - wet * 0.18);
     const grounded = !this.airborne;
-    const maxV = d.maxSpeed * (ctl.boost ? 1.12 : 1);
+    // Shift is full engine effort, without a fictional turbo speed multiplier.
+    const maxV = d.maxSpeed;
 
     // Longitudinal forces.
     let a = 0, brakingOnly = false;
     if (grounded) {
       if (thr > 0.02) {
-        if (vf < -0.8) { a = d.brake * thr; brakingOnly = true; }
-        else a = d.accel * thr * (ctl.boost ? 1.3 : 1) * surf * Math.max(0, 1 - Math.pow(Math.max(vf, 0) / maxV, 2.2));
+        if (vf < -0.8) { a = d.brake * surf * thr; brakingOnly = true; }
+        else a = d.accel * thr * (ctl.boost ? 1 : 0.82) * surf * Math.max(0, 1 - Math.pow(Math.max(vf, 0) / maxV, 2.2));
       } else if (thr < -0.02) {
-        if (vf > 0.8) { a = d.brake * thr; brakingOnly = true; }
+        if (vf > 0.8) { a = d.brake * surf * thr; brakingOnly = true; }
         else a = d.accel * 0.55 * thr * surf * Math.max(0, 1 - Math.pow(Math.max(-vf, 0) / (maxV * 0.25), 2));
       }
       const drag = (0.45 + 0.0011 * vf * vf) * (onRoad ? 1 : 2.4);
@@ -664,7 +666,7 @@ export class Vehicle {
     // Body attitude: terrain, plus squat/dive and body roll from load transfer.
     const aLat = this.carVf * yawRate;
     const pitchT = -Math.atan2((fl + fr) / 2 - (rl + rr) / 2, this.wb) - a * 0.005;
-    const rollT = Math.atan2((fl + rl) / 2 - (fr + rr) / 2, this.track * 2) - aLat * 0.008;
+    const rollT = Math.atan2((fl + rl) / 2 - (fr + rr) / 2, this.track) - aLat * 0.008;
     const k = 1 - Math.exp(-9 * dt);
     this.tilt.x += (pitchT - this.tilt.x) * k;
     this.tilt.z += (rollT - this.tilt.z) * k;

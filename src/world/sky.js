@@ -68,7 +68,7 @@ export class SkySystem {
     light.castShadow = shadows;
     light.shadow.mapSize.set(shadowSize, shadowSize);
     light.shadow.bias = -0.00025;
-    light.shadow.normalBias = 0.9;
+    light.shadow.normalBias = 0.08;
     const sc = light.shadow.camera;
     sc.near = 10; sc.far = 3000;
     scene.add(light, light.target);

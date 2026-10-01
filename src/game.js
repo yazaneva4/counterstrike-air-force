@@ -148,7 +148,7 @@ export class Game {
 
     await step(0.95, 'Final checks');
     this.post = new PostFX(this.renderer, this.scene, this.camera, { quality: q });
-    this.hasEnv = this.post.enabled && q !== 'low';
+    this.hasEnv = this.post.hdrSupported && q !== 'low';
     if (this.hasEnv) {
       // Reflection/ambient probe: the same sky without the blinding sun disk,
       // scaled down so image-based light complements (not floods) the sun.
@@ -723,6 +723,7 @@ export class Game {
     this.sky.update(dt, cam, focus, this.renderer, alt);
     this.weather.update(dt, cam, this.sky, this.clouds, this.scene.fog, this.ocean, alt);
     this.world.wind = this.clouds.wind;
+    this.world.wetness = this.weather.now.wet;
     this.ocean.update(dt, this.sky, this.scene.fog);
     this.clouds.update(dt, this.sky, this.scene.fog);
     this.vegetation.update(dt, this.camera.position);

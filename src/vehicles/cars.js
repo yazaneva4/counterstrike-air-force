@@ -141,7 +141,20 @@ function paintMaps(type, color) {
     LV.panelGrid(p, w, h, [S.roofV[0], S.roofV[1]], [0.4, 0.6]);
     for (const [v0, v1] of S.win) for (const u of [0.2, 0.36, 0.62, 0.78]) p.strokeRect(u * w - 1, (1 - v1) * h, 2, (v1 - v0) * h);
   });
-  return { body, cabin };
+  // Separate the opaque roof/pillars from the window glass. The former
+  // all-opaque glasshouse hid the interior and blocked the driver's view.
+  const mask = (glass) => canvasTexture(512, 1024, (ctx, w, h) => {
+    ctx.fillStyle = glass ? '#fff' : '#000'; ctx.fillRect(0, 0, w, h);
+    const rect = (u0, v0, u1, v1, solid) => {
+      ctx.fillStyle = (solid !== glass) ? '#fff' : '#000'; LV.rect(ctx, u0, v0, u1, v1, w, h);
+    };
+    for (const [a0, a1] of [[0, 0.4], [0.6, 1]]) {
+      rect(a0, 0, a1, 1, true);
+      for (const [v0, v1] of S.win) rect(a0 === 0 ? 0.2 : 0.62, v0, a0 === 0 ? 0.36 : 0.78, v1, false);
+    }
+    rect(0.4, S.roofV[0], 0.6, S.roofV[1], true);
+  }, { srgb: false });
+  return { body, cabin, solidMask: mask(false), glassMask: mask(true) };
 }
 
 function tyreNormal() {
@@ -249,16 +262,18 @@ export function buildCar(type = 'sedan', { color = CAR_COLORS[0] } = {}) {
   const style = type === 'gt' ? 'gt' : type === 'jeep' || type === 'pickup' ? 'off' : 'std';
   const maps = once(`paint:${type}:${color}`, () => paintMaps(type, color));
   const mats = once(`mats:${type}:${color}`, () => ({
-    paint: new THREE.MeshPhysicalMaterial({ map: maps.body.map, normalMap: maps.body.normalMap, roughnessMap: maps.body.roughnessMap, roughness: 1, metalness: 0.55, clearcoat: 1, clearcoatRoughness: 0.06, envMapIntensity: 1.1 }),
-    glass: new THREE.MeshPhysicalMaterial({ map: maps.cabin.map, normalMap: maps.cabin.normalMap, roughnessMap: maps.cabin.roughnessMap, roughness: 1, metalness: 0.4, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.4 }),
+    paint: new THREE.MeshPhysicalMaterial({ map: maps.body.map, normalMap: maps.body.normalMap, roughnessMap: maps.body.roughnessMap, roughness: 1, metalness: 0.22, clearcoat: 1, clearcoatRoughness: 0.14, envMapIntensity: 1 }),
+    cabin: new THREE.MeshPhysicalMaterial({ map: maps.cabin.map, normalMap: maps.cabin.normalMap, roughnessMap: maps.cabin.roughnessMap, alphaMap: maps.solidMask, alphaTest: 0.5, roughness: 1, metalness: 0.22, clearcoat: 1, clearcoatRoughness: 0.14 }),
+    glass: new THREE.MeshPhysicalMaterial({ color: 0x92aab2, alphaMap: maps.glassMask, alphaTest: 0.01, roughness: 0.09, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.1 }),
   }));
-  const { paint, glass } = mats;
+  const { paint, cabin, glass } = mats;
   const dark = stdMat(0x17181a, { rough: 0.7 });
   const chrome = stdMat(0xc8ccd0, { rough: 0.2, metal: 1 });
   const body = once(`bodyG:${type}`, () => loft(smoothSections(S.lower.map(([z, w, h, y, n]) => ({ z, w, h, y, n })), 3), { segs: 44 }));
   add(g, body, paint);
   const cab = once(`cabG:${type}`, () => loft(smoothSections(S.cabin.map(([z, w, h, y, n]) => ({ z, w, h, y, n })), 3), { segs: 40 }));
-  add(g, cab, glass);
+  add(g, cab, cabin);
+  add(g, cab, glass).castShadow = false;
 
   const zMin = S.lower[0][0], zMax = S.lower[S.lower.length - 1][0];
   add(g, new THREE.BoxGeometry(S.track * 0.92, 0.05, S.length * 0.7), dark, 0, -S.wheelR + S.clearance - 0.005, 0);
@@ -270,7 +285,7 @@ export function buildCar(type = 'sedan', { color = CAR_COLORS[0] } = {}) {
   const backZ = zMin - 0.005;
   add(g, new THREE.PlaneGeometry(0.5, 0.125), new THREE.MeshStandardMaterial({ map: plateTexture(S.tag), roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2 }), 0, S.lamps.tail[1] - 0.02, backZ, 0, Math.PI, 0);
 
-  const headMat = new THREE.MeshStandardMaterial({ color: 0xdfe8f0, emissive: 0xfff0d0, emissiveIntensity: 0.05, roughness: 0.1, metalness: 0.5 });
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xdfe8f0, emissive: 0xfff0d0, emissiveIntensity: 0.05, roughness: 0.14, metalness: 0 });
   const tailMat = new THREE.MeshStandardMaterial({ color: 0x5a0d10, emissive: 0xff1a12, emissiveIntensity: 0.15, roughness: 0.2 });
   const [hx, hy, hz, hs, hShape] = S.lamps.head, [tx, ty, tz, ts] = S.lamps.tail;
   const headGlow = [], tailGlow = [];
@@ -370,7 +385,7 @@ export function buildCar(type = 'sedan', { color = CAR_COLORS[0] } = {}) {
 
   return {
     group: g,
-    parts: { wheels, pivots, headMat, tailMat, headGlow, tailGlow, beam, pool, steerWheel: wheel, pilot: drv, body: g },
+    parts: { wheels, pivots, wheelbase: S.wb, track: S.track, headMat, tailMat, headGlow, tailGlow, beam, pool, steerWheel: wheel, pilot: drv, body: g },
     ground: S.wheelR, radius: 2.4, length: S.length, camDist: S.cab.camDist, camHeight: S.cab.camHeight, wb: S.wb, track: S.track, spec: S,
   };
 }
@@ -380,7 +395,13 @@ export function buildCar(type = 'sedan', { color = CAR_COLORS[0] } = {}) {
 export function animateCarParts(P, wheelR, dt, { vf = 0, steer = 0, lit = false, braking = false, night = 0 } = {}) {
   const ang = (vf / wheelR) * dt;
   for (const w of P.wheels) w.spin.rotation.x += ang * w.side;
-  for (const pv of P.pivots) pv.rotation.y = -steer;
+  for (const pv of P.pivots) {
+    // Inner wheel turns farther than the outer wheel at low speed.
+    const radius = Math.abs(steer) > 1e-4 ? P.wheelbase / Math.tan(Math.abs(steer)) : Infinity;
+    const side = Math.sign(pv.position.x);
+    const offset = side * Math.sign(steer) * P.track / 2;
+    pv.rotation.y = -Math.sign(steer) * Math.atan(P.wheelbase / Math.max(0.2, radius + offset));
+  }
   P.steerWheel.rotation.z = -steer * 3.2;
   P.headMat.emissiveIntensity = lit ? 3 : 0.05;
   for (const g of P.headGlow) g.material.opacity = lit ? 0.35 + 0.65 * night : 0;

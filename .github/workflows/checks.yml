@@ -15,4 +15,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Check JavaScript syntax
+        run: git ls-files -z '*.js' | xargs -0 -n1 node --check
       - run: npm test

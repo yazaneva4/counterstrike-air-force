@@ -74,7 +74,7 @@ test('first person follows the eyes and forward direction, third person restores
   const p = Object.create(Player.prototype);
   Object.assign(p, { root: new THREE.Group(), mode: 'foot', cockpit: true, swimming: false, camDist: 5.2, camYaw: 0, camPitch: 0, camPos: new THREE.Vector3(), fov: 62, shake: 0, game: { camera: new THREE.PerspectiveCamera(), world: flatWorld } });
   p._footCamera(1 / 60);
-  assert.equal(p.root.visible, false); assert.equal(p.game.camera.position.y, 1.55);
+  assert.equal(p.root.visible, false); assert.equal(p.game.camera.position.y, 1.65);
   assert.ok(p.game.camera.getWorldDirection(new THREE.Vector3()).z > 0.99);
   p.cockpit = false; p._footCamera(1); assert.equal(p.root.visible, true); assert.ok(p.game.camera.position.z < -5);
 });
@@ -138,7 +138,7 @@ test('rain wets pavement without progressively multiplying its color and roughne
   const { Weather } = await import('../src/world/weather.js');
   const w = Object.create(Weather.prototype);
   const material = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 });
-  Object.assign(w, { timer: 600, target: { cloud: 1, wind: 8, rain: 1, fog: 0, dir: 90 }, now: { cloud: 1, wind: 8, rain: 1, fog: 0 }, pavedMaterials: [{ material, color: material.color.clone(), roughness: 0.9 }], rain: { visible: false } });
+  Object.assign(w, { timer: 600, target: { cloud: 1, wind: 8, rain: 1, fog: 0, dir: 90 }, now: { cloud: 1, wind: 8, rain: 1, fog: 0, wet: 1 }, pavedMaterials: [{ material, color: material.color.clone(), roughness: 0.9 }], rain: { visible: false } });
   const sky = { light: { intensity: 1 }, hemi: { intensity: 1 }, baseLightIntensity: 1, baseHemiIntensity: 1, baseFogDensity: 0.001 }, clouds = { uniforms: { uCover: {}, uDark: {} } };
   const fog = { density: 0.001 };
   w.update(0.016, new THREE.PerspectiveCamera(), sky, clouds, fog, null, 2000);

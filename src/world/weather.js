@@ -16,7 +16,7 @@ const CODES = { 0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast'
 export class Weather {
   constructor(scene, { rain = 1400 } = {}) {
     this.target = { cloud: 0.3, wind: 4, dir: 70, rain: 0, fog: 0, temp: 27, label: 'default' };
-    this.now = { cloud: 0.3, wind: 4, rain: 0, fog: 0 };
+    this.now = { cloud: 0.3, wind: 4, rain: 0, fog: 0, wet: 0 };
     this.live = false;
     this.timer = 0;
     this.loaded = null;
@@ -80,6 +80,8 @@ export class Weather {
     if (this.timer <= 0) { this.timer = 600; this.refresh(); }
     const T = this.target, N = this.now, k = 0.25;
     N.cloud = damp(N.cloud, T.cloud, k, dt); N.wind = damp(N.wind, T.wind, k, dt); N.rain = damp(N.rain, T.rain, 0.4, dt); N.fog = damp(N.fog, T.fog, 0.3, dt);
+    // Pavement stays wet after a shower instead of drying in one frame.
+    N.wet = damp(N.wet ?? 0, N.rain, N.rain > (N.wet ?? 0) ? 0.08 : 0.004, dt);
     const over = smoothstep(0.5, 1, N.cloud);
     // Clouds: coverage, drift with the real wind (it blows towards dir + 180°).
     const to = (T.dir + 180) * Math.PI / 180;
@@ -92,7 +94,7 @@ export class Weather {
     if (fog) fog.density = (sky.baseFogDensity ?? fog.density) * (1 + over * 0.5 + N.rain * 1.2 + N.fog * 6 * (1 - smoothstep(0, 800, altitude)));
     // Trees and sea respond to wind.
     windUniforms.uAmp.value = clamp(0.35 + N.wind / 5, 0.3, 2.4);
-    if (this.pavedMaterials) for (const m of this.pavedMaterials) { m.material.roughness = m.roughness * (1 - N.rain * 0.6); m.material.color.copy(m.color).multiplyScalar(1 - N.rain * 0.22); }
+    if (this.pavedMaterials) for (const m of this.pavedMaterials) { m.material.roughness = m.roughness * (1 - N.wet * 0.6); m.material.color.copy(m.color).multiplyScalar(1 - N.wet * 0.22); }
     if (ocean) ocean.uniforms.uChop.value = clamp(0.55 + N.wind / 8, 0.5, 2);
     // Rain streaks.
     const inten = N.rain * (altitude < 1500 ? 1 : 0);

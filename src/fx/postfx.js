@@ -20,8 +20,8 @@ const GradeShader = {
     uSun: { value: new THREE.Vector2(0.5, 0.5) },
     uSunVis: { value: 0 },
     uSunColor: { value: new THREE.Color(1, 0.9, 0.7) },
-    uVignette: { value: 0.55 },
-    uChroma: { value: 0.0012 },
+    uVignette: { value: 0.2 },
+    uChroma: { value: 0.00025 },
     uFlash: { value: 0 },
     uCloud: { value: 0 },
     uNight: { value: 0 },
@@ -46,8 +46,8 @@ const GradeShader = {
         vec2 dv = (uv - sp) * vec2(aspect, 1.0);
         float r = length(dv);
         vec3 fl = vec3(0.0);
-        fl += uSunColor * exp(-r * 9.0) * 0.55;
-        fl += uSunColor * vec3(0.8, 0.85, 1.0) * exp(-abs(dv.y) * 160.0) * exp(-abs(dv.x) * 2.2) * 0.35;
+        fl += uSunColor * exp(-r * 9.0) * 0.16;
+        fl += uSunColor * vec3(0.8, 0.85, 1.0) * exp(-abs(dv.y) * 160.0) * exp(-abs(dv.x) * 2.2) * 0.08;
         vec2 axis = vec2(0.5) - sp;
         for (int i = 0; i < 5; i++){
           float fi = float(i);
@@ -67,14 +67,14 @@ const GradeShader = {
       col = mix(col, vec3(0.85, 0.88, 0.92) * (1.0 - uNight * 0.85), uCloud * 0.85);
       // Grade: a touch of contrast and warmth in the highlights.
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(l), col, 1.06);
+      col = mix(vec3(l), col, 1.0);
       col = col * (1.0 + 0.04 * vec3(0.4, 0.1, -0.3) * smoothstep(0.4, 1.6, l));
       // Vignette.
       col *= mix(1.0, smoothstep(0.95, 0.3, d), uVignette);
       col += vec3(uFlash);
       // Grain.
       float g = hash(uv * uRes + fract(uTime) * 100.0) - 0.5;
-      col += g * 0.018 * (0.4 + l);
+      col += g * 0.003 * (0.4 + l);
       gl_FragColor = vec4(max(col, 0.0), 1.0);
     }`,
 };
@@ -120,7 +120,9 @@ export class PostFX {
     this.scene = scene;
     this.camera = camera;
     const params = new URLSearchParams(location.search);
-    this.enabled = quality !== 'low' && !params.has('safe') && (params.has('hd') || floatTargetWorks(renderer));
+    // Reflections are useful even when the post-processing path is disabled.
+    this.hdrSupported = quality !== 'low' && floatTargetWorks(renderer);
+    this.enabled = quality !== 'low' && !params.has('safe') && (params.has('hd') || this.hdrSupported);
     document.body.classList.toggle('css-vignette', !this.enabled);
     if (!this.enabled) return;
     const size = renderer.getSize(new THREE.Vector2());
