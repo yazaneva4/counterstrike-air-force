@@ -345,7 +345,10 @@ addEventListener('resize', () => {
 buildMenu();
 bindSettings();
 setInterval(() => cloud.save(settings, game), 60000);
-document.addEventListener('visibilitychange', () => { if (document.hidden) cloud.save(settings, game, { keepalive: true }); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) cloud.save(settings, game, { keepalive: true });
+  else if (game?.running) game.weather?.refresh();
+});
 // Cloud progress arrives after the title screen is up: refresh the pickers.
 cloudReady.then((s) => { if (s && !game) buildMenu(); });
 bindPause();

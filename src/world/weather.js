@@ -20,6 +20,8 @@ export class Weather {
     this.live = false;
     this.timer = 0;
     this.loaded = null;
+    this.refreshing = false;
+    this.updatedAt = 0;
     // Rain: short streaks in a box that follows the camera.
     this.count = rain;
     const pos = new Float32Array(rain * 6), seed = new Float32Array(rain * 3);
@@ -35,24 +37,37 @@ export class Weather {
   }
 
   async refresh() {
+    if (this.refreshing) return false;
+    this.refreshing = true;
+    const ctl = new AbortController();
+    const timeout = setTimeout(() => ctl.abort(), 6000);
+    let ok = false;
     try {
-      const ctl = new AbortController();
-      const to = setTimeout(() => ctl.abort(), 6000);
-      const r = await fetch(URL, { signal: ctl.signal });
-      clearTimeout(to);
-      if (!r.ok) return;
-      const c = (await r.json()).current;
-      if (!c) return;
+      const r = await fetch(URL, { signal: ctl.signal, cache: 'no-store' });
+      if (!r.ok) throw new Error(`Weather request failed (${r.status})`);
+      const payload = await r.json();
+      const c = payload?.current;
+      if (!c) throw new Error('Weather response has no current conditions');
       const code = c.weather_code | 0;
       const wet = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95 || c.precipitation > 0.05;
       this.target = {
         cloud: clamp((c.cloud_cover ?? 30) / 100, 0, 1), wind: clamp(c.wind_speed_10m ?? 4, 0, 40), dir: c.wind_direction_10m ?? 70,
         rain: wet ? clamp(0.35 + (c.precipitation || 0) / 4 + (code >= 63 ? 0.25 : 0), 0.3, 1) : 0, fog: code === 45 || code === 48 ? 1 : 0,
-        temp: c.temperature_2m, label: CODES[code] || (wet ? 'rain' : 'fair'),
+        temp: c.temperature_2m ?? this.target.temp, label: CODES[code] || (wet ? 'rain' : 'fair'),
       };
       this.live = true;
       this.loaded = this.target;
-    } catch (e) { /* offline: keep the default */ }
+      this.updatedAt = Date.now();
+      ok = true;
+      return true;
+    } catch (e) {
+      // Retry a failed live request soon while keeping the last good conditions.
+      return false;
+    } finally {
+      clearTimeout(timeout);
+      this.refreshing = false;
+      this.timer = ok ? 300 : 30;
+    }
   }
 
   describe() {
