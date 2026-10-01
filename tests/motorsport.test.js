@@ -96,7 +96,7 @@ test('race-car network snapshots preserve livery and visible steering state', ()
   v.type = 'gtr'; v.color = 0xd8d8d4; v.throttle = 0.8; v.steer = 0.2; v.carVf = 20;
   p.human = { speed: 0, state: 'pilot' }; p.name = 'Racer'; p.character = 'pilot'; p.skinIndex = 1; p.game.location = 'earth';
   const state = p.netState();
-  assert.equal(state.v, 'gtr'); assert.equal(state.cc, 0xd8d8d4); assert.deepEqual(state.cv, [200, 20, 0, 0]);
+  assert.equal(state.v, 'gtr'); assert.equal(state.cc, 0xd8d8d4); assert.deepEqual(state.cv, [20, 0.2, 0, 0]);
   const remote = new RemotePlayer(new THREE.Scene(), 'racer', 'Racer', 0xffffff);
   const types = []; remote._ensureHuman = () => {}; remote._ensureVehicle = type => types.push(type);
   remote.apply(state); assert.deepEqual(types, ['gtr']);
