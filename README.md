@@ -88,3 +88,12 @@ People receive shadows on their clothing and skin; skin and hair use nonmetallic
 Car roofs and pillars remain opaque while the windows reveal the seats, driver and dashboard. Paint has a softer clear coat, front wheels use separate inner and outer steering angles, and wet roads reduce braking and cornering grip. Shift uses full engine effort. Pavement wets gradually and dries over several minutes. Reflections remain available when the supported HDR pipeline is used with post-processing disabled.
 
 The scenery and people remain procedural browser-game assets; this pass improves their materials and behaviour rather than replacing them with scanned models.
+
+
+### 4K and motorsport
+
+Select **4K Ultra** before entering the island for a fixed 3840-pixel long edge (3840 × 2160 on a 16:9 display). The renderer preserves the screen aspect ratio and reports the actual dimensions; this mode does not silently reduce resolution. A GPU that supports a smaller render surface is limited to its reported maximum. High and Auto retain adaptive resolution. 4K increases GPU load and does not replace the game's procedural assets with scanned photorealistic models.
+
+Choose **Race paddock** to start beside the **Vanguard GT-R** and **Vanguard D-Spec**, parked on the airbase apron. Press **F** to board. **W/S** accelerate/brake/reverse, **A/D** steer, **Shift** uses full throttle, and **Space** operates the rear handbrake. Tap the handbrake while turning at speed to initiate a drift, release it, then countersteer and balance the throttle. Rear-axle grip returns progressively; the D-Spec also supports power oversteer. Dry tarmac produces fading tyre marks and smoke; wet pavement reduces grip and smoke. The instruments show drift angle and time. Liveries and wheel steering also work for other players.
+
+Car first-person view uses mouse or gamepad look without holding right-click, honours sensitivity and vertical inversion, and keeps its field of view steady. The camera follows the current chassis and suspension position, uses a close near plane for the dashboard, and hides the driver model immediately. On-foot first-person view has a wider vertical look range and eye-level collision clearance. Press **V** or the view button to switch between first-person and third-person.

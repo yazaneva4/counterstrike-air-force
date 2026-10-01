@@ -24,6 +24,8 @@ export const VEHICLE_DEFS = {
   // Road vehicles. Speeds in m/s, accel/brake in m/s², mu = tyre grip, off = grip factor off the tarmac.
   sedan: { name: CAR_NAMES.sedan, role: 'Family sedan', kind: 'car', maxSpeed: 52, accel: 6.2, brake: 12, steerMax: 0.58, mu: 1.15, off: 0.72 },
   gt: { name: CAR_NAMES.gt, role: 'Sports coupe', kind: 'car', maxSpeed: 78, accel: 10, brake: 15, steerMax: 0.5, mu: 1.4, off: 0.62 },
+  gtr: { name: CAR_NAMES.gtr, role: 'GT race car · high-grip tyres', kind: 'car', maxSpeed: 88, accel: 11.5, brake: 16, steerMax: 0.52, mu: 1.5, off: 0.5, rearGrip: 1.04, aero: 0.12 },
+  drift: { name: CAR_NAMES.drift, role: 'Rear-drive drift car', kind: 'car', maxSpeed: 72, accel: 10.5, brake: 13, steerMax: 0.78, mu: 1.18, off: 0.56, rearGrip: 0.86, driftTune: true },
   pickup: { name: CAR_NAMES.pickup, role: 'Pickup truck', kind: 'car', maxSpeed: 44, accel: 5, brake: 11, steerMax: 0.55, mu: 1.05, off: 0.88 },
   jeep: { name: CAR_NAMES.jeep, role: 'Off-road 4x4', kind: 'car', maxSpeed: 38, accel: 5.6, brake: 11, steerMax: 0.62, mu: 1.1, off: 0.96 },
 };
@@ -41,7 +43,7 @@ function buildFor(type, opts = {}) {
     case 'ufo': return buildSaucer();
     case 'ship': return buildShip();
     case 'rocket': return buildRocket();
-    case 'sedan': case 'gt': case 'pickup': case 'jeep': return buildCar(type, { color: opts.color });
+    case 'sedan': case 'gt': case 'gtr': case 'drift': case 'pickup': case 'jeep': return buildCar(type, { color: opts.color });
     case 'nova': {
       const n = buildNova();
       const gear = new THREE.Group();
@@ -115,6 +117,7 @@ export class Vehicle {
     if (this.kind === 'rocket') this._rocketReset();
     if (this.kind === 'car') {
       this.steer = 0; this.vy = 0; this.airborne = false; this.gear = 1; this.lights = false; this.horn = false;
+      this.carYawRate = 0; this.rearGrip = 1; this.driftAngle = 0; this.drifting = false; this.driftTime = 0;
       this.skid = 0; this.bump = 0; this.susp = 0; this.suspV = 0; this.carVf = 0; this.braking = false; this.shift = 0;
       this.model.group.position.y = 0;
     }
@@ -551,6 +554,7 @@ export class Vehicle {
   // crests, and bumps against buildings, trees and other vehicles.
 
   _car(dt, ctl, world) {
+    if (dt <= 0) return null;
     const d = this.def, p = this.pos, G = 9.81 * (world.gravity ?? 1);
     const occupied = !!ctl;
     ctl = ctl || { steer: 0, throttle: 0, handbrake: true, boost: false, horn: false };
@@ -577,7 +581,7 @@ export class Vehicle {
       }
       const drag = (0.45 + 0.0011 * vf * vf) * (onRoad ? 1 : 2.4);
       a -= Math.sign(vf) * drag;
-      if (hb) { a -= Math.sign(vf) * 8.5 * surf; brakingOnly = true; }
+      if (hb) { a -= Math.sign(vf) * Math.min(5.5, d.mu * G * 0.48) * surf; brakingOnly = true; }
     }
     const before = vf;
     vf += a * dt;
@@ -591,27 +595,39 @@ export class Vehicle {
     const parked = (!occupied || hb || Math.abs(thr) < 0.02) && Math.hypot(vf, vl) < 0.7 && slope < 0.32;
     if (parked) { vf = 0; vl = 0; } else if (grounded) { vf += G * (n.x * hx + n.z * hz) * dt; vl += G * (n.x * hz - n.z * hx) * dt; }
 
-    // Tyre grip caps how much sideways speed can be removed each step.
-    if (grounded) {
-      const mu = d.mu * surf * (hb ? 0.34 : 1) * (this.stallFromWater ? 0.5 : 1);
-      const cap = mu * G * dt;
-      vl = Math.abs(vl) <= cap ? 0 : vl - Math.sign(vl) * cap;
-    }
-    this.skid = grounded ? clamp((Math.abs(vl) - 1) / 4, 0, 1) * (Math.abs(vf) > 3 ? 1 : 0) : 0;
-
-    // Steering (Ackermann bicycle model), softer at speed.
-    const steerMax = d.steerMax / (1 + Math.pow(Math.abs(vf) / 15, 1.3));
+    // Front and rear tyre forces are independent. Rear-axle lock and
+    // power oversteer can initiate a slide; countersteer restores balance.
+    const steerMax = d.steerMax / (1 + Math.pow(Math.abs(vf) / (d.driftTune ? 26 : 18), 1.2));
     const target = clamp(ctl.steer, -1, 1) * steerMax;
-    this.steer += (target - this.steer) * (1 - Math.exp(-(Math.abs(target) > Math.abs(this.steer) ? 7 : 11) * dt));
-    // Tyres cannot turn the car faster than grip allows (understeer instead of spinning);
-    // the handbrake unloads the rear axle so the tail can swing round.
-    const gripYaw = (d.mu * surf * G * (hb ? 1.7 : 1.05)) / Math.max(Math.abs(vf), 4);
-    const yawRate = grounded ? clamp(vf * Math.tan(this.steer) / this.wb * (hb && Math.abs(vf) > 6 ? 1.4 : 1), -Math.min(2.4, gripYaw), Math.min(2.4, gripYaw)) : 0;
+    this.steer = damp(this.steer, target, Math.abs(target) > Math.abs(this.steer) ? 7 : 11, dt);
+    const powerSlide = d.driftTune && thr > 0.65 && Math.abs(vf) > 8 && (Math.abs(this.steer) > 0.07 || Math.abs(vl) > 1.5);
+    const rearTarget = hb ? 0.16 : powerSlide ? 0.56 : 1;
+    this.rearGrip = damp(this.rearGrip ?? 1, rearTarget, hb ? 18 : 4.5, dt);
+    let yawRate = this.carYawRate ?? 0;
+    if (grounded && !parked) {
+      const lf = this.wb * 0.48, lr = this.wb - lf;
+      const normalLoad = clamp(0.5 - a * 0.5 / (this.wb * G), 0.3, 0.7);
+      const mu = d.mu * surf * (1 + (d.aero ?? 0) * Math.pow(Math.abs(vf) / 50, 2)) * (this.stallFromWater ? 0.5 : 1);
+      const slipSpeed = Math.max(Math.abs(vf), 3);
+      const frontSlip = Math.atan2(vl + yawRate * lf, slipSpeed) + this.steer * Math.sign(vf);
+      const rearSlip = Math.atan2(vl - yawRate * lr, slipSpeed);
+      const frontForce = clamp(-26 * frontSlip, -mu * G * normalLoad, mu * G * normalLoad);
+      const rearCap = mu * G * (1 - normalLoad) * (d.rearGrip ?? 1) * this.rearGrip;
+      const rearForce = clamp(-28 * rearSlip, -rearCap, rearCap);
+      const oldLateral = vl;
+      vl += (frontForce + rearForce) * dt;
+      // Coasting straight tyres must settle instead of oscillating around zero.
+      if (Math.abs(this.steer) < 0.001 && Math.abs(yawRate) < 0.01 && oldLateral * vl < 0) vl = 0;
+      const inertia = (this.wb * this.wb + this.track * this.track) / 12 + 0.6;
+      yawRate = clamp(yawRate + (lf * frontForce - lr * rearForce) / inertia * dt, -2.4, 2.4);
+      if (Math.abs(vf) < 3) yawRate = damp(yawRate, -vf * Math.tan(this.steer) / this.wb, 12, dt);
+    } else yawRate = damp(yawRate, 0, 10, dt);
+    this.carYawRate = yawRate;
 
     // Rebuild the velocity from the heading it had, then turn the car.
     this.vel.x = hx * vf + hz * vl;
     this.vel.z = hz * vf - hx * vl;
-    this.heading -= yawRate * dt;
+    this.heading += yawRate * dt;
     p.x += this.vel.x * dt; p.z += this.vel.z * dt;
     const lim = world.limit ?? 2650;
     p.x = clamp(p.x, -lim, lim); p.z = clamp(p.z, -lim, lim);
@@ -664,7 +680,12 @@ export class Vehicle {
       p.y = targetY;
     }
     // Body attitude: terrain, plus squat/dive and body roll from load transfer.
-    const aLat = this.carVf * yawRate;
+    const lateral = this.vel.x * hz2 - this.vel.z * hx2;
+    this.driftAngle = Math.atan2(lateral, Math.max(Math.abs(this.carVf), 0.1));
+    this.drifting = grounded && onRoad && this.carVf > 7 && Math.abs(this.driftAngle) > 0.12 && Math.abs(lateral) > 1.5;
+    this.driftTime = this.drifting ? (this.driftTime ?? 0) + dt : 0;
+    this.skid = grounded && this.speed > 3 ? clamp((Math.abs(lateral) - 0.6) / 4, 0, 1) : 0;
+    const aLat = -this.carVf * yawRate;
     const pitchT = -Math.atan2((fl + fr) / 2 - (rl + rr) / 2, this.wb) - a * 0.005;
     const rollT = Math.atan2((fl + rl) / 2 - (fr + rr) / 2, this.track) - aLat * 0.008;
     const k = 1 - Math.exp(-9 * dt);

@@ -115,7 +115,7 @@ function floatTargetWorks(renderer) {
 }
 
 export class PostFX {
-  constructor(renderer, scene, camera, { quality = 'high' } = {}) {
+  constructor(renderer, scene, camera, { quality = 'high', render4k = false } = {}) {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
@@ -127,8 +127,12 @@ export class PostFX {
     if (!this.enabled) return;
     const size = renderer.getSize(new THREE.Vector2());
     const dpr = renderer.getPixelRatio();
-    const rt = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, { type: THREE.HalfFloatType, samples: renderer.capabilities.isWebGL2 && quality === 'high' ? 4 : 0 });
+    const rt = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, { type: THREE.HalfFloatType, samples: renderer.capabilities.isWebGL2 && quality === 'high' && !render4k ? 4 : 0 });
     this.composer = new EffectComposer(renderer, rt);
+    // A supplied target is already in physical pixels. Reset the composer's
+    // logical size before adding passes to avoid a second DPR multiplication.
+    this.composer.setSize(size.x, size.y);
+    this.pixelRatio = dpr;
     this.renderPass = new RenderPass(scene, camera);
     this.composer.addPass(this.renderPass);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.42, 0.55, 0.92);
@@ -146,6 +150,8 @@ export class PostFX {
 
   setSize(w, h) {
     if (!this.enabled) return;
+    const dpr = this.renderer.getPixelRatio();
+    if (dpr !== this.pixelRatio) { this.composer.setPixelRatio(dpr); this.pixelRatio = dpr; }
     this.composer.setSize(w, h);
     this.grade.uniforms.uRes.value.set(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
   }

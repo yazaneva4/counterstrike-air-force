@@ -3,6 +3,7 @@
 // loading, pause/settings, chat, and the main loop.
 
 import * as THREE from 'three';
+import { renderPlan } from './core/resolution.js';
 import { Input } from './core/input.js';
 import { AudioEngine } from './core/audio.js';
 import { createEarth } from './space/globe.js';
@@ -33,6 +34,7 @@ Object.defineProperty(settings, 'saved', { value: null, writable: true, enumerab
 const cloudReady = cloud.load(settings, 4000).then((s) => { settings.saved = s || cloud.last; return s; });
 
 function resolveQuality() {
+  if (settings.quality === '4k') return 'high';
   if (settings.quality !== 'auto') return settings.quality;
   const mobile = isTouch() && Math.min(screen.width, screen.height) < 900;
   return mobile ? 'low' : (navigator.hardwareConcurrency || 4) >= 8 ? 'high' : 'medium';
@@ -50,8 +52,17 @@ try {
   $('#startBtn').disabled = true;
   $('#webglNote').textContent = 'This browser could not start 3D graphics. Please open the game in a browser with WebGL enabled.';
 }
-const pixelRatio = () => Math.min(devicePixelRatio || 1, { high: 1.75, medium: 1.35, low: 1 }[resolveQuality()] || 1.35);
-if (renderer) { renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight); }
+function applyResolution(scale = 1) {
+  const ctx = renderer.getContext();
+  const maxDimension = Math.min(renderer.capabilities.maxTextureSize, ctx.getParameter(ctx.MAX_RENDERBUFFER_SIZE));
+  const plan = renderPlan(innerWidth, innerHeight, { quality: settings.quality === '4k' ? '4k' : resolveQuality(), dpr: devicePixelRatio || 1, scale, maxDimension });
+  renderer.setPixelRatio(plan.pixelRatio);
+  renderer.setSize(innerWidth, innerHeight);
+  const note = $('#resolutionNote');
+  if (note) note.textContent = settings.quality === '4k' ? `${plan.width} × ${plan.height} · fixed resolution${plan.limited ? ' · limited by this GPU' : ''}` : 'Adaptive resolution keeps movement smooth';
+  return plan;
+}
+if (renderer) applyResolution();
 
 const input = new Input(canvas);
 const audio = new AudioEngine();
@@ -121,6 +132,7 @@ function segmented(el, key, values) {
   el.innerHTML = values.map(([v, label]) => `<button type="button" data-v="${v}" class="${settings[key] === v ? 'on' : ''}">${label}</button>`).join('');
   el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
     settings[key] = b.dataset.v; save(); audio.init(); audio.click();
+    if (key === 'quality' && renderer && !game?.running) { applyResolution(); layoutMenuCamera(); }
     el.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
   }));
 }
@@ -142,9 +154,9 @@ function buildMenu() {
     settings.profile.skin = +b.dataset.i; save(); audio.init(); audio.click();
     sk.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
   }));
-  segmented($('#spawnSel'), 'spawn', [['airbase', 'Airbase'], ['spaceport', 'Spaceport'], ['village', 'Village'], ['beach', 'Beach'], ['farm', 'Farm']]);
+  segmented($('#spawnSel'), 'spawn', [['airbase', 'Airbase'], ['spaceport', 'Spaceport'], ['village', 'Village'], ['beach', 'Beach'], ['farm', 'Farm'], ['motorsport', 'Race paddock']]);
   segmented($('#timeSel'), 'time', [['live', 'Real time'], ['dawn', 'Dawn'], ['day', 'Day'], ['sunset', 'Sunset'], ['night', 'Night']]);
-  segmented($('#qualitySel'), 'quality', [['auto', 'Auto'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]);
+  segmented($('#qualitySel'), 'quality', [['auto', 'Auto'], ['4k', '4K Ultra'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]);
   $('#hostBtn').onclick = () => { audio.init(); pendingRoom = { host: true }; $('#roomStatus').textContent = 'A room will open when you enter the island'; $('#roomCode').value = ''; };
   $('#joinBtn').onclick = () => {
     audio.init();
@@ -195,9 +207,9 @@ async function startGame() {
   $('#loading').classList.add('on');
   settings.quality = settings.quality || 'auto';
   const q = resolveQuality();
-  renderer.setPixelRatio(pixelRatio());
-  renderer.setSize(innerWidth, innerHeight);
-  game = new Game({ renderer, input, audio, settings: { ...settings, saved: settings.saved, quality: q, get sensitivity() { return settings.sensitivity; }, get invertY() { return settings.invertY; } } });
+  perf.scale = 1;
+  applyResolution();
+  game = new Game({ renderer, input, audio, settings: { ...settings, saved: settings.saved, quality: q, render4k: settings.quality === '4k', get sensitivity() { return settings.sensitivity; }, get invertY() { return settings.invertY; } } });
   try {
     await game.build((f, label) => {
       $('#loadBar').style.width = Math.round(f * 100) + '%';
@@ -297,6 +309,7 @@ function bindPause() {
 // ---- Adaptive resolution: trade pixels for a steady frame rate. ----------------------------
 const perf = { acc: 0, n: 0, scale: 1, cooldown: 4 };
 function adaptResolution(rawDt) {
+  if (settings.quality === '4k') return;
   perf.acc += rawDt; perf.n++;
   perf.cooldown -= rawDt;
   if (perf.acc < 2) return;
@@ -309,8 +322,7 @@ function adaptResolution(rawDt) {
   if (next !== perf.scale) {
     perf.scale = next;
     perf.cooldown = 3;
-    renderer.setPixelRatio(pixelRatio() * perf.scale);
-    renderer.setSize(innerWidth, innerHeight);
+    applyResolution(perf.scale);
     game?.resize(innerWidth, innerHeight);
   }
 }
@@ -336,8 +348,7 @@ function loop(now) {
 
 addEventListener('resize', () => {
   if (!renderer) return;
-  renderer.setPixelRatio(pixelRatio() * perf.scale);
-  renderer.setSize(innerWidth, innerHeight);
+  applyResolution(perf.scale);
   layoutMenuCamera();
   game?.resize(innerWidth, innerHeight);
 });

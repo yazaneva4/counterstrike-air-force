@@ -90,6 +90,11 @@ const SPECS = {
   },
 };
 
+// Two motorsport builds share the coupe shell, with their own chassis,
+// tyres, aero, cockpit and livery.
+SPECS.gtr = { ...SPECS.gt, name: 'Vanguard GT-R', track: 1.8, tyreW: 0.315, clearance: 0.09, tag: 'GT-R 27', race: true, number: '27', accent: '#dc3d28', wing: true, eye: [0.42, 0.68, -0.16] };
+SPECS.drift = { ...SPECS.gt, name: 'Vanguard D-Spec', track: 1.76, tyreW: 0.265, clearance: 0.12, tag: 'D-SPEC 86', race: true, number: '86', accent: '#24bfc2', wing: true, eye: [0.42, 0.68, -0.16] };
+
 export const CAR_TYPES = Object.keys(SPECS);
 export const CAR_NAMES = Object.fromEntries(CAR_TYPES.map((k) => [k, SPECS[k].name]));
 
@@ -107,6 +112,15 @@ function paintMaps(type, color) {
     const g = c.createLinearGradient(0, 0, w, 0);
     g.addColorStop(0, 'rgba(0,0,0,0.28)'); g.addColorStop(0.25, 'rgba(0,0,0,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.1)'); g.addColorStop(0.75, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.28)');
     c.fillStyle = g; c.fillRect(0, 0, w, h);
+    if (S.race) {
+      // Painted stripes and large door numbers follow the loft UVs.
+      for (const u of [0.445, 0.515]) { c.fillStyle = S.accent; LV.rect(c, u, 0.015, u + 0.04, 0.99, w, h); }
+      for (const u of [0.25, 0.75]) {
+        c.fillStyle = '#f5f3ee'; LV.rect(c, u - 0.065, 0.39, u + 0.065, 0.55, w, h);
+        c.fillStyle = '#111519'; c.font = 'bold 108px Arial'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText(S.number, u * w, 0.53 * h);
+      }
+    }
     // Plastic sills and bumper skirts.
     c.fillStyle = '#1a1b1d'; LV.rect(c, 0, 0, 0.13, 1, w, h); LV.rect(c, 0.87, 0, 1, 1, w, h);
     LV.rect(c, 0, 0, 1, 0.012, w, h); LV.rect(c, 0, 0.988, 1, 1, w, h);
@@ -259,7 +273,7 @@ function pilot(seed = 9) {
 export function buildCar(type = 'sedan', { color = CAR_COLORS[0] } = {}) {
   const S = SPECS[type];
   const g = new THREE.Group();
-  const style = type === 'gt' ? 'gt' : type === 'jeep' || type === 'pickup' ? 'off' : 'std';
+  const style = type === 'gt' || S.race ? 'gt' : type === 'jeep' || type === 'pickup' ? 'off' : 'std';
   const maps = once(`paint:${type}:${color}`, () => paintMaps(type, color));
   const mats = once(`mats:${type}:${color}`, () => ({
     paint: new THREE.MeshPhysicalMaterial({ map: maps.body.map, normalMap: maps.body.normalMap, roughnessMap: maps.body.roughnessMap, roughness: 1, metalness: 0.22, clearcoat: 1, clearcoatRoughness: 0.14, envMapIntensity: 1 }),
@@ -330,7 +344,7 @@ export function buildCar(type = 'sedan', { color = CAR_COLORS[0] } = {}) {
   for (const [zi, front] of [[S.wb / 2, true], [-S.wb / 2, false]]) for (const sd of [1, -1]) {
     const wl = buildWheel(S, style, sd);
     const pivot = new THREE.Group();
-    pivot.position.set(sd * (S.lower[Math.floor(S.lower.length / 2)][1] - 0.07), 0, zi);
+    pivot.position.set(sd * S.track / 2, 0, zi);
     pivot.add(wl.outer);
     g.add(pivot);
     wheels.push({ spin: wl.spin, side: sd, front });
@@ -369,6 +383,34 @@ export function buildCar(type = 'sedan', { color = CAR_COLORS[0] } = {}) {
     add(g, new THREE.BoxGeometry(1.5, 0.05, 0.05), chrome, 0, 0.05, zMax + 0.12);
     for (const sd of [1, -1]) add(g, new THREE.BoxGeometry(0.05, 0.4, 0.05), chrome, sd * 0.7, 0.2, zMax + 0.1);
   }
+  if (S.race) {
+    const carbon = once('raceCarbon', () => stdMat(0x16181a, { rough: 0.5, metal: 0.15 }));
+    // Splitter, side skirts, rear diffuser and a high, end-plated wing.
+    add(g, new THREE.BoxGeometry(2.08, 0.035, 0.48), carbon, 0, -S.wheelR + S.clearance, zMax - 0.13);
+    for (const side of [-1, 1]) {
+      add(g, new THREE.BoxGeometry(0.11, 0.07, 2.6), carbon, side * 1.02, -S.wheelR + S.clearance + 0.03, 0);
+      add(g, new THREE.BoxGeometry(0.045, 0.35, 0.05), carbon, side * 0.65, 0.65, zMin + 0.3);
+      add(g, new THREE.BoxGeometry(0.025, 0.2, 0.43), carbon, side * 1.04, 0.9, zMin + 0.3);
+    }
+    add(g, new THREE.BoxGeometry(2.08, 0.045, 0.42), carbon, 0, 0.85, zMin + 0.3, -0.08);
+    for (const side of [-1, 1]) for (const z of [-S.wb / 2, S.wb / 2]) {
+      const flare = add(g, new THREE.TorusGeometry(S.wheelR * 1.14, 0.048, 8, 32, Math.PI), paint, side * 1.01, 0, z);
+      flare.rotation.set(0, side * Math.PI / 2, 0);
+    }
+    const cage = once('cageMat', () => stdMat(0xb5b7b8, { rough: 0.42, metal: 0.65 }));
+    const tube = (a, b) => {
+      const start = new THREE.Vector3(...a), end = new THREE.Vector3(...b), direction = end.clone().sub(start);
+      const mesh = add(g, new THREE.CylinderGeometry(0.026, 0.026, direction.length(), 10), cage);
+      mesh.position.copy(start.add(end).multiplyScalar(0.5));
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+    };
+    for (const side of [-1, 1]) {
+      tube([side * 0.65, -0.12, -0.65], [side * 0.63, 0.8, -0.62]);
+      tube([side * 0.63, 0.8, -0.62], [side * 0.6, 0.72, 0.56]);
+    }
+    tube([-0.63, 0.8, -0.62], [0.63, 0.8, -0.62]);
+    tube([-0.65, -0.12, -0.65], [0.63, 0.8, -0.62]);
+  }
   // Interior: seats, dash and a steering wheel so the cabin reads through glass.
   const [sx, sy, sz] = S.seat;
   const seatMat = stdMat(0x24262a, { rough: 0.9 });
@@ -377,6 +419,19 @@ export function buildCar(type = 'sedan', { color = CAR_COLORS[0] } = {}) {
     add(g, new THREE.BoxGeometry(0.42, 0.55, 0.12), seatMat, sd * sx, sy + 0.5, sz - 0.32, -0.2, 0, 0);
   }
   add(g, new THREE.BoxGeometry(1.5, 0.22, 0.4), seatMat, 0, sy + 0.34, sz + 0.75);
+  const instruments = new THREE.MeshBasicMaterial({ map: once('dashGauges', () => canvasTexture(512, 256, (ctx, w, h) => {
+    ctx.fillStyle = '#15191a'; ctx.fillRect(0, 0, w, h);
+    for (const x of [w * 0.3, w * 0.7]) {
+      ctx.strokeStyle = '#c6c5bc'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, h * 0.5, 75, Math.PI * 0.7, Math.PI * 2.3); ctx.stroke();
+      for (let i = 0; i < 10; i++) { const a = Math.PI * (0.7 + i / 9 * 1.6); ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * 62, h * 0.5 + Math.sin(a) * 62); ctx.lineTo(x + Math.cos(a) * 72, h * 0.5 + Math.sin(a) * 72); ctx.stroke(); }
+      ctx.strokeStyle = '#bf4333'; ctx.beginPath(); ctx.moveTo(x, h * 0.5); ctx.lineTo(x - 40, h * 0.5 + 36); ctx.stroke();
+    }
+  })) });
+  add(g, new THREE.PlaneGeometry(0.42, 0.21), instruments, sx, sy + 0.49, sz + 0.58, 0, Math.PI);
+  if (S.race) for (const side of [-1, 1]) {
+    add(g, new THREE.BoxGeometry(0.24, 0.16, 0.12), seatMat, side * sx, sy + 0.81, sz - 0.32);
+    for (const strap of [-0.095, 0.095]) add(g, new THREE.BoxGeometry(0.038, 0.46, 0.025), stdMat(0xad2924, { rough: 0.9 }), side * sx + strap, sy + 0.49, sz - 0.245);
+  }
   const wheel = add(g, new THREE.TorusGeometry(0.17, 0.02, 8, 24), dark, sx, sy + 0.5, sz + 0.52, -0.6, 0, 0);
   const drv = pilot(type.length * 13);
   drv.root.scale.setScalar(0.94);

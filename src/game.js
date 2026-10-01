@@ -4,6 +4,7 @@
 // the player is: 'earth' (the island), 'space', 'moon' or 'mars'.
 
 import * as THREE from 'three';
+import { SkidMarks } from './fx/skidmarks.js';
 import { Terrain, PLACES } from './world/terrain.js';
 import { Structures, RUNWAY } from './world/structures.js';
 import { Vegetation } from './world/vegetation.js';
@@ -93,7 +94,7 @@ export class Game {
     const shadows = q !== 'low';
     this.renderer.shadowMap.enabled = shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.sky = new SkySystem(this.scene, { shadowSize: q === 'high' ? 2048 : 1024, shadows });
+    this.sky = new SkySystem(this.scene, { shadowSize: this.settings.render4k ? 4096 : q === 'high' ? 2048 : 1024, shadows });
     this.ocean = new Ocean(this.terrain.heightTexture(512));
     this.scene.add(this.ocean.mesh);
     this.clouds = new Clouds({ count: q === 'low' ? 26 : 46 });
@@ -139,6 +140,7 @@ export class Game {
     await step(0.88, 'Preparing orbit');
     this.fx = { sparks: new Particles(3500), smoke: new Particles(3200, { additive: false }) };
     this.scene.add(this.fx.sparks.points, this.fx.smoke.points);
+    this.skidMarks = new SkidMarks(this.scene);
     this.space = new Space(this.renderer);
     this.space.active = false;
     this.boltGeo = new THREE.CapsuleGeometry(0.22, 5, 4, 8).rotateX(Math.PI / 2);
@@ -147,7 +149,7 @@ export class Game {
     this.ufoTrail = new Trail(this.scene, { length: 70, width: 1.6, color: 0x7dffd6, opacity: 0.5, additive: true, minStep: 4 });
 
     await step(0.95, 'Final checks');
-    this.post = new PostFX(this.renderer, this.scene, this.camera, { quality: q });
+    this.post = new PostFX(this.renderer, this.scene, this.camera, { quality: q, render4k: !!this.settings.render4k });
     this.hasEnv = this.post.hdrSupported && q !== 'low';
     if (this.hasEnv) {
       // Reflection/ambient probe: the same sky without the blinding sun disk,
@@ -169,6 +171,13 @@ export class Game {
       skyCopy.scale.setScalar(80);
       this.envScene.add(skyCopy);
     }
+    // Preserve oblique texture detail on roads, buildings and car panels.
+    const anisotropy = Math.min(this.renderer.capabilities.getMaxAnisotropy(), q === 'high' ? 16 : 4);
+    this.scene.traverse(o => {
+      for (const m of [o.material].flat()) for (const key of ['map', 'normalMap', 'roughnessMap', 'alphaMap']) {
+        if (m?.[key]?.isTexture) { m[key].anisotropy = anisotropy; m[key].needsUpdate = true; }
+      }
+    });
     this.player = new Player(this, this.settings.profile);
     this.scene.add(this.player.root);
     this.islandWorld = W;
@@ -184,6 +193,7 @@ export class Game {
   _parkCars() {
     const S = this.structures, sp = S.spawns, P = PLACES, C = P.spaceport;
     const list = [
+      ['gtr', 80, 590, 0, 2], ['drift', 96, 590, 0, 3],
       ['pickup', 60, 590, Math.PI / 2, 2], ['jeep', -262, 592, -Math.PI / 2, 5],
       ['sedan', sp.village.x + 30, sp.village.z + 8, 0.4, 0], ['gt', sp.village.x - 26, sp.village.z + 34, -0.6, 6],
       ['pickup', sp.farm.x + 12, sp.farm.z + 10, 1.2, 3], ['jeep', sp.beach.x + 20, sp.beach.z - 24, 2.5, 7],
@@ -238,6 +248,10 @@ export class Game {
       beach: { x: S.beach.x, z: S.beach.z, h: Math.PI }, farm: { x: S.farm.x, z: S.farm.z, h: 0 },
       spaceport: { x: S.spaceport.x, z: S.spaceport.z, h: S.spaceport.heading },
     }[spawn] || { x: -150, z: 590, h: 0 };
+    if (spawn === 'motorsport') {
+      const race = this.vehicles.find(v => v.type === 'gtr');
+      if (race) { where.x = race.home.x; where.z = race.home.z - 4.5; where.h = race.home.heading; }
+    }
     this.player.spawnAt(where, where.h);
     this.player.camPos.set(where.x, this.world.groundAt(where.x, where.z) + 60, where.z - 40);
     this.running = true;
@@ -633,6 +647,7 @@ export class Game {
       const res = v.update(dt, v === p.vehicle ? p.ctl : null, this.world);
       if (res) this._vehicleEvent(v, res);
     }
+    if (p.vehicle && p.mode === 'vehicle') p._vehicleCamera(dt);
     this._rocketFx(dt);
     if (p.mode === 'dead') p.deadCamera(dt, t);
     const cam = this.camera;
@@ -702,6 +717,7 @@ export class Game {
       const res = v.update(dt, v === p.vehicle ? p.ctl : null, this.world);
       if (res) this._vehicleEvent(v, res);
     }
+    if (p.vehicle && p.mode === 'vehicle') p._vehicleCamera(dt);
     this._rocketFx(dt);
     if (p.mode === 'dead') p.deadCamera(dt, t);
     if (this.debugCam) { this.camera.position.copy(this.debugCam.pos); this.camera.up.set(0, 1, 0); this.camera.lookAt(this.debugCam.look); }
@@ -752,6 +768,8 @@ export class Game {
     this.traffic.update(dt, t, this.sky.night, this.focusPos(), this.vehicles);
     this._updateBolts(dt);
     this._trails(dt);
+    this.skidMarks.update(dt, p.mode === 'vehicle' ? p.vehicle : null, this.world);
+    this._driftFx(dt);
     this.fx.sparks.update(dt); this.fx.smoke.update(dt);
     this.fx.sparks.setPixelScale(innerHeight * this.renderer.getPixelRatio());
     this.fx.smoke.setPixelScale(innerHeight * this.renderer.getPixelRatio());
@@ -807,6 +825,23 @@ export class Game {
       this.ufoTrail.push(this.ufo.pos, up);
       this.ufoTrail.update(clamp(this.ufo.speed / 60, 0, 1));
     } else { this.ufoTrail.clear(); this.ufoTrail.update(0); }
+  }
+
+  _driftFx(dt) {
+    const v = this.player.vehicle;
+    if (!v || v.kind !== 'car' || !v.onGround || v.skid < 0.15 || v.speed < 6) { this.tyreSmoke = 0; return; }
+    const road = this.world.structures.roadAt(v.pos.x, v.pos.z);
+    const intensity = road ? v.skid * (1 - (this.world.wetness ?? 0)) : Math.min(1, v.speed / 20);
+    this.tyreSmoke = (this.tyreSmoke || 0) + dt * 22 * intensity;
+    const count = Math.floor(this.tyreSmoke); this.tyreSmoke -= count;
+    const hx = Math.sin(v.heading), hz = Math.cos(v.heading);
+    for (let k = 0; k < count; k++) for (const side of [-1, 1]) {
+      const x = v.pos.x - hx * v.wb / 2 + hz * side * v.track / 2;
+      const z = v.pos.z - hz * v.wb / 2 - hx * side * v.track / 2;
+      this.fx.smoke.emit(x, this.world.groundAt(x, z) + 0.16, z,
+        v.vel.x * 0.12 + (Math.random() - 0.5), 0.5 + Math.random() * 0.6, v.vel.z * 0.12 + (Math.random() - 0.5),
+        { color: road ? 0xbfc0bd : 0x9c8969, size: 0.28, grow: 1.2, life: 1.3, drag: 1.5, intensity: 0.7 });
+    }
   }
 
   _audio(dt) {

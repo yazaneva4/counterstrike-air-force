@@ -365,7 +365,7 @@ export class HUD {
   // Speedometer, gear, rev bar and status lamps for road vehicles.
   _carHud(c, v, W, H, d, col, dim) {
     const R = Math.min(W, H) * 0.115, cx = W * 0.5, cy = H - R * 1.25;
-    const kmh = Math.abs(v.carVf) * 3.6, top = Math.ceil(v.def.maxSpeed * 3.6 * 1.12 / 20) * 20;
+    const kmh = v.speed * 3.6, top = Math.ceil(v.def.maxSpeed * 3.6 * 1.12 / 20) * 20;
     const A0 = Math.PI * 0.75, SW = Math.PI * 1.5;
     c.save();
     c.fillStyle = 'rgba(6,20,26,0.55)'; c.beginPath(); c.arc(cx, cy, R * 1.12, 0, Math.PI * 2); c.fill();
@@ -391,7 +391,7 @@ export class HUD {
     // Status lamps.
     const lamp = (x, txt, on, colr) => { c.font = `700 ${11 * d}px 'DM Mono', monospace`; c.fillStyle = on ? colr : 'rgba(170,255,225,0.25)'; c.fillText(txt, x, cy - R * 0.9); };
     lamp(cx - R * 0.5, 'LIGHTS', v.lights, '#ffe08a'); lamp(cx + R * 0.5, 'BRAKE', v.braking, '#ff6a5a');
-    if (v.skid > 0.3) { c.fillStyle = '#ffb45a'; c.font = `700 ${11 * d}px 'DM Mono', monospace`; c.fillText('SLIDE', cx, cy - R * 1.25); }
+    if (v.skid > 0.3) { c.fillStyle = '#ffb45a'; c.font = `700 ${11 * d}px 'DM Mono', monospace`; c.fillText(v.drifting ? 'DRIFT ' + Math.round(Math.abs(v.driftAngle) * 180 / Math.PI) + '° · ' + v.driftTime.toFixed(1) + 's' : 'TYRE SLIP', cx, cy - R * 1.25); }
     c.font = `500 ${11 * d}px 'DM Mono', monospace`; c.fillStyle = dim;
     c.fillText('W/S THROTTLE · A/D STEER · SPACE HANDBRAKE · L LIGHTS · B HORN', cx, cy + R * 1.42);
     c.restore();

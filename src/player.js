@@ -90,9 +90,14 @@ export class Player {
     if (this.mode === 'dead') return;
     this.cockpit = !this.cockpit;
     this.game.hud.toast(this.cockpit ? 'First-person view · V to switch' : 'Third-person view · V to switch', 2);
-    this.game.camera.near = this.cockpit ? 0.08 : 0.3;
+    this.game.camera.near = this.cockpit ? 0.05 : 0.3;
     this.game.camera.updateProjectionMatrix();
-    if (this.vehicle) this.vehicle.hidePilot = this.cockpit;
+    if (this.vehicle) {
+      this.vehicle.hidePilot = this.cockpit;
+      if (this.vehicle.parts.pilot) this.vehicle.parts.pilot.root.visible = !this.cockpit;
+      this.lookYaw = 0; this.lookPitch = 0;
+      this._vehicleCamera(1);
+    }
     if (this.mode === 'foot' || this.mode === 'chute' || this.mode === 'fall') this._footCamera(1);
   }
 
@@ -117,7 +122,7 @@ export class Player {
     const look = I.consumeLook();
     const sens = 0.0024 * S.sensitivity * scale;
     this.camYaw -= look.dx * sens;
-    this.camPitch = clamp(this.camPitch - look.dy * sens * (S.invertY ? -1 : 1), -1.25, 0.95);
+    this.camPitch = clamp(this.camPitch - look.dy * sens * (S.invertY ? -1 : 1), this.cockpit ? -1.48 : -1.25, this.cockpit ? 1.48 : 0.95);
     return look;
   }
 
@@ -125,7 +130,7 @@ export class Player {
     const G = this.game, I = G.input, W = G.world;
     this._look(dt);
     const wheel = I.consumeWheel();
-    this.camDist = clamp(this.camDist + wheel * 0.7, 2.4, 16);
+    if (!this.cockpit) this.camDist = clamp(this.camDist + wheel * 0.7, 2.4, 16);
     const mv = I.moveAxes();
     const sprint = I.down('ShiftLeft') || I.down('ShiftRight') || I.tdown('boost');
     const fx = Math.sin(this.camYaw), fz = Math.cos(this.camYaw);
@@ -222,6 +227,10 @@ export class Player {
     this.mode = 'vehicle';
     this.root.visible = false;
     this.stick.x = this.stick.y = 0;
+    this.lookYaw = this.lookPitch = 0;
+    G.camera.near = this.cockpit ? 0.05 : 0.3;
+    G.camera.updateProjectionMatrix();
+    this.camPos.copy(v.pos);
     this.camYaw = v.headingAngle();
     if (v.kind === 'plane') v.throttle = Math.max(v.throttle, 0);
     G.hud.prompt(null);
@@ -270,9 +279,11 @@ export class Player {
     const up = (I.down('Space') || (lift && I.down('ArrowUp')) || I.tdown('up')) ? 1 : 0;
     const down = (I.down('KeyC') || (lift && I.down('ArrowDown')) || I.down('ControlLeft') || I.tdown('down')) ? 1 : 0;
     const boost = I.down('ShiftLeft') || I.down('ShiftRight') || I.tdown('boost');
-    const freeLook = I.mouseRight;
+    const freeLook = I.mouseRight || (this.cockpit && v.kind === 'car');
     if (freeLook) {
-      this.lookYaw -= look.dx * 0.004; this.lookPitch = clamp(this.lookPitch - look.dy * 0.004, -1, 0.6);
+      const sens = 0.0024 * S.sensitivity;
+      this.lookYaw = clamp(this.lookYaw - look.dx * sens, -1.5, 1.5);
+      this.lookPitch = clamp(this.lookPitch - look.dy * sens * (S.invertY ? -1 : 1), -0.9, 0.85);
     } else {
       this.lookYaw = damp(this.lookYaw, 0, 3, dt); this.lookPitch = damp(this.lookPitch, 0, 3, dt);
     }
@@ -329,8 +340,8 @@ export class Player {
     }
     if (G.space.active) return;
     if (I.hit('KeyF') || I.thit('veh')) this.exitVehicle();
-    if (this.vehicle) this._vehicleCamera(dt);
-    else this._footCamera(dt);
+    // The game places the vehicle camera after chassis physics and suspension.
+    if (!this.vehicle) this._footCamera(dt);
   }
 
   _chute(dt) {
@@ -383,11 +394,19 @@ export class Player {
       // Small gait-linked head motion, in centimetres.
       pivot.y += Math.sin(this.human.phase * 2) * 0.015 * clamp(this.human.speed / 1.65, 0, 1);
     }
+    // A helmet, hair or neck must never cover the first-person lens.
     this.root.visible = !this.cockpit && ['foot', 'chute', 'fall'].includes(this.mode);
+    cam.near = this.cockpit ? 0.05 : 0.3;
     const dist = this.camDist + extra;
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
     const dx = Math.sin(this.camYaw) * cp, dz = Math.cos(this.camYaw) * cp;
     if (this.cockpit) {
+      // Keep the eyes clear of a low wall even when the body has already
+      // resolved its waist-height collision.
+      const eyes = pivot.clone();
+      W.structures.collide(eyes, 0.12, eyes.y);
+      if (eyes.distanceToSquared(pivot) < 0.36) pivot.copy(eyes);
+      pivot.y = Math.max(pivot.y, W.groundAt(pivot.x, pivot.z) + 0.12);
       cam.position.copy(pivot);
       this.camPos.copy(pivot);
       cam.up.set(0, 1, 0);
@@ -423,9 +442,11 @@ export class Player {
   _vehicleCamera(dt) {
     const G = this.game, cam = G.camera, v = this.vehicle, W = G.world;
     const fwd = tv.copy(Z).applyQuaternion(v.quat);
+    cam.near = this.cockpit ? 0.05 : 0.3;
     if (this.cockpit) {
+      cam.up.set(0, 1, 0);
       const seat = v.kind === 'car' ? v.model.spec.eye : { jet: [0, 0.95, 3.4], nova: [0, 1.05, 0.2], prop: [0.3, 0.55, 0.8], heli: [-0.45, 0.4, 1.5], ufo: [0, 2.2, 0], ship: [0, 0.9, 9.4], rocket: [0, 57 + (v.parts.model?.position.y || 0), -1.3] }[v.type] || [0, 1, 0];
-      tv2.set(seat[0], seat[1], seat[2]).applyQuaternion(v.quat).add(v.pos);
+      tv2.set(seat[0], seat[1] + (v.kind === 'car' ? v.model.group.position.y : 0), seat[2]).applyQuaternion(v.quat).add(v.pos);
       cam.position.copy(tv2);
       tq.copy(v.quat).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(this.lookPitch, Math.PI + this.lookYaw, 0, 'YXZ')));
       cam.quaternion.copy(tq);
@@ -471,7 +492,7 @@ export class Player {
       look.y += v.camHeight * 0.3;
       cam.lookAt(look);
     }
-    const speedFov = clamp(v.speed / (v.kind === 'car' ? v.def.maxSpeed * 1.5 : 280), 0, 1) * (v.kind === 'car' ? 12 : 14) + (v.boosting && v.kind !== 'car' ? 6 : 0);
+    const speedFov = (this.cockpit && v.kind === 'car' ? 0 : clamp(v.speed / (v.kind === 'car' ? v.def.maxSpeed * 1.5 : 280), 0, 1) * (v.kind === 'car' ? 12 : 14) + (v.boosting && v.kind !== 'car' ? 6 : 0));
     this.fov = damp(this.fov, (this.cockpit ? 70 : 62) + speedFov, 2.5, dt);
     this._applyShake(cam);
   }
@@ -488,7 +509,7 @@ export class Player {
 
   _applyShake(cam) {
     if (this.shake <= 0) return;
-    const s = this.shake * this.shake * 0.6;
+    const s = this.shake * this.shake * (this.cockpit ? 0.08 : 0.6);
     cam.position.x += (Math.random() - 0.5) * s;
     cam.position.y += (Math.random() - 0.5) * s;
     cam.position.z += (Math.random() - 0.5) * s;

@@ -10,7 +10,7 @@ import { mulberry32 } from '../core/noise.js';
 import { CHARACTERS } from '../player.js';
 
 const builders = { jet: () => buildFighter({ color: 0x7a8a96 }), prop: () => buildProp({ stripe: 0x2a8a4a }), heli: () => buildHelicopter({ color: 0x2a6a4a }), ufo: () => buildSaucer({ glow: 0xffa86a }), nova: () => ({ group: buildNova().group, parts: {} }), rocket: () => buildRocket(), ship: () => buildShip(),
-  sedan: (c) => buildCar('sedan', { color: c }), gt: (c) => buildCar('gt', { color: c }), pickup: (c) => buildCar('pickup', { color: c }), jeep: (c) => buildCar('jeep', { color: c }) };
+  sedan: (c) => buildCar('sedan', { color: c }), gt: (c) => buildCar('gt', { color: c }), gtr: (c) => buildCar('gtr', { color: c }), drift: (c) => buildCar('drift', { color: c }), pickup: (c) => buildCar('pickup', { color: c }), jeep: (c) => buildCar('jeep', { color: c }) };
 const ROCKET_SIDEWAYS = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 
 export class RemotePlayer {
@@ -47,7 +47,7 @@ export class RemotePlayer {
     const key = type + ':' + color;
     if (this.vehicleKey === key) return;
     this.vehicleKey = key;
-    if (this.vehicleType === type && !/^(sedan|gt|pickup|jeep)$/.test(type)) return;
+    if (this.vehicleType === type && !/^(sedan|gt|gtr|drift|pickup|jeep)$/.test(type)) return;
     if (this.vehicle) this.scene.remove(this.vehicle.group);
     this.vehicle = null;
     this.vehicleType = type;
