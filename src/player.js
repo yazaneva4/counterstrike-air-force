@@ -95,7 +95,7 @@ export class Player {
     if (this.vehicle) {
       this.vehicle.hidePilot = this.cockpit;
       if (this.vehicle.parts.pilot) this.vehicle.parts.pilot.root.visible = !this.cockpit;
-      this.lookYaw = 0; this.lookPitch = 0;
+      this.lookYaw = 0; this.lookPitch = this.cockpit && this.vehicle.kind === 'car' ? 0.07 : 0;
       this._vehicleCamera(1);
     }
     if (this.mode === 'foot' || this.mode === 'chute' || this.mode === 'fall') this._footCamera(1);

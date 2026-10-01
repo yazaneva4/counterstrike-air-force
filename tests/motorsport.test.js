@@ -19,7 +19,7 @@ function car(type = 'drift', speed = 20) {
     id: 'test-car', kind: 'car', def: VEHICLE_DEFS[type], pos: new THREE.Vector3(0, 0.345, 0),
     vel: new THREE.Vector3(0, 0, speed), quat: new THREE.Quaternion(), heading: 0, wb: 2.68, track: 1.76,
     ground: 0.345, airborne: false, steer: 0, vy: 0, susp: 0, suspV: 0, tilt: { x: 0, z: 0 },
-    model: { group: new THREE.Group(), spec: { tyreW: 0.265, eye: [0.38, 0.9, -0.28] } },
+    model: { group: new THREE.Group(), spec: { tyreW: 0.265, eye: [0.42, 0.83, -0.34] } },
     gear: 1, shift: 0, rpm: 0, camDist: 8.5, camHeight: 2.4, parts: { pilot: { root: new THREE.Group() } },
   });
   return v;
@@ -75,10 +75,11 @@ test('car cockpit looks with the mouse, respects invert and follows the updated 
   p.lookPitch = 0; p.game.settings.invertY = true; p._drive(1 / 60); assert.ok(p.lookPitch < 0);
   p.lookYaw = p.lookPitch = 0; v.pos.set(12, 3, 40); v.model.group.position.y = 0.08;
   p._vehicleCamera(1 / 60);
-  assert.ok(p.game.camera.position.distanceTo(new THREE.Vector3(12.38, 3.98, 39.72)) < 1e-8);
+  assert.ok(p.game.camera.position.distanceTo(new THREE.Vector3(12.42, 3.91, 39.66)) < 1e-8);
   assert.ok(p.game.camera.getWorldDirection(new THREE.Vector3()).z > 0.99);
   assert.equal(v.parts.pilot.root.visible, false); assert.equal(p.game.camera.near, 0.05); assert.equal(p.fov, 70);
   p.toggleView(); assert.equal(v.parts.pilot.root.visible, true); assert.equal(p.game.camera.near, 0.3);
+  p.toggleView(); assert.equal(p.lookPitch, 0.07); assert.ok(p.game.camera.getWorldDirection(new THREE.Vector3()).y > 0);
 });
 test('invalid car inputs stay finite instead of poisoning vehicle telemetry', () => {
   const v = car('gtr');
