@@ -72,9 +72,9 @@ export class Weather {
     clouds.uniforms.uCover.value = clamp(0.1 + N.cloud * 0.95, 0.1, 1);
     clouds.uniforms.uDark.value = over * 0.45 + N.rain * 0.25;
     // Sun and haze under overcast or rain.
-    sky.light.intensity *= 1 - 0.5 * over - 0.25 * N.rain;
-    sky.hemi.intensity *= 1 - 0.2 * over;
-    if (fog) fog.density *= 1 + over * 0.5 + N.rain * 1.2 + N.fog * 6 * (1 - smoothstep(0, 800, altitude));
+    sky.light.intensity = (sky.baseLightIntensity ?? sky.light.intensity) * (1 - 0.5 * over - 0.25 * N.rain);
+    sky.hemi.intensity = (sky.baseHemiIntensity ?? sky.hemi.intensity) * (1 - 0.2 * over);
+    if (fog) fog.density = (sky.baseFogDensity ?? fog.density) * (1 + over * 0.5 + N.rain * 1.2 + N.fog * 6 * (1 - smoothstep(0, 800, altitude)));
     // Trees and sea respond to wind.
     windUniforms.uAmp.value = clamp(0.35 + N.wind / 5, 0.3, 2.4);
     if (this.pavedMaterials) for (const m of this.pavedMaterials) { m.material.roughness = m.roughness * (1 - N.rain * 0.6); m.material.color.copy(m.color).multiplyScalar(1 - N.rain * 0.22); }
@@ -97,7 +97,7 @@ export class Weather {
       const z = ((r2 * B * 2 + sz * (1 - (y + H) / (H * 2)) * 2) % (B * 2) + B * 2) % (B * 2) - B;
       const X = camera.position.x + x, Y = camera.position.y + y, Z = camera.position.z + z;
       p[i * 6] = X; p[i * 6 + 1] = Y; p[i * 6 + 2] = Z;
-      p[i * 6 + 3] = X + sx * 0.04; p[i * 6 + 4] = Y + 0.7; p[i * 6 + 5] = Z + sz * 0.04;
+      p[i * 6 + 3] = X + sx * 0.04; p[i * 6 + 4] = Y - 0.7; p[i * 6 + 5] = Z + sz * 0.04;
     }
     this.rain.geometry.setDrawRange(0, n * 2);
     this.rain.geometry.attributes.position.needsUpdate = true;

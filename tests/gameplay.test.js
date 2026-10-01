@@ -139,12 +139,23 @@ test('rain wets pavement without progressively multiplying its color and roughne
   const w = Object.create(Weather.prototype);
   const material = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 });
   Object.assign(w, { timer: 600, target: { cloud: 1, wind: 8, rain: 1, fog: 0, dir: 90 }, now: { cloud: 1, wind: 8, rain: 1, fog: 0 }, pavedMaterials: [{ material, color: material.color.clone(), roughness: 0.9 }], rain: { visible: false } });
-  const sky = { light: { intensity: 1 }, hemi: { intensity: 1 } }, clouds = { uniforms: { uCover: {}, uDark: {} } };
-  w.update(0.016, new THREE.PerspectiveCamera(), sky, clouds, null, null, 2000);
-  const color = material.color.r, roughness = material.roughness;
+  const sky = { light: { intensity: 1 }, hemi: { intensity: 1 }, baseLightIntensity: 1, baseHemiIntensity: 1, baseFogDensity: 0.001 }, clouds = { uniforms: { uCover: {}, uDark: {} } };
+  const fog = { density: 0.001 };
+  w.update(0.016, new THREE.PerspectiveCamera(), sky, clouds, fog, null, 2000);
+  const color = material.color.r, roughness = material.roughness, light = sky.light.intensity, hemi = sky.hemi.intensity, density = fog.density;
   assert.ok(roughness < 0.4); assert.ok(color < w.pavedMaterials[0].color.r);
-  w.update(0.016, new THREE.PerspectiveCamera(), sky, clouds, null, null, 2000);
+  w.update(0.016, new THREE.PerspectiveCamera(), sky, clouds, fog, null, 2000);
   assert.equal(material.roughness, roughness); assert.equal(material.color.r, color);
+  assert.equal(sky.light.intensity, light); assert.equal(sky.hemi.intensity, hemi); assert.equal(fog.density, density);
+});
+test('rain streaks fall down through the camera volume', async () => {
+  const { Weather } = await import('../src/world/weather.js');
+  const w = Object.create(Weather.prototype);
+  const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  Object.assign(w, { count: 1, rnd: new Float32Array([0.5, 0.5, 0.5]), t: 0, rain: new THREE.LineSegments(geometry, new THREE.LineBasicMaterial()) });
+  w._rain(0.016, new THREE.PerspectiveCamera(), 1, 4, 0);
+  const p = geometry.attributes.position.array;
+  assert.ok(p[4] < p[1]);
 });
 test('analog gamepad movement remains analog past the digital throttle threshold', () => {
   const { input, setPad } = inputFixture();
