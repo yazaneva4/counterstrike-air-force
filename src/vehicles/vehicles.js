@@ -230,7 +230,7 @@ export class Vehicle {
       // Taxi, take-off roll.
       const steer = clamp(ctl.roll + ctl.yaw, -1, 1);
       const steerRate = lerp(0.9, 0.25, clamp(this.speed / d.takeoff, 0, 1));
-      this.heading -= steer * steerRate * dt;
+      this.heading += steer * steerRate * dt;
       if (ctl.throttle < 0 && this.throttle < 0.05) this.speed = Math.max(0, this.speed - 12 * dt);
       else this.speed = Math.max(0, this.speed - 0.6 * dt);
       const canRotate = this.speed > d.takeoff * 0.85;
@@ -261,11 +261,13 @@ export class Vehicle {
     this.loadFactor = (stall / d.stall) ** 2;
     const auth = clamp((this.speed - stall * 0.35) / stall, 0.12, 1);
     let rollIn = clamp(ctl.roll, -1, 1);
-    if (Math.abs(ctl.roll) < 0.05 && Math.abs(bank) < 1.35) rollIn = clamp(-bank * 1.2, -0.6, 0.6);
+    if (Math.abs(ctl.roll) < 0.05 && Math.abs(bank) < 1.35) rollIn = clamp(bank * 1.2, -0.6, 0.6);
     const pitchIn = clamp(ctl.pitch, -1, 1);
     tq.setFromAxisAngle(X, -pitchIn * d.pitchRate * auth * dt); this.quat.multiply(tq);
-    tq.setFromAxisAngle(Z, rollIn * d.rollRate * auth * dt); this.quat.multiply(tq);
-    tq.setFromAxisAngle(Y, -ctl.yaw * d.yawRate * dt); this.quat.multiply(tq);
+    // Positive roll/yaw input means right on the controls. In this model's
+    // +Z-forward coordinate system, a right bank is a negative local Z turn.
+    tq.setFromAxisAngle(Z, -rollIn * d.rollRate * auth * dt); this.quat.multiply(tq);
+    tq.setFromAxisAngle(Y, ctl.yaw * d.yawRate * dt); this.quat.multiply(tq);
     // Banked flight turns the aircraft (coordinated turn).
     tq.setFromAxisAngle(Y, -coordinatedTurnRate(this.speed, bank) * auth * dt); this.quat.premultiply(tq);
     // An abandoned aircraft slowly noses over and goes down.
