@@ -14,11 +14,12 @@ const flatWorld = {
   vegetation: { near: () => {} },
 };
 const neutral = { throttle: 0, pitch: 0, roll: 0, yaw: 0, boost: false };
-function plane(speed = 100) {
+function plane(speed = 100, type = 'jet') {
   const v = Object.create(Vehicle.prototype);
-  Object.assign(v, { def: VEHICLE_DEFS.jet, type: 'jet', pos: new THREE.Vector3(0, 1000, 0), quat: new THREE.Quaternion(), vel: new THREE.Vector3(), onGround: false, speed, throttle: 0, ground: 2, radius: 6, gearDown: false });
+  Object.assign(v, { def: VEHICLE_DEFS[type], type, pos: new THREE.Vector3(0, 1000, 0), quat: new THREE.Quaternion(), vel: new THREE.Vector3(), heading: 0, pitch: 0, onGround: false, speed, throttle: 0, ground: 2, radius: 6, gearDown: false });
   return v;
 }
+const FIXED_WING_TYPES = ['jet', 'prop', 'nova'];
 function inputFixture() {
   globalThis.addEventListener = () => {};
   globalThis.document = { getElementById: () => null, addEventListener: () => {} };
@@ -34,6 +35,51 @@ test('banked turns widen with speed and raise stall speed', () => {
   assert.equal(coordinatedTurnRate(200, 0.5), coordinatedTurnRate(100, 0.5) / 2);
   assert.ok(bankedStallSpeed(58, Math.PI / 3) > 81);
   assert.ok(Number.isFinite(coordinatedTurnRate(0, Math.PI / 2)));
+});
+test('right input banks and turns right in every fixed-wing aircraft', () => {
+  for (const type of FIXED_WING_TYPES) {
+    const v = plane(Math.max(100, VEHICLE_DEFS[type].stall * 1.5), type);
+    v._plane(0.1, { ...neutral, roll: 1 }, flatWorld);
+    assert.ok(v.bankAngle() < 0, `${type}: right input should lower the right wing`);
+    v._plane(0.1, neutral, flatWorld);
+    assert.ok(v.headingAngle() > 0, `${type}: right bank should turn right`);
+  }
+});
+test('right rudder and taxi input turn right in every fixed-wing aircraft', () => {
+  for (const type of FIXED_WING_TYPES) {
+    const airborne = plane(100, type);
+    airborne._plane(0.1, { ...neutral, yaw: 1 }, flatWorld);
+    assert.ok(airborne.headingAngle() > 0, `${type}: right rudder should turn right`);
+    const taxiing = plane(20, type);
+    taxiing.onGround = true;
+    taxiing._plane(0.1, { ...neutral, roll: 1 }, flatWorld);
+    assert.ok(taxiing.heading > 0, `${type}: right taxi input should turn right`);
+  }
+});
+test('automatic bank recovery levels all fixed-wing aircraft', () => {
+  for (const type of FIXED_WING_TYPES) {
+    const v = plane(Math.max(100, VEHICLE_DEFS[type].stall * 1.5), type);
+    v.quat.setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.35);
+    const before = Math.abs(v.bankAngle());
+    for (let i = 0; i < 12; i++) v._plane(0.05, neutral, flatWorld);
+    assert.ok(Math.abs(v.bankAngle()) < before, `${type}: neutral controls should reduce bank`);
+    assert.ok([v.pos.x, v.pos.y, v.pos.z, v.speed].every(Number.isFinite), `${type}: flight state must stay finite`);
+  }
+});
+test('flight controls animate the visible control surfaces on every fixed-wing aircraft', () => {
+  for (const type of FIXED_WING_TYPES) {
+    const left = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 0.5)); left.position.x = 1;
+    const right = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 0.5)); right.position.x = -1;
+    const elevator = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 0.5));
+    const rudder = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 0.5));
+    const v = plane(100, type);
+    v.parts = { flightSurfaces: { ailerons: [left, right], elevators: [elevator], rudder } };
+    v.flightControls = { roll: 1, pitch: 1, yaw: 1 };
+    v._animate(0.5, { night: 0 });
+    assert.ok(left.rotation.x < 0 && right.rotation.x > 0, `${type}: ailerons should oppose each other`);
+    assert.ok(elevator.rotation.x > 0, `${type}: elevator should respond to pitch`);
+    assert.ok(rudder.rotation.y > 0, `${type}: rudder should respond to yaw`);
+  }
 });
 test('airborne wind drifts the aircraft without changing indicated airspeed', () => {
   const calm = plane(), windy = plane();

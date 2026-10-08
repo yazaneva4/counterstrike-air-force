@@ -55,7 +55,7 @@ function buildFor(type, opts = {}) {
         gear.add(leg, wheel);
       }
       n.group.add(gear);
-      return { group: n.group, parts: { engines: n.engines, gear, canopyMat: n.canopyMat }, ground: 2.2, radius: 7, length: 9, camDist: 20, camHeight: 5.5 };
+      return { group: n.group, parts: { engines: n.engines, gear, canopyMat: n.canopyMat, flightSurfaces: n.flightSurfaces }, ground: 2.2, radius: 7, length: 9, camDist: 20, camHeight: 5.5 };
     }
     default: throw new Error('unknown vehicle ' + type);
   }
@@ -224,13 +224,18 @@ export class Vehicle {
     this.speed += (thrust - drag) * dt;
     if (!this.onGround) this.speed -= f.y * 9.81 * dt * 0.85;
     this.speed = Math.max(0, this.speed);
+    this.flightControls = {
+      pitch: clamp(ctl.pitch, -1, 1),
+      roll: clamp(ctl.roll, -1, 1),
+      yaw: clamp(ctl.yaw, -1, 1),
+    };
 
     const ground = world.groundAt(p.x, p.z);
     if (this.onGround) {
       // Taxi, take-off roll.
       const steer = clamp(ctl.roll + ctl.yaw, -1, 1);
       const steerRate = lerp(0.9, 0.25, clamp(this.speed / d.takeoff, 0, 1));
-      this.heading -= steer * steerRate * dt;
+      this.heading += steer * steerRate * dt;
       if (ctl.throttle < 0 && this.throttle < 0.05) this.speed = Math.max(0, this.speed - 12 * dt);
       else this.speed = Math.max(0, this.speed - 0.6 * dt);
       const canRotate = this.speed > d.takeoff * 0.85;
@@ -261,11 +266,13 @@ export class Vehicle {
     this.loadFactor = (stall / d.stall) ** 2;
     const auth = clamp((this.speed - stall * 0.35) / stall, 0.12, 1);
     let rollIn = clamp(ctl.roll, -1, 1);
-    if (Math.abs(ctl.roll) < 0.05 && Math.abs(bank) < 1.35) rollIn = clamp(-bank * 1.2, -0.6, 0.6);
-    const pitchIn = clamp(ctl.pitch, -1, 1);
+    if (Math.abs(ctl.roll) < 0.05 && Math.abs(bank) < 1.35) rollIn = clamp(bank * 1.2, -0.6, 0.6);
+    const pitchIn = this.flightControls.pitch;
     tq.setFromAxisAngle(X, -pitchIn * d.pitchRate * auth * dt); this.quat.multiply(tq);
-    tq.setFromAxisAngle(Z, rollIn * d.rollRate * auth * dt); this.quat.multiply(tq);
-    tq.setFromAxisAngle(Y, -ctl.yaw * d.yawRate * dt); this.quat.multiply(tq);
+    // Positive roll/yaw input means right on the controls. In this model's
+    // +Z-forward coordinate system, a right bank is a negative local Z turn.
+    tq.setFromAxisAngle(Z, -rollIn * d.rollRate * auth * dt); this.quat.multiply(tq);
+    tq.setFromAxisAngle(Y, ctl.yaw * d.yawRate * dt); this.quat.multiply(tq);
     // Banked flight turns the aircraft (coordinated turn).
     tq.setFromAxisAngle(Y, -coordinatedTurnRate(this.speed, bank) * auth * dt); this.quat.premultiply(tq);
     // An abandoned aircraft slowly noses over and goes down.
@@ -743,6 +750,17 @@ export class Vehicle {
     const P = this.parts;
     const t = performance.now() / 1000;
     const night = world.night;
+    if (P.flightSurfaces) {
+      const c = this.flightControls || { pitch: 0, roll: 0, yaw: 0 };
+      const surfaces = P.flightSurfaces;
+      for (const a of surfaces.ailerons || []) {
+        const side = Math.sign(a.position.x) || 1;
+        const elevon = a.userData.flightSurface === 'elevon' ? c.pitch * 0.24 : 0;
+        a.rotation.x = damp(a.rotation.x, -c.roll * side * 0.28 + elevon, 8, dt);
+      }
+      for (const e of surfaces.elevators || []) e.rotation.x = damp(e.rotation.x, c.pitch * 0.24, 8, dt);
+      if (surfaces.rudder) surfaces.rudder.rotation.y = damp(surfaces.rudder.rotation.y, c.yaw * 0.24, 8, dt);
+    }
     if (P.nav) {
       const on = this.occupied || !this.onGround;
       P.nav.red.material.opacity = on ? 1 : 0.25;

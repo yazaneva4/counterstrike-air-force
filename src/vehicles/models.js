@@ -28,6 +28,12 @@ function add(parent, geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
   return m;
 }
 
+function flightSurface(parent, material, size, position, role) {
+  const surface = add(parent, new THREE.BoxGeometry(...size), material, ...position);
+  surface.userData.flightSurface = role;
+  return surface;
+}
+
 function navLights(group, left, right, tail) {
   const red = glowSprite(0xff2a2a, 1.6); red.position.copy(left);
   const green = glowSprite(0x2aff5a, 1.6); green.position.copy(right);
@@ -193,6 +199,17 @@ export function buildFighter({ tailNo = '88-0412' } = {}) {
     // Ventral fins.
     const vf = add(g, fin([[-4.6, -0.55], [-5.2, -1.15], [-5.8, -1.15], [-5.6, -0.55]], 0.06), surf, s * 0.55, 0, 0); vf.rotation.z = s * 0.35;
   }
+  const flightSurfaces = {
+    ailerons: [
+      flightSurface(g, surf, [1.45, 0.08, 0.48], [3.55, 0.035, -2.72], 'aileron'),
+      flightSurface(g, surf, [1.45, 0.08, 0.48], [-3.55, 0.035, -2.72], 'aileron'),
+    ],
+    elevators: [
+      flightSurface(g, surf, [0.9, 0.07, 0.38], [1.95, 0.075, -7.35], 'elevator'),
+      flightSurface(g, surf, [0.9, 0.07, 0.38], [-1.95, 0.075, -7.35], 'elevator'),
+    ],
+    rudder: flightSurface(g, surf, [0.08, 1.35, 0.28], [0, 2.7, -7.45], 'rudder'),
+  };
   add(g, fin([[-4.05, 0.85], [-6.72, 4.3], [-7.75, 4.3], [-7.62, 0.85]], 0.18), surf, 0, 0, 0);
   add(g, new THREE.CylinderGeometry(0.1, 0.12, 1.2, 10).rotateX(Math.PI / 2), dark, 0, 4.25, -7.2);
   const tailTex = textDecal(tailNo.replace('-', ''), { font: 'bold 90px Arial', color: '#1f262c' });
@@ -222,7 +239,7 @@ export function buildFighter({ tailNo = '88-0412' } = {}) {
   const taxiLight = glowSprite(0xfff4d8, 0.8, 0.9); taxiLight.position.set(0, -1.2, 4.55); gear.add(taxiLight);
   g.add(gear);
   const nav = navLights(g, new THREE.Vector3(4.9, -0.12, -1.8), new THREE.Vector3(-4.9, -0.12, -1.8), new THREE.Vector3(0, 4.3, -7.8));
-  return { group: g, parts: { flame, flameCore, nozzleGlow, gear, nav, pilot: p }, ground: 2.5, radius: 7, length: 15.5, camDist: 24, camHeight: 6 };
+  return { group: g, parts: { flame, flameCore, nozzleGlow, gear, nav, pilot: p, flightSurfaces }, ground: 2.5, radius: 7, length: 15.5, camDist: 24, camHeight: 6 };
 }
 
 // ---------------------------------------------------------------------------
@@ -297,6 +314,17 @@ export function buildProp({ stripe = 0xc8302a, reg = 'N172KI' } = {}) {
   for (const s of [1, -1]) {
     const hs = add(g, planform([[0.2, -3.75], [1.75, -4.15], [1.8, -4.75], [0.2, -4.9]], 0.1), white, 0, 0.45, 0); hs.scale.x = s;
   }
+  const flightSurfaces = {
+    ailerons: [
+      flightSurface(g, red, [1.25, 0.09, 0.55], [4.35, 1.34, -0.02], 'aileron'),
+      flightSurface(g, red, [1.25, 0.09, 0.55], [-4.35, 1.34, -0.02], 'aileron'),
+    ],
+    elevators: [
+      flightSurface(g, red, [0.72, 0.07, 0.34], [1.05, 0.57, -4.58], 'elevator'),
+      flightSurface(g, red, [0.72, 0.07, 0.34], [-1.05, 0.57, -4.58], 'elevator'),
+    ],
+    rudder: flightSurface(g, red, [0.07, 0.9, 0.26], [0, 1.23, -4.82], 'rudder'),
+  };
   add(g, fin([[-2.4, 0.9], [-3.8, 1.25], [-4.55, 2.25], [-5.0, 2.25], [-4.95, 0.5]], 0.1), white);
   decal(g, textDecal('▲', { font: 'bold 110px Arial', color: '#' + new THREE.Color(stripe).getHexString() }), 0.6, 0.3, new THREE.Vector3(0.07, 1.8, -4.6), new THREE.Euler(0, Math.PI / 2, 0));
   // Spinner, two-blade propeller with twist, exhaust stubs.
@@ -322,7 +350,7 @@ export function buildProp({ stripe = 0xc8302a, reg = 'N172KI' } = {}) {
   gear.position.y = -0.4;
   g.add(gear);
   const nav = navLights(g, new THREE.Vector3(5.65, 1.12, 0.6), new THREE.Vector3(-5.65, 1.12, 0.6), new THREE.Vector3(0, 2.3, -5));
-  return { group: g, parts: { prop, disc, gear, nav, pilot: p }, ground: 1.7, radius: 6, length: 8.4, camDist: 15, camHeight: 4 };
+  return { group: g, parts: { prop, disc, gear, nav, pilot: p, flightSurfaces }, ground: 1.7, radius: 6, length: 8.4, camDist: 15, camHeight: 4 };
 }
 
 // ---------------------------------------------------------------------------

@@ -56,6 +56,16 @@ export function buildNova() {
     const bot = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.09, 0.5), glow(COL_CYAN, 0.9));
     bot.position.set(dir * 5.3, -0.15, 0.5); bot.rotation.y = dir * -0.06; wing.add(bot);
   }
+  // Contrasting hinged elevons make pitch and roll visible on this tailless
+  // prototype instead of leaving the broad wing as one rigid slab.
+  const elevonMat = new THREE.MeshStandardMaterial({ color: 0x3c1d67, metalness: 0.72, roughness: 0.32, emissive: 0x11072b, emissiveIntensity: 0.45 });
+  const elevons = [1, -1].map((dir) => {
+    const elevon = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.12, 0.68), elevonMat);
+    elevon.position.set(dir * 7.5, 0.15, 0.72);
+    elevon.userData.flightSurface = 'elevon';
+    body.add(elevon);
+    return elevon;
+  });
 
   const nacMat = hullMat(true);
   for (const dir of [1, -1]) {
@@ -97,5 +107,5 @@ export function buildNova() {
 
   body.traverse((o) => { if (o.isMesh && !o.material.transparent) o.castShadow = true; });
   body.scale.setScalar(0.68);
-  return { group: outer, engines, canopyMat };
+  return { group: outer, engines, canopyMat, flightSurfaces: { ailerons: elevons, elevators: [], rudder: null } };
 }
