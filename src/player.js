@@ -10,6 +10,7 @@ import { clamp, damp, dampAngle, lerp, smoothstep } from './core/util.js';
 
 const tv = new THREE.Vector3(), tv2 = new THREE.Vector3(), tq = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
+const IDENTITY_Q = new THREE.Quaternion();
 const Z = new THREE.Vector3(0, 0, 1);
 
 export const CHARACTERS = [
@@ -44,7 +45,9 @@ export class Player {
     this.camPos = new THREE.Vector3();
     this.camLook = new THREE.Vector3();
     this.stick = { x: 0, y: 0 };
-    this.chaseFwd = new THREE.Vector3(0, 0, 1); this.chaseUp = new THREE.Vector3(0, 1, 0); this.chaseVeh = null;
+    this.chaseFwd = new THREE.Vector3(0, 0, 1);   // smoothed view direction behind an aircraft
+    this.chaseUp = new THREE.Vector3(0, 1, 0);
+    this.chaseVeh = null;
     this.kb = { roll: 0, pitch: 0 };   // keyboard deflection, ramped like a real stick
   }
 
@@ -91,6 +94,7 @@ export class Player {
   toggleView() {
     if (this.mode === 'dead') return;
     this.cockpit = !this.cockpit;
+    this.chaseVeh = null;
     this.game.hud.toast(this.cockpit ? 'First-person view · V to switch' : 'Third-person view · V to switch', 2);
     this.game.camera.near = this.cockpit ? 0.05 : 0.3;
     this.game.camera.updateProjectionMatrix();
@@ -230,6 +234,7 @@ export class Player {
     this.root.visible = false;
     this.stick.x = this.stick.y = 0;
     this.kb.roll = this.kb.pitch = 0;
+    this.chaseVeh = null;
     this.lookYaw = this.lookPitch = 0;
     G.camera.near = this.cockpit ? 0.05 : 0.3;
     G.camera.updateProjectionMatrix();
@@ -488,18 +493,22 @@ export class Player {
       if (!flat) {
         // Aircraft chase camera: only the view direction is smoothed (never the
         // position), so the plane stays put in frame at any speed and through loops.
-        if (this.chaseVeh !== v) { this.chaseVeh = v; this.chaseFwd.copy(fwd); this.chaseUp.set(0, 1, 0); }
+        if (this.chaseVeh !== v || !Number.isFinite(this.chaseFwd.x + this.chaseUp.x)) { this.chaseVeh = v; this.chaseFwd.copy(fwd); this.chaseUp.set(0, 1, 0); }
         const k = 1 - Math.exp(-4.5 * dt);
-        this.chaseFwd.lerp(fwd, k);
-        if (this.chaseFwd.lengthSq() < 1e-4) this.chaseFwd.copy(fwd);
-        this.chaseFwd.normalize();
-        const planeUp = tv2.set(0, 1, 0).applyQuaternion(v.quat);
-        this.chaseUp.lerp(planeUp, k * 0.5);   // follows the bank only partly
-        if (this.chaseUp.lengthSq() < 1e-4) this.chaseUp.copy(UP);
+        // Turn toward the plane's heading by rotating, not lerping, so a flip never collapses the vector.
+        tq.setFromUnitVectors(this.chaseFwd, fwd);
+        tq.slerp(IDENTITY_Q, 1 - k);
+        this.chaseFwd.applyQuaternion(tq).normalize();
+        this.chaseUp.lerp(tv2.set(0, 1, 0).applyQuaternion(v.quat), k * 0.5);
+        // Keep the camera's up perpendicular to its view so near-vertical climbs never degenerate.
+        this.chaseUp.addScaledVector(this.chaseFwd, -this.chaseUp.dot(this.chaseFwd));
+        if (this.chaseUp.lengthSq() < 1e-3) this.chaseUp.copy(UP).addScaledVector(this.chaseFwd, -this.chaseFwd.y);
+        if (this.chaseUp.lengthSq() < 1e-3) this.chaseUp.set(0, 0, 1);
         this.chaseUp.normalize();
         const dir = this.chaseFwd.clone().applyAxisAngle(UP, this.lookYaw);
         const upv = this.chaseUp.clone();
         const want = new THREE.Vector3().copy(v.pos).addScaledVector(dir, -dist).addScaledVector(upv, v.camHeight - this.lookPitch * dist * 0.8);
+        want.y = Math.max(want.y, v.pos.y - dist * 0.6 + v.camHeight);
         const gh = W.groundAt(want.x, want.z);
         if (want.y < gh + 1.5) want.y = gh + 1.5;
         if (want.y < 1.2) want.y = 1.2;
