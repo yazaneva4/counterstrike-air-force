@@ -44,6 +44,7 @@ export class Player {
     this.camPos = new THREE.Vector3();
     this.camLook = new THREE.Vector3();
     this.stick = { x: 0, y: 0 };
+    this.kb = { roll: 0, pitch: 0 };   // keyboard deflection, ramped like a real stick
   }
 
   buildBody() {
@@ -200,10 +201,11 @@ export class Player {
     this.mode = 'vehicle';
     this.root.visible = false;
     this.stick.x = this.stick.y = 0;
+    this.kb.roll = this.kb.pitch = 0;
     this.camYaw = v.headingAngle();
     if (v.kind === 'plane') v.throttle = Math.max(v.throttle, 0);
     G.hud.prompt(null);
-    const help = { plane: 'W throttle, mouse/arrows pitch, A/D roll', heli: 'Space up, C down, WASD fly, mouse turn', ufo: 'Space/C altitude, WASD fly, E tractor beam', ship: 'Space/C altitude, WASD fly, Shift boost · climb past 3,000 m for orbit', car: 'W/S throttle and brake · A/D steer · Space handbrake · Shift boost · L lights · B horn · V cockpit', rocket: v.onGround && !v.launched ? 'Space to launch · W/S throttle · mouse steer · G legs · R level' : 'W/S throttle · mouse steer · Q/E roll · G legs · R hold level' };
+    const help = { plane: 'W/S throttle · mouse or ↑↓ pitch · A/D roll · Q/E rudder · Shift afterburner · F exit', heli: 'Space up, C down, WASD fly, mouse turn', ufo: 'Space/C altitude, WASD fly, E tractor beam', ship: 'Space/C altitude, WASD fly, Shift boost · climb past 3,000 m for orbit', car: 'W/S throttle and brake · A/D steer · Space handbrake · Shift boost · L lights · B horn · V cockpit', rocket: v.onGround && !v.launched ? 'Space to launch · W/S throttle · mouse steer · G legs · R level' : 'W/S throttle · mouse steer · Q/E roll · G legs · R hold level' };
     G.hud.toast(v.def.name + ' · ' + help[v.kind], 5);
     G.audio?.enter(v.type);
     G.onEnterVehicle?.(v);
@@ -285,12 +287,21 @@ export class Player {
         this.stick.y = clamp(this.stick.y - look.dy * 0.0045 * S.sensitivity * (S.invertY ? -1 : 1), -1, 1);
       }
       this.stick.x = damp(this.stick.x, 0, 2.2, dt); this.stick.y = damp(this.stick.y, 0, 2.2, dt);
-      const touchPlane = I.touch.active;
+      const touchPlane = I.touch.active, pad = I.pad.active;
+      // Keys deflect the controls gradually (and recentre quickly) instead of snapping to full stick.
+      const ramp = (cur, target) => {
+        const rate = target === 0 || Math.sign(target) !== Math.sign(cur) ? 7 : 3;
+        return Math.abs(target - cur) <= rate * dt ? target : cur + Math.sign(target - cur) * rate * dt;
+      };
+      this.kb.roll = ramp(this.kb.roll, touchPlane ? 0 : clamp((I.down('KeyD') ? 1 : 0) - (I.down('KeyA') ? 1 : 0) + ar.x, -1, 1));
+      this.kb.pitch = ramp(this.kb.pitch, clamp(ar.y, -1, 1));
+      // Throttle: analog on a gamepad, otherwise held keys; the stick's X is the rudder.
+      const thr = pad && Math.abs(I.pad.ly) > 0.05 ? I.pad.ly : clamp((I.down('KeyW') ? 1 : 0) - (I.down('KeyS') ? 1 : 0) + (I.tdown('up') ? 1 : 0) - (I.tdown('down') ? 1 : 0), -1, 1);
       this.ctl = {
-        throttle: clamp((I.down('KeyW') ? 1 : 0) - (I.down('KeyS') ? 1 : 0) + (I.tdown('up') ? 1 : 0) - (I.tdown('down') ? 1 : 0), -1, 1),
-        pitch: clamp(this.stick.y + ar.y + (touchPlane ? I.touch.y : 0), -1, 1),
-        roll: clamp(this.stick.x + (touchPlane ? I.touch.x : ((I.down('KeyD') ? 1 : 0) - (I.down('KeyA') ? 1 : 0))) + ar.x, -1, 1),
-        yaw: (I.down('KeyE') ? 1 : 0) - (I.down('KeyQ') ? 1 : 0),
+        throttle: thr,
+        pitch: clamp(this.stick.y + this.kb.pitch + (touchPlane ? I.touch.y : 0), -1, 1),
+        roll: clamp(this.stick.x + this.kb.roll + (touchPlane ? I.touch.x : 0), -1, 1),
+        yaw: clamp((I.down('KeyE') ? 1 : 0) - (I.down('KeyQ') ? 1 : 0) + (pad ? I.pad.lx : 0), -1, 1),
         boost,
       };
       const firing = (I.mouseLeft && I.locked) || I.down('Space') || I.tdown('fire');

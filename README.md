@@ -23,7 +23,7 @@ An open-world 3D browser game set on Kestrel Island, a fictional island in the P
 | | Keyboard / mouse |
 |---|---|
 | On foot | WASD walk · mouse look · Shift run · Space jump or swim · E talk · F board an aircraft |
-| Planes | W/S throttle · mouse or ↑↓ pitch · A/D roll · Q/E rudder · Shift afterburner · click or Space to fire · F to exit (eject in flight) |
+| Planes | W/S throttle · mouse or ↑↓ pitch · A/D roll · Q/E rudder · Shift afterburner · click or Space to fire · F to exit (eject in flight). Keys ramp the controls smoothly; let go and the wings and nose level out. The Skylark limits its bank to about 63°; the jets can roll freely. On a gamepad the left stick is throttle and rudder and the right stick is pitch and roll. |
 | Helicopter | Space/C up and down · WASD fly · mouse or Q/E turn · Shift fast |
 | Cars | W/S throttle, brake and reverse · A/D steer · Space handbrake · Shift boost · L headlights · B horn · V driver view · F get out |
 | Saucer and Odyssey | Space/C up and down · WASD fly · E tractor beam (saucer) · Shift boost · hold Space above 3,000 m for orbit |

@@ -13,9 +13,9 @@ import { buildRocket, buildShip, AURORA } from './spacecraft.js';
 import { buildCar, CAR_NAMES, animateCarParts } from './cars.js';
 
 export const VEHICLE_DEFS = {
-  jet: { name: 'F-7 Falcon', role: 'Air-superiority jet', kind: 'plane', maxSpeed: 280, stall: 58, takeoff: 70, thrust: 15, pitchRate: 1.15, rollRate: 2.6, yawRate: 0.45, turn: 0.8, boost: 1.35, weapons: true },
-  prop: { name: 'C-2 Skylark', role: 'Light touring plane', kind: 'plane', maxSpeed: 74, stall: 21, takeoff: 27, thrust: 4.2, pitchRate: 0.85, rollRate: 1.6, yawRate: 0.55, turn: 0.6, boost: 1 },
-  nova: { name: 'Nova X-1', role: 'Experimental prototype', kind: 'plane', maxSpeed: 330, stall: 42, takeoff: 52, thrust: 20, pitchRate: 1.5, rollRate: 3.4, yawRate: 0.7, turn: 1.05, boost: 1.45, weapons: true },
+  jet: { name: 'F-7 Falcon', role: 'Air-superiority jet', kind: 'plane', trim: 0.22, maxSpeed: 280, stall: 58, takeoff: 70, thrust: 15, pitchRate: 1.15, rollRate: 2.6, yawRate: 0.45, turn: 0.8, boost: 1.35, weapons: true },
+  prop: { name: 'C-2 Skylark', role: 'Light touring plane', kind: 'plane', maxBank: 1.1, trim: 0.5, maxSpeed: 74, stall: 21, takeoff: 27, thrust: 4.2, pitchRate: 0.85, rollRate: 1.6, yawRate: 0.55, turn: 0.6, boost: 1 },
+  nova: { name: 'Nova X-1', role: 'Experimental prototype', kind: 'plane', trim: 0.14, maxSpeed: 330, stall: 42, takeoff: 52, thrust: 20, pitchRate: 1.5, rollRate: 3.4, yawRate: 0.7, turn: 1.05, boost: 1.45, weapons: true },
   heli: { name: 'H-60 Kite', role: 'Rescue helicopter', kind: 'heli', maxSpeed: 72, climb: 14 },
   ufo: { name: 'Visitor Craft', role: 'Anti-gravity saucer', kind: 'ufo', maxSpeed: 170, climb: 48, boost: 2.6 },
   ship: { name: 'Odyssey', role: 'Spaceplane · vertical take-off to orbit', kind: 'ship', maxSpeed: 240, climb: 55, boost: 2.4 },
@@ -240,8 +240,16 @@ export class Vehicle {
     let rollIn = clamp(ctl.roll, -1, 1);
     const bank = this.bankAngle();
     if (Math.abs(ctl.roll) < 0.05 && Math.abs(bank) < 1.35) rollIn = clamp(-bank * 1.2, -0.6, 0.6);
+    // Touring planes stay upright: no roll input pushes the bank past the limit.
+    if (d.maxBank && Math.abs(bank) > d.maxBank && rollIn * bank > 0) rollIn = 0;
     const pitchIn = clamp(ctl.pitch, -1, 1);
     tq.setFromAxisAngle(X, -pitchIn * d.pitchRate * auth * dt); this.quat.multiply(tq);
+    // Auto-trim: with the stick centred the nose eases back toward level flight
+    // (not while inverted or in a steep bank, so loops and rolls stay possible).
+    if (Math.abs(pitchIn) < 0.05 && Math.abs(bank) < 0.9 && d.trim) {
+      const pa = this.pitchAngle();
+      if (Math.abs(pa) < 1.0) { tq.setFromAxisAngle(X, pa * d.trim * auth * dt); this.quat.multiply(tq); }
+    }
     tq.setFromAxisAngle(Z, rollIn * d.rollRate * auth * dt); this.quat.multiply(tq);
     tq.setFromAxisAngle(Y, -ctl.yaw * d.yawRate * dt); this.quat.multiply(tq);
     // Banked flight turns the aircraft (coordinated turn).
