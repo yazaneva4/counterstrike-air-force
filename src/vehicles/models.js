@@ -179,6 +179,10 @@ export function buildFighter({ tailNo = '88-0412' } = {}) {
   p.root.scale.setScalar(0.92); p.root.position.set(0, -0.15, 3.3);
   g.add(p.root);
   add(g, new THREE.BoxGeometry(0.5, 0.9, 0.2), dark, 0, 0.72, 2.95, -0.25);
+  for (const s of [1, -1]) add(g, new THREE.BoxGeometry(0.045, 0.06, 2.6), dark, s * 0.5, 0.58, 3.6);
+  add(g, new THREE.CylinderGeometry(0.016, 0.026, 0.95, 8).rotateX(Math.PI / 2), metal, 0, 0.0, 8.15);
+  add(g, new THREE.BoxGeometry(0.03, 0.34, 0.2), dark, 0, -1.0, 0.8);
+  add(g, new THREE.BoxGeometry(0.03, 0.3, 0.18), dark, 0.4, 0.92, -1.6, 0, 0, 0.2);
   // Chin intake.
   const intake = loft([
     { z: -0.6, w: 0.5, h: 0.3, y: -0.8, n: 3 }, { z: 1.0, w: 0.58, h: 0.4, y: -0.9, n: 3 },
@@ -271,6 +275,13 @@ export function buildTalon({ tailNo = '01-0217' } = {}) {
   p.root.scale.setScalar(0.92); p.root.position.set(0, 0.0, 4.6);
   g.add(p.root);
   add(g, new THREE.BoxGeometry(0.5, 0.9, 0.2), dark, 0, 0.85, 4.0, -0.25);
+  // Canopy rails, HUD combiner glass, pitot boom, antenna blades and the dorsal airbrake.
+  for (const s of [1, -1]) add(g, new THREE.BoxGeometry(0.05, 0.07, 3.5), dark, s * 0.57, 0.66, 4.9);
+  add(g, new THREE.BoxGeometry(0.4, 0.02, 0.3), glass(), 0, 0.97, 6.0, -0.5);
+  add(g, new THREE.CylinderGeometry(0.018, 0.03, 1.1, 8).rotateX(Math.PI / 2), metal, 0, 0.02, 10.3);
+  add(g, new THREE.BoxGeometry(0.03, 0.4, 0.22), dark, 0, -0.95, 1.4);
+  add(g, new THREE.BoxGeometry(0.03, 0.34, 0.2), dark, 0.5, 0.98, -1.4, 0, 0, 0.2);
+  add(g, new THREE.BoxGeometry(0.9, 0.03, 1.5), dark, 0, 0.8, -4.0);
   const flames = [], flightSurfaces = { ailerons: [], elevators: [], rudders: [] };
   for (const s of [1, -1]) {
     // Box intake under the wing root, with a dark throat.

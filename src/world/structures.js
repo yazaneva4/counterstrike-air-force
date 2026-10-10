@@ -9,6 +9,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/noise.js';
 import { canvasTexture, stdMat, mesh, glowSprite, glowTexture, tint, lerp, clamp } from '../core/util.js';
 import { PLACES, HALF, MAP_SIZE } from './terrain.js';
+import { buildRaceTrack } from './racetrack.js';
 import { buildSpaceport } from './spaceport.js';
 import { plaster, roofTiles } from '../core/textures.js';
 import { treeSpecimen } from './vegetation.js';
@@ -117,6 +118,7 @@ export class Structures {
     this.colliders = [];      // oriented boxes {x,z,hw,hd,rot,top,bottom}
     this.platforms = [];      // walkable tops {x,z,hw,hd,rot,y}
     this.roads = [];          // polylines [[x,z],...] with width
+    this.tracks = [];         // closed race circuits (not used by road traffic)
     this.nightLights = [];    // {obj, mat, base} glow when dark
     this.spinners = [];       // (dt,t)=>void animations
     this.blinkers = [];       // {sprite, period, phase}
@@ -132,6 +134,7 @@ export class Structures {
     this._harbour();
     this._turbines();
     buildSpaceport(this);
+    buildRaceTrack(this);
   }
 
   h(x, z) { return this.terrain.heightAt(x, z); }
@@ -145,14 +148,20 @@ export class Structures {
       const lx = dx * b.c - dz * b.s, lz = dx * b.s + dz * b.c;
       if (Math.abs(lx) < b.hw + pad && Math.abs(lz) < b.hd + pad) return true;
     }
-    for (const r of this.roads) {
-      const pts = r.pts;
-      for (let i = 1; i < pts.length; i++) {
-        const [ax, az] = pts[i - 1], [bx, bz] = pts[i];
-        const vx = bx - ax, vz = bz - az;
-        const t = clamp(((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz), 0, 1);
-        if (Math.hypot(x - (ax + vx * t), z - (az + vz * t)) < r.width / 2 + pad) return true;
-      }
+    for (const r of this.roads) if (this._nearPath(r, x, z, r.width / 2 + pad)) return true;
+    for (const r of this.tracks) if (this._nearPath(r, x, z, r.width / 2 + pad + 10)) return true;
+    return false;
+  }
+
+  // Is (x, z) within `dist` of a road or circuit centre-line?
+  _nearPath(r, x, z, dist) {
+    if (r.closed && Math.hypot(x - r.cx, z - r.cz) > r.r) return false;
+    const pts = r.pts, n = pts.length;
+    for (let i = 1; i <= (r.closed ? n : n - 1); i++) {
+      const a = pts[i - 1], b = pts[i % n];
+      const vx = b[0] - a[0], vz = b[1] - a[1];
+      const t = clamp(((x - a[0]) * vx + (z - a[1]) * vz) / (vx * vx + vz * vz || 1), 0, 1);
+      if (Math.hypot(x - (a[0] + vx * t), z - (a[1] + vz * t)) < dist) return true;
     }
     return false;
   }
@@ -160,14 +169,8 @@ export class Structures {
   // Tarmac under (x, z): a road, the runway, an apron or any paved slab.
   roadAt(x, z) {
     if (this.platformAt(x, z) > -Infinity) return true;
-    for (const r of this.roads) {
-      const pts = r.pts, hw = r.width / 2 + 0.6;
-      for (let i = 1; i < pts.length; i++) {
-        const ax = pts[i - 1][0], az = pts[i - 1][1], vx = pts[i][0] - ax, vz = pts[i][1] - az;
-        const t = clamp(((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz), 0, 1);
-        if (Math.hypot(x - (ax + vx * t), z - (az + vz * t)) < hw) return true;
-      }
-    }
+    for (const r of this.roads) if (this._nearPath(r, x, z, r.width / 2 + 0.6)) return true;
+    for (const r of this.tracks) if (this._nearPath(r, x, z, r.width / 2 + 1.4)) return true;
     return false;
   }
 
@@ -788,6 +791,10 @@ export class Structures {
     for (const r of this.roads) {
       ctx.strokeStyle = 'rgba(70,70,74,0.95)'; ctx.lineWidth = Math.max(1.4, r.width * S);
       ctx.beginPath(); r.pts.forEach(([x, z], i) => (i ? ctx.lineTo(X(x), Z(z)) : ctx.moveTo(X(x), Z(z)))); ctx.stroke();
+    }
+    for (const r of this.tracks) {
+      ctx.strokeStyle = 'rgba(70,70,74,0.95)'; ctx.lineWidth = Math.max(2, r.width * S);
+      ctx.beginPath(); r.pts.forEach(([x, z], i) => (i ? ctx.lineTo(X(x), Z(z)) : ctx.moveTo(X(x), Z(z)))); ctx.closePath(); ctx.stroke();
     }
     ctx.fillStyle = '#3a3d40';
     ctx.fillRect(X(RUNWAY.x0), Z(RUNWAY.z - RUNWAY.width / 2), (RUNWAY.x1 - RUNWAY.x0) * S, Math.max(2, RUNWAY.width * S));

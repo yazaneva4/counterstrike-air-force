@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { SkidMarks } from './fx/skidmarks.js';
 import { Terrain, PLACES } from './world/terrain.js';
 import { Structures, RUNWAY } from './world/structures.js';
+import { LapTimer, fmtLap } from './world/racetrack.js';
 import { Vegetation } from './world/vegetation.js';
 import { SkySystem } from './world/sky.js';
 import { Ocean } from './world/water.js';
@@ -136,6 +137,7 @@ export class Game {
     this.animals = new Animals(W, this.scene);
     this.aliens = new Aliens(W, this.scene);
     this.traffic = new Traffic(this.scene, W);
+    this.lapTimer = new LapTimer(this.structures.race);
 
     await step(0.88, 'Preparing orbit');
     this.fx = { sparks: new Particles(3500), smoke: new Particles(3200, { additive: false }) };
@@ -194,6 +196,7 @@ export class Game {
     const S = this.structures, sp = S.spawns, P = PLACES, C = P.spaceport;
     const list = [
       ['gtr', 80, 590, 0, 2], ['drift', 96, 590, 0, 3],
+      ...['gtr', 'drift', 'gt', 'gtr', 'drift', 'gt'].map((t, i) => [t, sp.speedwayGrid[i].x, sp.speedwayGrid[i].z, sp.speedwayGrid[i].heading, i + 2]),
       ['pickup', 60, 590, Math.PI / 2, 2], ['jeep', -262, 592, -Math.PI / 2, 5],
       ['sedan', sp.village.x + 30, sp.village.z + 8, 0.4, 0], ['gt', sp.village.x - 26, sp.village.z + 34, -0.6, 6],
       ['pickup', sp.farm.x + 12, sp.farm.z + 10, 1.2, 3], ['jeep', sp.beach.x + 20, sp.beach.z - 24, 2.5, 7],
@@ -249,8 +252,8 @@ export class Game {
       spaceport: { x: S.spaceport.x, z: S.spaceport.z, h: S.spaceport.heading },
     }[spawn] || { x: -150, z: 590, h: 0 };
     if (spawn === 'motorsport') {
-      const race = this.vehicles.find(v => v.type === 'gtr');
-      if (race) { where.x = race.home.x; where.z = race.home.z - 4.5; where.h = race.home.heading; }
+      const pit = S.speedway;
+      where.x = pit.x; where.z = pit.z; where.h = pit.heading;
     }
     this.player.spawnAt(where, where.h);
     this.player.camPos.set(where.x, this.world.groundAt(where.x, where.z) + 60, where.z - 40);
@@ -282,6 +285,18 @@ export class Game {
     if (this.location === 'space') { const n = this.space.nearest; return n.alt > n.r * 6 ? 'Deep Space' : { earth: 'Low Earth Orbit', moon: 'Lunar Orbit', mars: 'Mars Orbit' }[n.id]; }
     const p = this.focusPos();
     return this.world.terrain.regionName(p.x, p.z, p.y);
+  }
+
+  // Lap timing on Kestrel Speedway: only while driving a car.
+  _lapTiming(dt, p) {
+    const L = this.lapTimer, car = p.mode === 'vehicle' && p.vehicle?.kind === 'car' ? p.vehicle : null;
+    const pos = car ? car.pos : p.pos;
+    const ev = L.update(pos.x, pos.z, dt, !!car);
+    if (!car && L.running && !this.structures.race.pts.some(([x, z]) => Math.hypot(x - pos.x, z - pos.z) < 40)) L.reset();
+    if (!ev) return;
+    if (ev.type === 'start') this.hud.toast('Lap 1 · go! Pass all three checkpoints to count a lap', 3);
+    else this.hud.toast(`Lap ${ev.lap}  ${fmtLap(ev.time)}${ev.isBest ? '  ·  NEW BEST' : '  ·  best ' + fmtLap(ev.best)}`, 5);
+    this.audio?.ping?.();
   }
 
   modeLabel() {
@@ -769,6 +784,7 @@ export class Game {
     this._updateBolts(dt);
     this._trails(dt);
     this.skidMarks.update(dt, p.mode === 'vehicle' ? p.vehicle : null, this.world);
+    this._lapTiming(dt, p);
     this._driftFx(dt);
     this.fx.sparks.update(dt); this.fx.smoke.update(dt);
     this.fx.sparks.setPixelScale(innerHeight * this.renderer.getPixelRatio());

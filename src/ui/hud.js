@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { escapeHTML, clamp, lerp } from '../core/util.js';
 import { MAP_SIZE, HALF, PLACES } from '../world/terrain.js';
+import { fmtLap } from '../world/racetrack.js';
 import { MYSTERY_INFO } from '../world/mysteries.js';
 
 const $ = (s) => document.querySelector(s);
@@ -399,6 +400,16 @@ export class HUD {
     if (v.skid > 0.3) { c.fillStyle = '#ffb45a'; c.font = `700 ${11 * d}px 'DM Mono', monospace`; c.fillText(v.drifting ? 'DRIFT ' + Math.round(Math.abs(v.driftAngle) * 180 / Math.PI) + '° · ' + v.driftTime.toFixed(1) + 's' : 'TYRE SLIP', cx, cy - R * 1.25); }
     c.font = `500 ${11 * d}px 'DM Mono', monospace`; c.fillStyle = dim;
     c.fillText('W/S THROTTLE · A/D STEER · SPACE HANDBRAKE · L LIGHTS · B HORN', cx, cy + R * 1.42);
+    // Lap timer panel (Kestrel Speedway) at the left of the dial.
+    const L = this.game.lapTimer;
+    if (L && (L.running || L.best)) {
+      const lx = cx - R * 2.3, ly = cy - R * 0.5;
+      c.textAlign = 'left'; c.fillStyle = 'rgba(6,20,26,0.55)'; c.fillRect(lx - 10 * d, ly - 24 * d, 190 * d, 92 * d);
+      c.fillStyle = col; c.font = `700 ${12 * d}px 'DM Mono', monospace`; c.fillText(L.running ? 'LAP ' + L.lap : 'LAPS', lx, ly - 8 * d);
+      c.font = `700 ${20 * d}px 'DM Mono', monospace`; c.fillStyle = L.splitFlash > 0 ? '#7dffd6' : col; c.fillText(L.running ? fmtLap(L.time) : '--:--.---', lx, ly + 16 * d);
+      c.font = `500 ${11 * d}px 'DM Mono', monospace`; c.fillStyle = dim;
+      c.fillText('LAST ' + fmtLap(L.last), lx, ly + 38 * d); c.fillText('BEST ' + fmtLap(L.best), lx, ly + 54 * d);
+    }
     c.restore();
   }
 
@@ -510,7 +521,7 @@ export class HUD {
     ctx.font = `600 ${12 * d}px 'DM Mono', monospace`;
     ctx.textAlign = 'center';
     const labels = onEarth
-      ? [PLACES.airbase, PLACES.village, PLACES.farm, PLACES.lighthouse, PLACES.beach, PLACES.stones, PLACES.turbines, PLACES.spaceport, { name: 'Red Mesa', x: -1300, z: -60 }, { name: 'Mount Kestrel', x: PLACES.peak.x, z: PLACES.peak.z + 160 }]
+      ? [PLACES.airbase, PLACES.village, PLACES.farm, PLACES.lighthouse, PLACES.beach, PLACES.stones, PLACES.turbines, PLACES.spaceport, PLACES.speedway, { name: 'Red Mesa', x: -1300, z: -60 }, { name: 'Mount Kestrel', x: PLACES.peak.x, z: PLACES.peak.z + 160 }]
       : G.location === 'moon' ? [{ name: 'Kestrel-1 site', x: 70, z: -70 }, { name: 'Mare Serenitatis', x: 900, z: -900 }] : [{ name: 'Ares Station', x: 160, z: 170 }, { name: 'Jezero Crater Rim', x: 0, z: 2300 }, { name: 'Ares Vallis', x: 1200, z: -1150 }];
     for (const l of labels) {
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(l.name, X(l.x) + d, Z(l.z) + d);
