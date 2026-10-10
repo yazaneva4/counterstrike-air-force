@@ -4,6 +4,7 @@
 // the player is: 'earth' (the island), 'space', 'moon' or 'mars'.
 
 import * as THREE from 'three';
+import { SkidMarks } from './fx/skidmarks.js';
 import { Terrain, PLACES } from './world/terrain.js';
 import { Structures, RUNWAY } from './world/structures.js';
 import { Vegetation } from './world/vegetation.js';
@@ -93,12 +94,17 @@ export class Game {
     const shadows = q !== 'low';
     this.renderer.shadowMap.enabled = shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.sky = new SkySystem(this.scene, { shadowSize: q === 'high' ? 2048 : 1024, shadows });
+    this.sky = new SkySystem(this.scene, { shadowSize: this.settings.render4k ? 4096 : q === 'high' ? 2048 : 1024, shadows });
     this.ocean = new Ocean(this.terrain.heightTexture(512));
     this.scene.add(this.ocean.mesh);
     this.clouds = new Clouds({ count: q === 'low' ? 26 : 46 });
     this.scene.add(this.clouds.mesh);
     this.weather = new Weather(this.scene, { rain: q === 'low' ? 700 : 1600 });
+    const pavement = new Set();
+    this.structures.group.traverse((o) => {
+      for (const m of [o.material].flat()) if (m?.isMeshStandardMaterial && m.polygonOffset && m.roughness >= 0.8) pavement.add(m);
+    });
+    this.weather.pavedMaterials = [...pavement].map(material => ({ material, color: material.color.clone(), roughness: material.roughness }));
 
     await step(0.58, 'Hiding mysteries');
     this.mysteries = new Mysteries(W, this.scene);
@@ -134,6 +140,7 @@ export class Game {
     await step(0.88, 'Preparing orbit');
     this.fx = { sparks: new Particles(3500), smoke: new Particles(3200, { additive: false }) };
     this.scene.add(this.fx.sparks.points, this.fx.smoke.points);
+    this.skidMarks = new SkidMarks(this.scene);
     this.space = new Space(this.renderer);
     this.space.active = false;
     this.boltGeo = new THREE.CapsuleGeometry(0.22, 5, 4, 8).rotateX(Math.PI / 2);
@@ -142,8 +149,8 @@ export class Game {
     this.ufoTrail = new Trail(this.scene, { length: 70, width: 1.6, color: 0x7dffd6, opacity: 0.5, additive: true, minStep: 4 });
 
     await step(0.95, 'Final checks');
-    this.post = new PostFX(this.renderer, this.scene, this.camera, { quality: q });
-    this.hasEnv = this.post.enabled && q !== 'low';
+    this.post = new PostFX(this.renderer, this.scene, this.camera, { quality: q, render4k: !!this.settings.render4k });
+    this.hasEnv = this.post.hdrSupported && q !== 'low';
     if (this.hasEnv) {
       // Reflection/ambient probe: the same sky without the blinding sun disk,
       // scaled down so image-based light complements (not floods) the sun.
@@ -164,6 +171,13 @@ export class Game {
       skyCopy.scale.setScalar(80);
       this.envScene.add(skyCopy);
     }
+    // Preserve oblique texture detail on roads, buildings and car panels.
+    const anisotropy = Math.min(this.renderer.capabilities.getMaxAnisotropy(), q === 'high' ? 16 : 4);
+    this.scene.traverse(o => {
+      for (const m of [o.material].flat()) for (const key of ['map', 'normalMap', 'roughnessMap', 'alphaMap']) {
+        if (m?.[key]?.isTexture) { m[key].anisotropy = anisotropy; m[key].needsUpdate = true; }
+      }
+    });
     this.player = new Player(this, this.settings.profile);
     this.scene.add(this.player.root);
     this.islandWorld = W;
@@ -179,6 +193,7 @@ export class Game {
   _parkCars() {
     const S = this.structures, sp = S.spawns, P = PLACES, C = P.spaceport;
     const list = [
+      ['gtr', 80, 590, 0, 2], ['drift', 96, 590, 0, 3],
       ['pickup', 60, 590, Math.PI / 2, 2], ['jeep', -262, 592, -Math.PI / 2, 5],
       ['sedan', sp.village.x + 30, sp.village.z + 8, 0.4, 0], ['gt', sp.village.x - 26, sp.village.z + 34, -0.6, 6],
       ['pickup', sp.farm.x + 12, sp.farm.z + 10, 1.2, 3], ['jeep', sp.beach.x + 20, sp.beach.z - 24, 2.5, 7],
@@ -233,6 +248,10 @@ export class Game {
       beach: { x: S.beach.x, z: S.beach.z, h: Math.PI }, farm: { x: S.farm.x, z: S.farm.z, h: 0 },
       spaceport: { x: S.spaceport.x, z: S.spaceport.z, h: S.spaceport.heading },
     }[spawn] || { x: -150, z: 590, h: 0 };
+    if (spawn === 'motorsport') {
+      const race = this.vehicles.find(v => v.type === 'gtr');
+      if (race) { where.x = race.home.x; where.z = race.home.z - 4.5; where.h = race.home.heading; }
+    }
     this.player.spawnAt(where, where.h);
     this.player.camPos.set(where.x, this.world.groundAt(where.x, where.z) + 60, where.z - 40);
     this.running = true;
@@ -415,7 +434,7 @@ export class Game {
     this.space.active = true;
     this.spaceVehicle = v;
     this.location = 'space';
-    this.camera.near = 1; this.camera.far = 200000; this.camera.updateProjectionMatrix();
+    this.camera.near = this.player.cockpit ? 0.08 : 1; this.camera.far = 200000; this.camera.updateProjectionMatrix();
     this.post.setScene(this.space.scene, this.camera);
     this.hud.toast(from === 'earth' ? 'Orbit reached · press 1 Earth · 2 Moon · 3 Mars to warp · dive towards a world to land' : 'Back in orbit · 1 Earth · 2 Moon · 3 Mars', 5);
     if (v.parts.beam) v.parts.beam.visible = false;
@@ -440,7 +459,7 @@ export class Game {
     if (v.kind === 'rocket') { v.prepareDescent(v.heading); v.vel.set(0, -70, 0); }
     else v.quat.setFromEuler(new THREE.Euler(0, v.heading, 0, 'YXZ'));
     v.onGround = false;
-    this.camera.near = 0.3; this.camera.far = 30000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
+    this.camera.near = this.player.cockpit ? 0.08 : 0.3; this.camera.far = 30000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
     this.post.setScene(this.scene, this.camera);
     this.player.camPos.copy(v.pos).add(tv.set(0, 20, 60));
     this.reentry = 4;
@@ -469,7 +488,7 @@ export class Game {
     v.onGround = false;
     if (v.kind === 'rocket') { v.prepareDescent(0); v.vel.set(0, -45, 0); }
     else { v.quat.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ')); v.vel.set(0, -30, -10); }
-    this.camera.near = 0.3; this.camera.far = 60000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
+    this.camera.near = this.player.cockpit ? 0.08 : 0.3; this.camera.far = 60000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
     this.post.setScene(S.scene, this.camera);
     this.player.camPos.copy(v.pos).add(tv.set(0, 25, 70));
     this.fade(1.4, '#000');
@@ -510,7 +529,7 @@ export class Game {
       v.reset();
       if (v === this.ufo) this._lockUfo(false);
     }
-    this.camera.near = 0.3; this.camera.far = 30000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
+    this.camera.near = this.player.cockpit ? 0.08 : 0.3; this.camera.far = 30000; this.camera.up.set(0, 1, 0); this.camera.updateProjectionMatrix();
     this.post.setScene(this.scene, this.camera);
     const S = this.structures.spawns.spaceport;
     this.player.spawnAt({ x: S.x, z: S.z }, S.heading);
@@ -621,12 +640,14 @@ export class Game {
   _surfaceFrame(dt, t) {
     const S = this.surface, p = this.player, I = this.input;
     p.update(dt);
+    if (this.space.active || this.location !== S.body) { I.endFrame(); return; }
     // The world clock keeps running on other worlds (and stays in step for multiplayer).
     this.sky.advance(dt);
     for (const v of this.vehicles) {
       const res = v.update(dt, v === p.vehicle ? p.ctl : null, this.world);
       if (res) this._vehicleEvent(v, res);
     }
+    if (p.vehicle && p.mode === 'vehicle') p._vehicleCamera(dt);
     this._rocketFx(dt);
     if (p.mode === 'dead') p.deadCamera(dt, t);
     const cam = this.camera;
@@ -644,7 +665,7 @@ export class Game {
     }
     // Climb high enough and you are back in orbit.
     const v = p.vehicle;
-    if (v && !v.destroyed && v.kind === 'rocket' && v.launched && v.vel.y > 0 && v.pos.y - this.world.groundAt(v.pos.x, v.pos.z) > 1500) this.enterSpace();
+    if (v && !v.destroyed && v.kind === 'rocket' && v.launched && v.vel.y > 0 && v.pos.y - this.world.groundAt(v.pos.x, v.pos.z) > 1500) { this.enterSpace(); I.endFrame(); return; }
     this._remotes(dt, S.scene);
     this.net.update(dt, p.netState(), this.sky.time);
     this.audio.update({ dt, vehicle: p.mode === 'vehicle' && v ? v.type : null, throttle: v?.throttle || 0, speed: v ? v.speed : 0, rpm: v?.rpm || 0, boosting: v?.boosting, night: 0, altitude: 0, coast: 0, space: true, vacuum: S.world.air < 0.01, menu: false, thrust: v?.thrustAcc > 0 });
@@ -662,15 +683,15 @@ export class Game {
     this.t = t;
     const I = this.input, p = this.player;
     this._hotkeys();
-    if (this.paused) { this._render(dt); I.endFrame(); return; }
+    if (this.paused) { this.post.render(); I.endFrame(); return; }
     this.world.night = this.sky.night;
 
     if (this.location === 'moon' || this.location === 'mars') { this._surfaceFrame(dt, t); return; }
     if (this.space.active) {
       if (this.sky.real) this.space.setTimeOfDay(this.sky.time, Math.sin(this.sky.decl));
-      const res = this.space.update(dt, this._spaceControls(), this.camera);
-      if (res === 'reentry') this.exitSpace();
-      else if (res && res.startsWith('land:')) this.enterSurface(res.slice(5));
+      const res = this.space.update(dt, { ...this._spaceControls(), firstPerson: p.cockpit }, this.camera);
+      if (res === 'reentry') { this.exitSpace(); I.endFrame(); return; }
+      else if (res && res.startsWith('land:')) { this.enterSurface(res.slice(5)); I.endFrame(); return; }
       const sv = this.spaceVehicle;
       if (sv && this.space.active) {
         const th = this.space.thrust || 0;
@@ -690,11 +711,13 @@ export class Game {
     }
 
     p.update(dt);
+    if (this.location !== 'earth') { I.endFrame(); return; }
     // Vehicles (the player's gets the controls).
     for (const v of this.vehicles) {
       const res = v.update(dt, v === p.vehicle ? p.ctl : null, this.world);
       if (res) this._vehicleEvent(v, res);
     }
+    if (p.vehicle && p.mode === 'vehicle') p._vehicleCamera(dt);
     this._rocketFx(dt);
     if (p.mode === 'dead') p.deadCamera(dt, t);
     if (this.debugCam) { this.camera.position.copy(this.debugCam.pos); this.camera.up.set(0, 1, 0); this.camera.lookAt(this.debugCam.look); }
@@ -715,6 +738,8 @@ export class Game {
     this.sky.shadowRadius = p.mode === 'vehicle' ? 220 : 110;
     this.sky.update(dt, cam, focus, this.renderer, alt);
     this.weather.update(dt, cam, this.sky, this.clouds, this.scene.fog, this.ocean, alt);
+    this.world.wind = this.clouds.wind;
+    this.world.wetness = this.weather.now.wet;
     this.ocean.update(dt, this.sky, this.scene.fog);
     this.clouds.update(dt, this.sky, this.scene.fog);
     this.vegetation.update(dt, this.camera.position);
@@ -743,6 +768,8 @@ export class Game {
     this.traffic.update(dt, t, this.sky.night, this.focusPos(), this.vehicles);
     this._updateBolts(dt);
     this._trails(dt);
+    this.skidMarks.update(dt, p.mode === 'vehicle' ? p.vehicle : null, this.world);
+    this._driftFx(dt);
     this.fx.sparks.update(dt); this.fx.smoke.update(dt);
     this.fx.sparks.setPixelScale(innerHeight * this.renderer.getPixelRatio());
     this.fx.smoke.setPixelScale(innerHeight * this.renderer.getPixelRatio());
@@ -800,6 +827,23 @@ export class Game {
     } else { this.ufoTrail.clear(); this.ufoTrail.update(0); }
   }
 
+  _driftFx(dt) {
+    const v = this.player.vehicle;
+    if (!v || v.kind !== 'car' || !v.onGround || v.skid < 0.15 || v.speed < 6) { this.tyreSmoke = 0; return; }
+    const road = this.world.structures.roadAt(v.pos.x, v.pos.z);
+    const intensity = road ? v.skid * (1 - (this.world.wetness ?? 0)) : Math.min(1, v.speed / 20);
+    this.tyreSmoke = (this.tyreSmoke || 0) + dt * 22 * intensity;
+    const count = Math.floor(this.tyreSmoke); this.tyreSmoke -= count;
+    const hx = Math.sin(v.heading), hz = Math.cos(v.heading);
+    for (let k = 0; k < count; k++) for (const side of [-1, 1]) {
+      const x = v.pos.x - hx * v.wb / 2 + hz * side * v.track / 2;
+      const z = v.pos.z - hz * v.wb / 2 - hx * side * v.track / 2;
+      this.fx.smoke.emit(x, this.world.groundAt(x, z) + 0.16, z,
+        v.vel.x * 0.12 + (Math.random() - 0.5), 0.5 + Math.random() * 0.6, v.vel.z * 0.12 + (Math.random() - 0.5),
+        { color: road ? 0xbfc0bd : 0x9c8969, size: 0.28, grow: 1.2, life: 1.3, drag: 1.5, intensity: 0.7 });
+    }
+  }
+
   _audio(dt) {
     const p = this.player, v = p.vehicle;
     const f = this.focusPos();
@@ -839,6 +883,7 @@ export class Game {
 
   _hotkeys() {
     const I = this.input, H = this.hud;
+    if (!this.paused && I.hit('KeyV')) this.player.toggleView();
     if (I.hit('KeyM')) H.toggleMap();
     if (I.hit('KeyJ')) H.toggleJournal();
     if (I.hit('KeyH')) document.querySelector('#help').classList.toggle('on');

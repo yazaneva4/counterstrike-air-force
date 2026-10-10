@@ -65,8 +65,10 @@ export class Terrain {
 
     const mN = smoothstep(-250, -1150, z);
     if (mN > 0) {
-      const rg = N.ridged(x * 0.00115 + 2, z * 0.00115 - 4, 5);
-      h += mN * (rg * rg * 560 + 45 + N.fbm(x * 0.004, z * 0.004, 3) * 25);
+      // Broad eroded ridges rather than tall, tightly spaced noise spikes.
+      const rg = N.ridged(x * 0.00065 + 2, z * 0.00065 - 4, 3);
+      const shoulder = N.fbm(x * 0.0008 - 3, z * 0.0008 + 8, 3) * 0.5 + 0.5;
+      h += mN * (rg * 240 + shoulder * 170 + 45 + N.fbm(x * 0.003, z * 0.003, 3) * 15);
     }
     const pk = Math.exp(-((x + 120) ** 2 + (z + 1380) ** 2) / (2 * 430 * 430));
     h += pk * 430;

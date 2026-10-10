@@ -10,6 +10,8 @@ import { mulberry32 } from '../core/noise.js';
 import { canvasTexture, stdMat, mesh, glowSprite, glowTexture, tint, lerp, clamp } from '../core/util.js';
 import { PLACES, HALF, MAP_SIZE } from './terrain.js';
 import { buildSpaceport } from './spaceport.js';
+import { plaster, roofTiles } from '../core/textures.js';
+import { treeSpecimen } from './vegetation.js';
 
 export const RUNWAY = { x0: -720, x1: 560, z: 700, width: 42 };
 
@@ -60,6 +62,40 @@ function concreteTexture(tiles = 8) {
   }, { repeat: true });
   t.repeat.set(tiles, tiles);
   return t;
+}
+
+// Framed panes and recessed wooden doors share small textures across the town.
+function windowTextures() {
+  const map = canvasTexture(128, 128, (ctx, w, h) => {
+    ctx.fillStyle = '#c9c4b7'; ctx.fillRect(0, 0, w, h);
+    const pane = ctx.createLinearGradient(0, 0, w, h);
+    pane.addColorStop(0, '#85969b'); pane.addColorStop(0.45, '#455b63'); pane.addColorStop(1, '#1d2d35');
+    ctx.fillStyle = pane; ctx.fillRect(9, 9, w - 18, h - 18);
+    ctx.fillStyle = 'rgba(211,207,194,0.18)';
+    for (let x = 15; x < w - 12; x += 7) ctx.fillRect(x, 12, 2, h - 25);
+    ctx.fillStyle = '#c9c4b7'; ctx.fillRect(w / 2 - 3, 5, 6, h - 10); ctx.fillRect(5, h / 2 - 3, w - 10, 6);
+    ctx.strokeStyle = '#706a5f'; ctx.lineWidth = 2; ctx.strokeRect(3, 3, w - 6, h - 6);
+  });
+  const emissive = canvasTexture(128, 128, (ctx, w, h) => {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#d5c29d'; ctx.fillRect(10, 10, w - 20, h - 20);
+    ctx.fillStyle = '#000'; ctx.fillRect(w / 2 - 4, 0, 8, h); ctx.fillRect(0, h / 2 - 4, w, 8);
+  }, { srgb: false });
+  return { map, emissive };
+}
+function doorTexture() {
+  return canvasTexture(128, 256, (ctx, w, h) => {
+    ctx.fillStyle = '#765540'; ctx.fillRect(0, 0, w, h);
+    const rnd = mulberry32(32);
+    for (let k = 0; k < 180; k++) {
+      ctx.strokeStyle = `rgba(35,23,16,${0.05 + rnd() * 0.12})`;
+      const x = rnd() * w; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + rnd() * 4, h); ctx.stroke();
+    }
+    ctx.strokeStyle = '#443326'; ctx.lineWidth = 5;
+    for (const yy of [20, 135]) for (const xx of [14, 68]) ctx.strokeRect(xx, yy, 44, 92);
+    ctx.fillStyle = '#b8a47a'; ctx.fillRect(w - 24, h * 0.51, 13, 4);
+    ctx.fillStyle = '#c7c0ad'; ctx.fillRect(0, 0, 6, h); ctx.fillRect(w - 6, 0, 6, h); ctx.fillRect(0, 0, w, 6);
+  });
 }
 
 function roadTexture() {
@@ -400,40 +436,60 @@ export class Structures {
     const wallGeo = new THREE.BoxGeometry(1, 1, 1); wallGeo.translate(0, 0.5, 0);
     const roofGeo = new THREE.CylinderGeometry(0.02, 0.72, 0.62, 4, 1); roofGeo.rotateY(Math.PI / 4); roofGeo.translate(0, 0.31, 0);
     const winGeo = new THREE.PlaneGeometry(1, 1);
-    const walls = new THREE.InstancedMesh(wallGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), n);
-    const roofs = new THREE.InstancedMesh(roofGeo, new THREE.MeshStandardMaterial({ roughness: 0.75, flatShading: true }), n);
-    const winMat = new THREE.MeshStandardMaterial({ color: 0x28303a, emissive: 0xffbe6e, emissiveIntensity: 0, roughness: 0.2, metalness: 0.4 });
-    const darkWinMat = new THREE.MeshStandardMaterial({ color: 0x28303a, roughness: 0.2, metalness: 0.4 });
-    const perHouse = 6;
+    const wallMaps = plaster(), roofMaps = roofTiles(), winMaps = windowTextures();
+    const wallMap = wallMaps.map.clone(), wallNormal = wallMaps.normal.clone();
+    wallMap.repeat.set(2, 2); wallNormal.repeat.set(2, 2);
+    const tileMap = roofMaps.map.clone(), tileNormal = roofMaps.normal.clone();
+    tileMap.repeat.set(2, 2); tileNormal.repeat.set(2, 2);
+    const walls = new THREE.InstancedMesh(wallGeo, new THREE.MeshStandardMaterial({ map: wallMap, normalMap: wallNormal, normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.94 }), n);
+    const roofs = new THREE.InstancedMesh(roofGeo, new THREE.MeshStandardMaterial({ map: tileMap, normalMap: tileNormal, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.86, flatShading: true }), n);
+    const winMat = new THREE.MeshStandardMaterial({ map: winMaps.map, emissiveMap: winMaps.emissive, emissive: 0xffd49b, emissiveIntensity: 0, roughness: 0.3, metalness: 0.08 });
+    const darkWinMat = new THREE.MeshStandardMaterial({ map: winMaps.map, roughness: 0.3, metalness: 0.08 });
+    const perHouse = 10;
     const lit = houses.filter((hh) => hh.lit).length;
     const wins = new THREE.InstancedMesh(winGeo, winMat, lit * perHouse);
     const dwins = new THREE.InstancedMesh(winGeo, darkWinMat, (n - lit) * perHouse);
-    const doors = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.3, 2.3), stdMat(0x4a3322, { rough: 0.7 }), n);
+    const doors = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.3, 2.3), new THREE.MeshStandardMaterial({ map: doorTexture(), roughness: 0.83 }), n);
+    const trimMat = stdMat(0xc4bcaa, { rough: 0.9 });
+    const foundations = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x8c867a, map: wallMap, normalMap: wallNormal, roughness: 0.95 }), n);
+    const eaves = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), trimMat, n);
+    const sills = new THREE.InstancedMesh(new THREE.BoxGeometry(1.5, 0.12, 0.24), trimMat, n * perHouse);
+    const steps = new THREE.InstancedMesh(new THREE.BoxGeometry(1.7, 0.22, 0.65), trimMat, n);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), s = new THREE.Vector3(), c = new THREE.Color();
-    let wi = 0, dwi = 0, di = 0;
+    let wi = 0, dwi = 0, di = 0, si = 0;
     const local = new THREE.Vector3(), qq = new THREE.Quaternion();
     houses.forEach((hs, i) => {
       q.setFromEuler(e.set(0, hs.rot, 0));
       m4.compose(p.set(hs.x, hs.y, hs.z), q, s.set(hs.w, hs.h + 0.3, hs.d)); walls.setMatrixAt(i, m4); walls.setColorAt(i, c.set(hs.wall));
       m4.compose(p.set(hs.x, hs.y + hs.h + 0.3, hs.z), q, s.set(hs.w * 1.02, hs.w * 0.55, hs.d * 1.02)); roofs.setMatrixAt(i, m4); roofs.setColorAt(i, c.set(hs.roof));
-      // Door + windows on the street-facing (+z local) side, windows on the back.
+      m4.compose(p.set(hs.x, hs.y + 0.18, hs.z), q, s.set(hs.w + 0.16, 0.36, hs.d + 0.16)); foundations.setMatrixAt(i, m4);
+      m4.compose(p.set(hs.x, hs.y + hs.h + 0.31, hs.z), q, s.set(hs.w * 1.04, 0.16, hs.d * 1.04)); eaves.setMatrixAt(i, m4);
+      // Doors and windows on every facade, with projecting stone sills.
       const place = (lx, ly, lz, ry, sx, sy, target, idx) => {
         local.set(lx, ly, lz).applyQuaternion(q);
         qq.setFromEuler(e.set(0, hs.rot + ry, 0));
         m4.compose(p.set(hs.x + local.x, hs.y + local.y, hs.z + local.z), qq, s.set(sx, sy, 1));
         target.setMatrixAt(idx, m4);
       };
-      place(0, 1.45, hs.d / 2 + 0.03, 0, 1, 1, doors, di++);
+      place(0, 1.45, hs.d / 2 + 0.04, 0, 1, 1, doors, di++);
+      place(0, 0.24, hs.d / 2 + 0.3, 0, 1, 1, steps, i);
       const slots = [[-hs.w * 0.3, 0], [hs.w * 0.3, 0], [-hs.w * 0.3, Math.PI], [hs.w * 0.3, Math.PI], [0, Math.PI], [0, 0]];
       slots.forEach(([lx, ry], k) => {
         const ly = k >= 4 ? Math.min(hs.h - 1.2, 4.6) : 2.2;
         const lz = ry === 0 ? hs.d / 2 + 0.03 : -hs.d / 2 - 0.03;
         if (hs.lit) place(lx, ly, lz, ry, 1.3, 1.2, wins, wi++);
         else place(lx, ly, lz, ry, 1.3, 1.2, dwins, dwi++);
+        place(lx, ly - 0.66, lz, ry, 1, 1, sills, si++);
       });
+      for (const side of [-1, 1]) for (const zz of [-0.22, 0.22]) {
+        const lx = side * (hs.w / 2 + 0.04), lz = zz * hs.d, ry = side * Math.PI / 2, ly = 2.3;
+        if (hs.lit) place(lx, ly, lz, ry, 1.3, 1.2, wins, wi++);
+        else place(lx, ly, lz, ry, 1.3, 1.2, dwins, dwi++);
+        place(lx, ly - 0.66, lz, ry, 1, 1, sills, si++);
+      }
     });
-    for (const im of [walls, roofs, wins, dwins, doors]) {
-      im.castShadow = im === walls || im === roofs;
+    for (const im of [walls, roofs, wins, dwins, doors, foundations, eaves, sills, steps]) {
+      im.castShadow = im !== wins && im !== dwins && im !== doors;
       im.receiveShadow = true;
       im.instanceMatrix.needsUpdate = true;
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
@@ -478,14 +534,16 @@ export class Structures {
       this.addBox(sx, sz, 1.8, 1.1, -a, y + 2.7);
     }
     // Benches + decorative trees around the plaza.
-    const trunk = stdMat(0x4f3a2a), leaf = stdMat(0x4a7a33, { flat: true });
+    const plantedTree = treeSpecimen('broad');
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2 + 0.2;
       const tx = V.x + Math.cos(a) * 44, tz = V.z + Math.sin(a) * 44;
       const gy = this.h(tx, tz);
-      this.group.add(mesh(new THREE.CylinderGeometry(0.25, 0.35, 4, 6), trunk, { x: tx, y: gy + 2, z: tz }));
-      this.group.add(mesh(new THREE.IcosahedronGeometry(2.6, 1), leaf, { x: tx, y: gy + 5.5, z: tz }));
-      this.addBox(tx, tz, 0.5, 0.5, 0, gy + 7);
+      const tree = plantedTree.clone();
+      tree.position.set(tx, gy - 0.05, tz); tree.rotation.y = a + k * 0.6;
+      tree.scale.setScalar(0.65 + (k % 3) * 0.05);
+      this.group.add(tree);
+      this.addBox(tx, tz, 0.32, 0.32, 0, gy + 7.5);
     }
     this.spawns.village = { x: V.x + 20, y, z: V.z + 30 };
   }

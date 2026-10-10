@@ -53,6 +53,7 @@ export class Player {
     if (!this.suit) Object.assign(outfit, ch.extra);
     const skins = [0xf1c7a5, 0xe0ac86, 0xc68a62, 0xa66d47, 0x7c4c32, 0x5a3825];
     outfit.skin = skins[this.skinIndex % skins.length];
+    this.eyeHeight = outfit.height * 0.94;
     const old = this.human;
     this.human = new Human(outfit);
     this.root = this.human.root;
@@ -82,6 +83,23 @@ export class Player {
     this.mode = 'foot';
     this.root.visible = true;
     this.human.state = 'idle';
+    this.onGround = true; this.swimming = false;
+    this.root.visible = !this.cockpit;
+  }
+
+  toggleView() {
+    if (this.mode === 'dead') return;
+    this.cockpit = !this.cockpit;
+    this.game.hud.toast(this.cockpit ? 'First-person view · V to switch' : 'Third-person view · V to switch', 2);
+    this.game.camera.near = this.cockpit ? 0.05 : 0.3;
+    this.game.camera.updateProjectionMatrix();
+    if (this.vehicle) {
+      this.vehicle.hidePilot = this.cockpit;
+      if (this.vehicle.parts.pilot) this.vehicle.parts.pilot.root.visible = !this.cockpit;
+      this.lookYaw = 0; this.lookPitch = this.cockpit && this.vehicle.kind === 'car' ? 0.07 : 0;
+      this._vehicleCamera(1);
+    }
+    if (this.mode === 'foot' || this.mode === 'chute' || this.mode === 'fall') this._footCamera(1);
   }
 
   // ---- Per-frame --------------------------------------------------------------
@@ -90,7 +108,6 @@ export class Player {
     const G = this.game, I = G.input;
     this.fireCD -= dt;
     this.shake = Math.max(0, this.shake - dt * 1.8);
-    if (I.hit('KeyV')) this.cockpit = !this.cockpit;
     if (this.mode === 'foot') this._foot(dt);
     else if (this.mode === 'vehicle') this._drive(dt);
     else if (this.mode === 'chute' || this.mode === 'fall') this._chute(dt);
@@ -106,7 +123,7 @@ export class Player {
     const look = I.consumeLook();
     const sens = 0.0024 * S.sensitivity * scale;
     this.camYaw -= look.dx * sens;
-    this.camPitch = clamp(this.camPitch - look.dy * sens * (S.invertY ? -1 : 1), -1.25, 0.95);
+    this.camPitch = clamp(this.camPitch - look.dy * sens * (S.invertY ? -1 : 1), this.cockpit ? -1.48 : -1.25, this.cockpit ? 1.48 : 0.95);
     return look;
   }
 
@@ -114,7 +131,7 @@ export class Player {
     const G = this.game, I = G.input, W = G.world;
     this._look(dt);
     const wheel = I.consumeWheel();
-    this.camDist = clamp(this.camDist + wheel * 0.7, 2.4, 16);
+    if (!this.cockpit) this.camDist = clamp(this.camDist + wheel * 0.7, 2.4, 16);
     const mv = I.moveAxes();
     const sprint = I.down('ShiftLeft') || I.down('ShiftRight') || I.tdown('boost');
     const fx = Math.sin(this.camYaw), fz = Math.cos(this.camYaw);
@@ -124,7 +141,7 @@ export class Player {
     const plat = W.structures.platformAt(pos.x, pos.z);
     this.swimming = terrainH < -1.25 && plat === -Infinity && pos.y < 0.2;
     const grav = W.gravity ?? 1;
-    const speed = (this.swimming ? 1.9 : sprint ? 6.4 : 2.6) * (grav < 1 ? 0.8 : 1);
+    const speed = (this.swimming ? 1.5 : sprint ? 5.8 : 1.65) * (grav < 1 ? 0.8 : 1);
     const accel = this.onGround || this.swimming ? 12 : 2.5;
     this.vel.x = damp(this.vel.x, wx * speed, accel, dt);
     this.vel.z = damp(this.vel.z, wz * speed, accel, dt);
@@ -133,10 +150,17 @@ export class Player {
       pos.y = damp(pos.y, -0.95, 4, dt);
       if (I.hit('Space') || I.thit('up')) G.audio?.splash();
     } else {
-      this.vel.y -= 22 * grav * dt;
-      if ((I.hit('Space') || I.thit('up')) && this.onGround) { this.vel.y = 7.2 * (grav < 1 ? 0.62 : 1); this.onGround = false; G.audio?.jump(); }
+      this.vel.y -= 9.81 * grav * dt;
+      if ((I.hit('Space') || I.thit('up')) && this.onGround) { this.vel.y = 3.2; this.onGround = false; G.audio?.jump(); }
     }
+    const previousX = pos.x, previousZ = pos.z, previousGround = W.groundAt(pos.x, pos.z);
     pos.x += this.vel.x * dt; pos.z += this.vel.z * dt;
+    // Feet cannot climb a cliff simply by snapping up to the height field.
+    const nextGround = W.groundAt(pos.x, pos.z);
+    const normal = W.terrain.normalAt?.(pos.x, pos.z);
+    if (this.onGround && !this.swimming && nextGround > previousGround + 1e-4 && normal && normal.y < 0.62) {
+      pos.x = previousX; pos.z = previousZ; this.vel.x = this.vel.z = 0;
+    }
     if (!this.swimming) pos.y += this.vel.y * dt;
     // Collisions: buildings, trunks, parked vehicles.
     W.structures.collide(pos, 0.35, pos.y + 0.9);
@@ -159,7 +183,8 @@ export class Player {
     } else if (!this.swimming && pos.y > g + 0.25) this.onGround = false;
     if (this.swimming && terrainH > -1.0) { pos.y = g; }
     const hs = Math.hypot(this.vel.x, this.vel.z);
-    if (hs > 0.3) this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), 10, dt);
+    if (this.cockpit) this.yaw = this.camYaw;
+    else if (hs > 0.3) this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), 10, dt);
     this.root.rotation.y = this.yaw;
     const H = this.human;
     H.speed = hs;
@@ -170,7 +195,8 @@ export class Player {
     H.lookPitch = clamp(-this.camPitch * 0.4, -0.3, 0.4);
     H.lookLocked = true;
     this._interactions();
-    this._footCamera(dt);
+    if (this.mode === 'vehicle') this._vehicleCamera(dt);
+    else this._footCamera(dt);
   }
 
   _interactions() {
@@ -186,7 +212,7 @@ export class Player {
     if (vehicle) {
       if (vehicle.locked) prompt = { key: 'F', text: 'The saucer is dormant. Something here is still undiscovered.' };
       else prompt = { key: 'F', text: 'Board ' + vehicle.def.name + ' · ' + vehicle.def.role };
-      if ((I.hit('KeyF') || I.thit('veh')) && !vehicle.locked) this.enter(vehicle);
+      if ((I.hit('KeyF') || I.thit('veh')) && !vehicle.locked) { this.enter(vehicle); prompt = null; }
     } else if (npc) {
       prompt = { key: 'E', text: 'Talk to ' + npc.name + ' · ' + npc.title };
       if (I.hit('KeyE') || I.thit('act')) G.talk(npc);
@@ -198,14 +224,19 @@ export class Player {
     const G = this.game;
     this.vehicle = v;
     v.occupied = true;
+    v.hidePilot = this.cockpit;
     this.mode = 'vehicle';
     this.root.visible = false;
     this.stick.x = this.stick.y = 0;
     this.kb.roll = this.kb.pitch = 0;
+    this.lookYaw = this.lookPitch = 0;
+    G.camera.near = this.cockpit ? 0.05 : 0.3;
+    G.camera.updateProjectionMatrix();
+    this.camPos.copy(v.pos);
     this.camYaw = v.headingAngle();
     if (v.kind === 'plane') v.throttle = Math.max(v.throttle, 0);
     G.hud.prompt(null);
-    const help = { plane: 'W/S throttle · mouse or ↑↓ pitch · A/D roll · Q/E rudder · Shift afterburner · F exit', heli: 'Space up, C down, WASD fly, mouse turn', ufo: 'Space/C altitude, WASD fly, E tractor beam', ship: 'Space/C altitude, WASD fly, Shift boost · climb past 3,000 m for orbit', car: 'W/S throttle and brake · A/D steer · Space handbrake · Shift boost · L lights · B horn · V cockpit', rocket: v.onGround && !v.launched ? 'Space to launch · W/S throttle · mouse steer · G legs · R level' : 'W/S throttle · mouse steer · Q/E roll · G legs · R hold level' };
+    const help = { plane: 'W/S throttle · mouse or ↑↓ pitch · A/D roll · Q/E rudder · Shift afterburner · F exit', heli: 'Space up, C down, WASD fly, mouse turn', ufo: 'Space/C altitude, WASD fly, E tractor beam', ship: 'Space/C altitude, WASD fly, Shift boost · climb past 3,000 m for orbit', car: 'W/S throttle and brake · A/D steer · Space handbrake · Shift full throttle · L lights · B horn · V cockpit', rocket: v.onGround && !v.launched ? 'Space to launch · W/S throttle · mouse steer · G legs · R level' : 'W/S throttle · mouse steer · Q/E roll · G legs · R hold level' };
     G.hud.toast(v.def.name + ' · ' + help[v.kind], 5);
     G.audio?.enter(v.type);
     G.onEnterVehicle?.(v);
@@ -217,6 +248,7 @@ export class Player {
     const agl = v.pos.y - v.ground - W.groundAt(v.pos.x, v.pos.z);
     if (!force && !v.onGround && agl < 20 && v.speed > 4) { G.hud.toast('Too low to bail out. Land first.'); return; }
     v.occupied = false;
+    v.hidePilot = false;
     this.vehicle = null;
     this.root.visible = true;
     if (v.onGround || agl < 3) {
@@ -249,9 +281,11 @@ export class Player {
     const up = (I.down('Space') || (lift && I.down('ArrowUp')) || I.tdown('up')) ? 1 : 0;
     const down = (I.down('KeyC') || (lift && I.down('ArrowDown')) || I.down('ControlLeft') || I.tdown('down')) ? 1 : 0;
     const boost = I.down('ShiftLeft') || I.down('ShiftRight') || I.tdown('boost');
-    const freeLook = I.mouseRight;
+    const freeLook = I.mouseRight || (this.cockpit && v.kind === 'car');
     if (freeLook) {
-      this.lookYaw -= look.dx * 0.004; this.lookPitch = clamp(this.lookPitch - look.dy * 0.004, -1, 0.6);
+      const sens = 0.0024 * S.sensitivity;
+      this.lookYaw = clamp(this.lookYaw - look.dx * sens, -1.5, 1.5);
+      this.lookPitch = clamp(this.lookPitch - look.dy * sens * (S.invertY ? -1 : 1), -0.9, 0.85);
     } else {
       this.lookYaw = damp(this.lookYaw, 0, 3, dt); this.lookPitch = damp(this.lookPitch, 0, 3, dt);
     }
@@ -315,8 +349,10 @@ export class Player {
       };
       if ((v.kind === 'ufo' || v.kind === 'ship') && up && v.pos.y - G.world.groundAt(v.pos.x, v.pos.z) > (G.location === 'earth' ? 3000 : 1500)) G.enterSpace();
     }
+    if (G.space.active) return;
     if (I.hit('KeyF') || I.thit('veh')) this.exitVehicle();
-    this._vehicleCamera(dt);
+    // The game places the vehicle camera after chassis physics and suspension.
+    if (!this.vehicle) this._footCamera(dt);
   }
 
   _chute(dt) {
@@ -364,17 +400,48 @@ export class Player {
   _footCamera(dt, extra = 0) {
     const G = this.game, cam = G.camera, W = G.world;
     const pivot = tv.copy(this.pos);
-    pivot.y += this.swimming ? 0.6 : 1.55;
+    pivot.y += this.swimming ? 1.1 : (this.eyeHeight ?? 1.65);
+    if (this.cockpit && this.onGround && !this.swimming && this.human) {
+      // Small gait-linked head motion, in centimetres.
+      pivot.y += Math.sin(this.human.phase * 2) * 0.015 * clamp(this.human.speed / 1.65, 0, 1);
+    }
+    // A helmet, hair or neck must never cover the first-person lens.
+    this.root.visible = !this.cockpit && ['foot', 'chute', 'fall'].includes(this.mode);
+    cam.near = this.cockpit ? 0.05 : 0.3;
     const dist = this.camDist + extra;
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
     const dx = Math.sin(this.camYaw) * cp, dz = Math.cos(this.camYaw) * cp;
+    if (this.cockpit) {
+      // Keep the eyes clear of a low wall even when the body has already
+      // resolved its waist-height collision.
+      const eyes = pivot.clone();
+      W.structures.collide(eyes, 0.12, eyes.y);
+      if (eyes.distanceToSquared(pivot) < 0.36) pivot.copy(eyes);
+      pivot.y = Math.max(pivot.y, W.groundAt(pivot.x, pivot.z) + 0.12);
+      cam.position.copy(pivot);
+      this.camPos.copy(pivot);
+      cam.up.set(0, 1, 0);
+      cam.lookAt(pivot.x + dx, pivot.y + sp, pivot.z + dz);
+      this.fov = damp(this.fov, 72, 3, dt);
+      this._applyShake(cam);
+      return;
+    }
     const rightX = -Math.cos(this.camYaw), rightZ = Math.sin(this.camYaw);
     const shoulder = 0.5 * smoothstep(2, 8, dist) * (extra ? 0 : 1);
     tv2.set(pivot.x - dx * dist + rightX * shoulder, pivot.y - sp * dist, pivot.z - dz * dist + rightZ * shoulder);
     const gh = W.groundAt(tv2.x, tv2.z);
     if (tv2.y < gh + 0.5) tv2.y = gh + 0.5;
     if (tv2.y < -0.5 && W.terrain.heightAt(tv2.x, tv2.z) < 0) tv2.y = Math.max(tv2.y, 0.4);
-    this.camPos.lerp(tv2, 1 - Math.exp(-18 * dt));
+    // Pull the chase camera in before a wall or hillside can block the player.
+    const desired = tv2.clone();
+    let obstructed = false;
+    for (let i = 1; i <= 16; i++) {
+      const probe = pivot.clone().lerp(desired, i / 16);
+      const blocked = W.groundAt(probe.x, probe.z) > probe.y - 0.2 || W.structures.collide(probe, 0.18, probe.y);
+      if (blocked) { obstructed = true; tv2.copy(pivot).lerp(desired, Math.max(0.06, (i - 1) / 16)); break; }
+    }
+    if (obstructed) this.camPos.copy(tv2);
+    else this.camPos.lerp(tv2, 1 - Math.exp(-18 * dt));
     if (this.camPos.distanceToSquared(tv2) > 400) this.camPos.copy(tv2);
     cam.position.copy(this.camPos);
     cam.up.set(0, 1, 0);
@@ -386,9 +453,11 @@ export class Player {
   _vehicleCamera(dt) {
     const G = this.game, cam = G.camera, v = this.vehicle, W = G.world;
     const fwd = tv.copy(Z).applyQuaternion(v.quat);
+    cam.near = this.cockpit ? 0.05 : 0.3;
     if (this.cockpit) {
+      cam.up.set(0, 1, 0);
       const seat = v.kind === 'car' ? v.model.spec.eye : { jet: [0, 0.95, 3.4], nova: [0, 1.05, 0.2], prop: [0.3, 0.55, 0.8], heli: [-0.45, 0.4, 1.5], ufo: [0, 2.2, 0], ship: [0, 0.9, 9.4], rocket: [0, 57 + (v.parts.model?.position.y || 0), -1.3] }[v.type] || [0, 1, 0];
-      tv2.set(seat[0], seat[1], seat[2]).applyQuaternion(v.quat).add(v.pos);
+      tv2.set(seat[0], seat[1] + (v.kind === 'car' ? v.model.group.position.y : 0), seat[2]).applyQuaternion(v.quat).add(v.pos);
       cam.position.copy(tv2);
       tq.copy(v.quat).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(this.lookPitch, Math.PI + this.lookYaw, 0, 'YXZ')));
       cam.quaternion.copy(tq);
@@ -416,7 +485,8 @@ export class Player {
       let dir;
       if (flat) dir = tv2.set(Math.sin(heading + this.lookYaw), 0, Math.cos(heading + this.lookYaw));
       else dir = tv2.copy(fwd).applyAxisAngle(UP, this.lookYaw);
-      const speedK = clamp(v.speed / 150, 0, 1);
+      const speed = Number.isFinite(v.speed) ? Math.max(0, v.speed) : 0;
+      const speedK = clamp(speed / 150, 0, 1);
       const dist = v.camDist * (1 + speedK * 0.25);
       const want = new THREE.Vector3().copy(v.pos).addScaledVector(dir, -dist);
       want.y += v.camHeight + (flat ? 0 : 0) - this.lookPitch * dist * 0.8;
@@ -434,8 +504,13 @@ export class Player {
       look.y += v.camHeight * 0.3;
       cam.lookAt(look);
     }
-    const speedFov = clamp(v.speed / (v.kind === 'car' ? v.def.maxSpeed * 1.5 : 280), 0, 1) * (v.kind === 'car' ? 12 : 14) + (v.boosting ? 6 : 0);
-    this.fov = damp(this.fov, (this.cockpit ? 70 : 62) + speedFov, 2.5, dt);
+    const speed = Number.isFinite(v.speed) ? Math.max(0, v.speed) : 0;
+    const maxSpeed = Number.isFinite(v.def?.maxSpeed) && v.def.maxSpeed > 0 ? v.def.maxSpeed : 280;
+    const speedFov = (this.cockpit && v.kind === 'car' ? 0 : clamp(speed / (v.kind === 'car' ? maxSpeed * 1.5 : 280), 0, 1) * (v.kind === 'car' ? 12 : 14) + (v.boosting && v.kind !== 'car' ? 6 : 0));
+    if (!Number.isFinite(this.fov)) this.fov = Number.isFinite(cam.fov) ? cam.fov : 62;
+    const targetFov = (this.cockpit ? 70 : 62) + speedFov;
+    this.fov = damp(this.fov, targetFov, 2.5, dt);
+    if (!Number.isFinite(this.fov)) this.fov = targetFov;
     this._applyShake(cam);
   }
 
@@ -451,7 +526,7 @@ export class Player {
 
   _applyShake(cam) {
     if (this.shake <= 0) return;
-    const s = this.shake * this.shake * 0.6;
+    const s = this.shake * this.shake * (this.cockpit ? 0.08 : 0.6);
     cam.position.x += (Math.random() - 0.5) * s;
     cam.position.y += (Math.random() - 0.5) * s;
     cam.position.z += (Math.random() - 0.5) * s;

@@ -131,6 +131,9 @@ export class HUD {
       $('#peerBox').style.display = peers.length ? 'block' : 'none';
       $('#modeTag').textContent = G.modeLabel();
     }
+    const viewButton = $('#viewToggle');
+    viewButton.textContent = G.player.cockpit ? '1ST PERSON · V' : '3RD PERSON · V';
+    viewButton.setAttribute('aria-label', G.player.cockpit ? 'Switch to third-person view' : 'Switch to first-person view');
     this._minimap(heading);
     this._flight(dt);
     this._labels();
@@ -362,7 +365,12 @@ export class HUD {
   // Speedometer, gear, rev bar and status lamps for road vehicles.
   _carHud(c, v, W, H, d, col, dim) {
     const R = Math.min(W, H) * 0.115, cx = W * 0.5, cy = H - R * 1.25;
-    const kmh = Math.abs(v.carVf) * 3.6, top = Math.ceil(v.def.maxSpeed * 3.6 * 1.12 / 20) * 20;
+    const speed = Number.isFinite(v.speed) ? Math.max(0, v.speed) : Number.isFinite(v.carVf) ? Math.abs(v.carVf) : 0;
+    const kmh = speed * 3.6;
+    const maxSpeed = Number.isFinite(v.def?.maxSpeed) && v.def.maxSpeed > 0 ? v.def.maxSpeed : 52;
+    const top = Math.max(20, Math.ceil(maxSpeed * 3.6 * 1.12 / 20) * 20);
+    const carVf = Number.isFinite(v.carVf) ? v.carVf : 0;
+    const rpm = Number.isFinite(v.rpm) ? clamp(v.rpm, 0, 1) : 0;
     const A0 = Math.PI * 0.75, SW = Math.PI * 1.5;
     c.save();
     c.fillStyle = 'rgba(6,20,26,0.55)'; c.beginPath(); c.arc(cx, cy, R * 1.12, 0, Math.PI * 2); c.fill();
@@ -382,13 +390,13 @@ export class HUD {
     c.fillStyle = col; c.font = `700 ${R * 0.34}px 'DM Mono', monospace`; c.fillText(String(Math.round(kmh)), cx, cy + R * 0.42);
     c.font = `500 ${9 * d}px 'DM Mono', monospace`; c.fillStyle = dim; c.fillText('KM/H', cx, cy + R * 0.62);
     // Gear, rev bar.
-    c.font = `700 ${R * 0.3}px 'DM Mono', monospace`; c.fillStyle = col; c.fillText(v.gear === 0 ? 'R' : Math.abs(v.carVf) < 0.4 && !v.throttle ? 'N' : String(v.gear), cx, cy - R * 0.32);
+    c.font = `700 ${R * 0.3}px 'DM Mono', monospace`; c.fillStyle = col; c.fillText(v.gear === 0 ? 'R' : Math.abs(carVf) < 0.4 && !v.throttle ? 'N' : String(v.gear), cx, cy - R * 0.32);
     c.strokeStyle = dim; c.lineWidth = 1 * d; c.strokeRect(cx - R * 0.5, cy + R * 0.78, R, 6 * d);
-    c.fillStyle = v.rpm > 0.9 ? '#ff6a5a' : col; c.fillRect(cx - R * 0.5, cy + R * 0.78, R * clamp(v.rpm, 0, 1), 6 * d);
+    c.fillStyle = rpm > 0.9 ? '#ff6a5a' : col; c.fillRect(cx - R * 0.5, cy + R * 0.78, R * rpm, 6 * d);
     // Status lamps.
     const lamp = (x, txt, on, colr) => { c.font = `700 ${11 * d}px 'DM Mono', monospace`; c.fillStyle = on ? colr : 'rgba(170,255,225,0.25)'; c.fillText(txt, x, cy - R * 0.9); };
     lamp(cx - R * 0.5, 'LIGHTS', v.lights, '#ffe08a'); lamp(cx + R * 0.5, 'BRAKE', v.braking, '#ff6a5a');
-    if (v.skid > 0.3) { c.fillStyle = '#ffb45a'; c.font = `700 ${11 * d}px 'DM Mono', monospace`; c.fillText('SLIDE', cx, cy - R * 1.25); }
+    if (v.skid > 0.3) { c.fillStyle = '#ffb45a'; c.font = `700 ${11 * d}px 'DM Mono', monospace`; c.fillText(v.drifting ? 'DRIFT ' + Math.round(Math.abs(v.driftAngle) * 180 / Math.PI) + '° · ' + v.driftTime.toFixed(1) + 's' : 'TYRE SLIP', cx, cy - R * 1.25); }
     c.font = `500 ${11 * d}px 'DM Mono', monospace`; c.fillStyle = dim;
     c.fillText('W/S THROTTLE · A/D STEER · SPACE HANDBRAKE · L LIGHTS · B HORN', cx, cy + R * 1.42);
     c.restore();

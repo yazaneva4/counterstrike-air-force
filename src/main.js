@@ -3,6 +3,7 @@
 // loading, pause/settings, chat, and the main loop.
 
 import * as THREE from 'three';
+import { renderPlan } from './core/resolution.js';
 import { Input } from './core/input.js';
 import { AudioEngine } from './core/audio.js';
 import { createEarth } from './space/globe.js';
@@ -33,6 +34,7 @@ Object.defineProperty(settings, 'saved', { value: null, writable: true, enumerab
 const cloudReady = cloud.load(settings, 4000).then((s) => { settings.saved = s || cloud.last; return s; });
 
 function resolveQuality() {
+  if (settings.quality === '4k') return 'high';
   if (settings.quality !== 'auto') return settings.quality;
   const mobile = isTouch() && Math.min(screen.width, screen.height) < 900;
   return mobile ? 'low' : (navigator.hardwareConcurrency || 4) >= 8 ? 'high' : 'medium';
@@ -50,8 +52,17 @@ try {
   $('#startBtn').disabled = true;
   $('#webglNote').textContent = 'This browser could not start 3D graphics. Please open the game in a browser with WebGL enabled.';
 }
-const pixelRatio = () => Math.min(devicePixelRatio || 1, { high: 1.75, medium: 1.35, low: 1 }[resolveQuality()] || 1.35);
-if (renderer) { renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight); }
+function applyResolution(scale = 1) {
+  const ctx = renderer.getContext();
+  const maxDimension = Math.min(renderer.capabilities.maxTextureSize, ctx.getParameter(ctx.MAX_RENDERBUFFER_SIZE));
+  const plan = renderPlan(innerWidth, innerHeight, { quality: settings.quality === '4k' ? '4k' : resolveQuality(), dpr: devicePixelRatio || 1, scale, maxDimension });
+  renderer.setPixelRatio(plan.pixelRatio);
+  renderer.setSize(innerWidth, innerHeight);
+  const note = $('#resolutionNote');
+  if (note) note.textContent = settings.quality === '4k' ? `${plan.width} × ${plan.height} · fixed resolution${plan.limited ? ' · limited by this GPU' : ''}` : 'Adaptive resolution keeps movement smooth';
+  return plan;
+}
+if (renderer) applyResolution();
 
 const input = new Input(canvas);
 const audio = new AudioEngine();
@@ -121,6 +132,7 @@ function segmented(el, key, values) {
   el.innerHTML = values.map(([v, label]) => `<button type="button" data-v="${v}" class="${settings[key] === v ? 'on' : ''}">${label}</button>`).join('');
   el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
     settings[key] = b.dataset.v; save(); audio.init(); audio.click();
+    if (key === 'quality' && renderer && !game?.running) { applyResolution(); layoutMenuCamera(); }
     el.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
   }));
 }
@@ -142,21 +154,21 @@ function buildMenu() {
     settings.profile.skin = +b.dataset.i; save(); audio.init(); audio.click();
     sk.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
   }));
-  segmented($('#spawnSel'), 'spawn', [['airbase', 'Airbase'], ['spaceport', 'Spaceport'], ['village', 'Village'], ['beach', 'Beach'], ['farm', 'Farm']]);
+  segmented($('#spawnSel'), 'spawn', [['airbase', 'Airbase'], ['spaceport', 'Spaceport'], ['village', 'Village'], ['beach', 'Beach'], ['farm', 'Farm'], ['motorsport', 'Race paddock']]);
   segmented($('#timeSel'), 'time', [['live', 'Real time'], ['dawn', 'Dawn'], ['day', 'Day'], ['sunset', 'Sunset'], ['night', 'Night']]);
-  segmented($('#qualitySel'), 'quality', [['auto', 'Auto'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]);
-  $('#hostBtn').addEventListener('click', () => { audio.init(); pendingRoom = { host: true }; $('#roomStatus').textContent = 'A room will open when you enter the island'; $('#roomCode').value = ''; });
-  $('#joinBtn').addEventListener('click', () => {
+  segmented($('#qualitySel'), 'quality', [['auto', 'Auto'], ['4k', '4K Ultra'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]);
+  $('#hostBtn').onclick = () => { audio.init(); pendingRoom = { host: true }; $('#roomStatus').textContent = 'A room will open when you enter the island'; $('#roomCode').value = ''; };
+  $('#joinBtn').onclick = () => {
     audio.init();
     const code = $('#roomCode').value.trim().toUpperCase();
     if (!/^[A-Z0-9]{5}$/.test(code)) { $('#roomStatus').textContent = 'Enter a 5-character room code'; return; }
     pendingRoom = { host: false, code };
     $('#roomStatus').textContent = `You will join ${code} when you enter the island`;
-  });
-  $('#roomCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#joinBtn').click(); });
+  };
+  $('#roomCode').onkeydown = (e) => { if (e.key === 'Enter') $('#joinBtn').click(); };
   const params = new URLSearchParams(location.search);
   if (params.get('room')) { $('#roomCode').value = params.get('room').toUpperCase().slice(0, 5); pendingRoom = { host: false, code: $('#roomCode').value }; $('#roomStatus').textContent = `Invited to room ${$('#roomCode').value}`; }
-  $('#startBtn').addEventListener('click', startGame);
+  $('#startBtn').onclick = startGame;
 }
 let pendingRoom = null;
 
@@ -184,8 +196,10 @@ function toggleFullscreen(force) {
   } catch (e) { /* not supported (iPhone Safari): use Add to Home Screen */ }
 }
 
+let starting = false;
 async function startGame() {
-  if (!renderer) return;
+  if (!renderer || starting || game?.running) return;
+  starting = true;
   if (isTouch()) toggleFullscreen(true);
   audio.init();
   audio.click();
@@ -193,9 +207,9 @@ async function startGame() {
   $('#loading').classList.add('on');
   settings.quality = settings.quality || 'auto';
   const q = resolveQuality();
-  renderer.setPixelRatio(pixelRatio());
-  renderer.setSize(innerWidth, innerHeight);
-  game = new Game({ renderer, input, audio, settings: { ...settings, saved: settings.saved, quality: q, get sensitivity() { return settings.sensitivity; }, get invertY() { return settings.invertY; } } });
+  perf.scale = 1;
+  applyResolution();
+  game = new Game({ renderer, input, audio, settings: { ...settings, saved: settings.saved, quality: q, render4k: settings.quality === '4k', get sensitivity() { return settings.sensitivity; }, get invertY() { return settings.invertY; } } });
   try {
     await game.build((f, label) => {
       $('#loadBar').style.width = Math.round(f * 100) + '%';
@@ -230,6 +244,8 @@ function setPaused(p) {
   if (!game) return;
   game.paused = p;
   $('#pause').classList.toggle('on', p);
+  input.clear();
+  input.enabled = !p && !$('#chat').classList.contains('typing');
   if (p) input.releaseLock();
 }
 
@@ -249,7 +265,7 @@ addEventListener('keydown', (e) => {
   }
   if (e.key === 'Enter' && !game.paused) {
     e.preventDefault();
-    $('#chat').classList.add('typing'); input.enabled = false; input.held.clear(); input.releaseLock();
+    $('#chat').classList.add('typing'); input.clear(); input.enabled = false; input.releaseLock();
     setTimeout(() => chat.focus(), 0);
   }
   if (e.key === 'Escape') {
@@ -264,7 +280,7 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 function bindPause() {
-  $('#resumeBtn').addEventListener('click', () => { setPaused(false); canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0 })); });
+  $('#resumeBtn').addEventListener('click', () => { setPaused(false); input.requestLock(); });
   $('#titleBtn').addEventListener('click', () => { game?.net?.leave(true); location.reload(); });
   $('#pauseHost').addEventListener('click', () => { game.net.host(settings.profile.name); });
   $('#pauseJoin').addEventListener('click', () => { game.net.join($('#pauseCode').value, settings.profile.name); });
@@ -276,16 +292,16 @@ function bindPause() {
   $('#journalClose').addEventListener('click', () => game.hud.toggleJournal(false));
   $('#mapClose').addEventListener('click', () => game.hud.toggleMap(false));
   $('#helpClose').addEventListener('click', () => $('#help').classList.remove('on'));
-  $('#lockHint').addEventListener('click', () => canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+  $('#lockHint').addEventListener('click', () => input.requestLock());
   // Touch shortcuts.
   document.querySelectorAll('[data-hud]').forEach((b) => b.addEventListener('click', () => {
     const k = b.dataset.hud;
     if (k === 'map') game.hud.toggleMap();
     if (k === 'journal') game.hud.toggleJournal();
     if (k === 'pause') setPaused(!game.paused);
-    if (k === 'view' && game.player) game.player.cockpit = !game.player.cockpit;
+    if (k === 'view' && game.player && !game.paused) { game.player.toggleView(); b.blur(); }
     if (k === 'help') $('#help').classList.toggle('on');
-    if (k === 'chat') { $('#chat').classList.add('typing'); input.enabled = false; input.held.clear(); setTimeout(() => $('#chatInput').focus(), 0); }
+    if (k === 'chat') { $('#chat').classList.add('typing'); input.clear(); input.enabled = false; setTimeout(() => $('#chatInput').focus(), 0); }
     if (k === 'full') toggleFullscreen();
   }));
 }
@@ -293,6 +309,7 @@ function bindPause() {
 // ---- Adaptive resolution: trade pixels for a steady frame rate. ----------------------------
 const perf = { acc: 0, n: 0, scale: 1, cooldown: 4 };
 function adaptResolution(rawDt) {
+  if (settings.quality === '4k') return;
   perf.acc += rawDt; perf.n++;
   perf.cooldown -= rawDt;
   if (perf.acc < 2) return;
@@ -305,8 +322,7 @@ function adaptResolution(rawDt) {
   if (next !== perf.scale) {
     perf.scale = next;
     perf.cooldown = 3;
-    renderer.setPixelRatio(pixelRatio() * perf.scale);
-    renderer.setSize(innerWidth, innerHeight);
+    applyResolution(perf.scale);
     game?.resize(innerWidth, innerHeight);
   }
 }
@@ -332,8 +348,7 @@ function loop(now) {
 
 addEventListener('resize', () => {
   if (!renderer) return;
-  renderer.setPixelRatio(pixelRatio() * perf.scale);
-  renderer.setSize(innerWidth, innerHeight);
+  applyResolution(perf.scale);
   layoutMenuCamera();
   game?.resize(innerWidth, innerHeight);
 });
@@ -341,7 +356,10 @@ addEventListener('resize', () => {
 buildMenu();
 bindSettings();
 setInterval(() => cloud.save(settings, game), 60000);
-document.addEventListener('visibilitychange', () => { if (document.hidden) cloud.save(settings, game, { keepalive: true }); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) cloud.save(settings, game, { keepalive: true });
+  else if (game?.running) game.weather?.refresh();
+});
 // Cloud progress arrives after the title screen is up: refresh the pickers.
 cloudReady.then((s) => { if (s && !game) buildMenu(); });
 bindPause();

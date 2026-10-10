@@ -16,10 +16,12 @@ const CODES = { 0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast'
 export class Weather {
   constructor(scene, { rain = 1400 } = {}) {
     this.target = { cloud: 0.3, wind: 4, dir: 70, rain: 0, fog: 0, temp: 27, label: 'default' };
-    this.now = { cloud: 0.3, wind: 4, rain: 0, fog: 0 };
+    this.now = { cloud: 0.3, wind: 4, rain: 0, fog: 0, wet: 0 };
     this.live = false;
     this.timer = 0;
     this.loaded = null;
+    this.refreshing = false;
+    this.updatedAt = 0;
     // Rain: short streaks in a box that follows the camera.
     this.count = rain;
     const pos = new Float32Array(rain * 6), seed = new Float32Array(rain * 3);
@@ -35,24 +37,37 @@ export class Weather {
   }
 
   async refresh() {
+    if (this.refreshing) return false;
+    this.refreshing = true;
+    const ctl = new AbortController();
+    const timeout = setTimeout(() => ctl.abort(), 6000);
+    let ok = false;
     try {
-      const ctl = new AbortController();
-      const to = setTimeout(() => ctl.abort(), 6000);
-      const r = await fetch(URL, { signal: ctl.signal });
-      clearTimeout(to);
-      if (!r.ok) return;
-      const c = (await r.json()).current;
-      if (!c) return;
+      const r = await fetch(URL, { signal: ctl.signal, cache: 'no-store' });
+      if (!r.ok) throw new Error(`Weather request failed (${r.status})`);
+      const payload = await r.json();
+      const c = payload?.current;
+      if (!c) throw new Error('Weather response has no current conditions');
       const code = c.weather_code | 0;
       const wet = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95 || c.precipitation > 0.05;
       this.target = {
         cloud: clamp((c.cloud_cover ?? 30) / 100, 0, 1), wind: clamp(c.wind_speed_10m ?? 4, 0, 40), dir: c.wind_direction_10m ?? 70,
         rain: wet ? clamp(0.35 + (c.precipitation || 0) / 4 + (code >= 63 ? 0.25 : 0), 0.3, 1) : 0, fog: code === 45 || code === 48 ? 1 : 0,
-        temp: c.temperature_2m, label: CODES[code] || (wet ? 'rain' : 'fair'),
+        temp: c.temperature_2m ?? this.target.temp, label: CODES[code] || (wet ? 'rain' : 'fair'),
       };
       this.live = true;
       this.loaded = this.target;
-    } catch (e) { /* offline: keep the default */ }
+      this.updatedAt = Date.now();
+      ok = true;
+      return true;
+    } catch (e) {
+      // Retry a failed live request soon while keeping the last good conditions.
+      return false;
+    } finally {
+      clearTimeout(timeout);
+      this.refreshing = false;
+      this.timer = ok ? 300 : 30;
+    }
   }
 
   describe() {
@@ -65,6 +80,8 @@ export class Weather {
     if (this.timer <= 0) { this.timer = 600; this.refresh(); }
     const T = this.target, N = this.now, k = 0.25;
     N.cloud = damp(N.cloud, T.cloud, k, dt); N.wind = damp(N.wind, T.wind, k, dt); N.rain = damp(N.rain, T.rain, 0.4, dt); N.fog = damp(N.fog, T.fog, 0.3, dt);
+    // Pavement stays wet after a shower instead of drying in one frame.
+    N.wet = damp(N.wet ?? 0, N.rain, N.rain > (N.wet ?? 0) ? 0.08 : 0.004, dt);
     const over = smoothstep(0.5, 1, N.cloud);
     // Clouds: coverage, drift with the real wind (it blows towards dir + 180°).
     const to = (T.dir + 180) * Math.PI / 180;
@@ -72,11 +89,12 @@ export class Weather {
     clouds.uniforms.uCover.value = clamp(0.1 + N.cloud * 0.95, 0.1, 1);
     clouds.uniforms.uDark.value = over * 0.45 + N.rain * 0.25;
     // Sun and haze under overcast or rain.
-    sky.light.intensity *= 1 - 0.5 * over - 0.25 * N.rain;
-    sky.hemi.intensity *= 1 - 0.2 * over;
-    if (fog) fog.density *= 1 + over * 0.5 + N.rain * 1.2 + N.fog * 6 * (1 - smoothstep(0, 800, altitude));
+    sky.light.intensity = (sky.baseLightIntensity ?? sky.light.intensity) * (1 - 0.5 * over - 0.25 * N.rain);
+    sky.hemi.intensity = (sky.baseHemiIntensity ?? sky.hemi.intensity) * (1 - 0.2 * over);
+    if (fog) fog.density = (sky.baseFogDensity ?? fog.density) * (1 + over * 0.5 + N.rain * 1.2 + N.fog * 6 * (1 - smoothstep(0, 800, altitude)));
     // Trees and sea respond to wind.
     windUniforms.uAmp.value = clamp(0.35 + N.wind / 5, 0.3, 2.4);
+    if (this.pavedMaterials) for (const m of this.pavedMaterials) { m.material.roughness = m.roughness * (1 - N.wet * 0.6); m.material.color.copy(m.color).multiplyScalar(1 - N.wet * 0.22); }
     if (ocean) ocean.uniforms.uChop.value = clamp(0.55 + N.wind / 8, 0.5, 2);
     // Rain streaks.
     const inten = N.rain * (altitude < 1500 ? 1 : 0);
@@ -96,7 +114,7 @@ export class Weather {
       const z = ((r2 * B * 2 + sz * (1 - (y + H) / (H * 2)) * 2) % (B * 2) + B * 2) % (B * 2) - B;
       const X = camera.position.x + x, Y = camera.position.y + y, Z = camera.position.z + z;
       p[i * 6] = X; p[i * 6 + 1] = Y; p[i * 6 + 2] = Z;
-      p[i * 6 + 3] = X + sx * 0.04; p[i * 6 + 4] = Y + 0.7; p[i * 6 + 5] = Z + sz * 0.04;
+      p[i * 6 + 3] = X + sx * 0.04; p[i * 6 + 4] = Y - 0.7; p[i * 6 + 5] = Z + sz * 0.04;
     }
     this.rain.geometry.setDrawRange(0, n * 2);
     this.rain.geometry.attributes.position.needsUpdate = true;

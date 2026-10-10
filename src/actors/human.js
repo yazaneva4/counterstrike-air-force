@@ -35,6 +35,8 @@ function geos() {
   G.hipsF = lathe([[0.05, -0.135], [0.13, -0.11], [0.17, -0.07], [0.178, -0.02], [0.16, 0.04], [0.13, 0.085]], 22, 1.1, 0.76);
   G.belt = new THREE.TorusGeometry(0.152, 0.014, 6, 28); G.belt.rotateX(Math.PI / 2); G.belt.scale(1.06, 1, 0.74);
   G.buckle = new THREE.BoxGeometry(0.045, 0.03, 0.01);
+  G.pockets = mergeGeometries([-1, 1].map(side => new THREE.BoxGeometry(0.078, 0.095, 0.008).translate(side * 0.078, 0.28, 0.106)));
+  G.zipper = new THREE.BoxGeometry(0.004, 0.29, 0.004);
   G.collar = new THREE.TorusGeometry(0.058, 0.014, 6, 20); G.collar.rotateX(Math.PI / 2);
   G.neck = lathe([[0.056, -0.01], [0.05, 0.05], [0.048, 0.1], [0.052, 0.13]], 14);
   // Head: a sphere sculpted into a skull with jaw, chin and flatter face.
@@ -153,8 +155,8 @@ const EYE_COLORS = ['#3b2414', '#5a3a1e', '#2f6a8a', '#4a7a4a', '#6b5a30', '#2a1
 const SHIRTS = [0x2e5c8a, 0xb23a3a, 0xf0f0ea, 0x3c7a4a, 0xe0b040, 0x5a4a8a, 0x2a2a2e, 0xd98a50, 0x6fa8c8, 0xc86a8a, 0x8a9a5a];
 const PANTS = [0x2b3a55, 0x3a3a3a, 0x5a4a38, 0x6e7a8a, 0x2a2a2a, 0xa89a7a, 0x384a3a];
 
-// Share of generated people who are women. Everyone is a man by default.
-export const FEMALE_SHARE = 0;
+// A mixed island population makes the same roles feel like a lived-in place.
+export const FEMALE_SHARE = 0.5;
 
 // Pick a believable outfit for a role using a seeded random source.
 export function outfitFor(role, rnd) {
@@ -269,24 +271,33 @@ function hairNormal() {
   return hairNormalTex;
 }
 
+let skinNormalTex;
+function skinNormal() {
+  if (!skinNormalTex) {
+    skinNormalTex = new THREE.CanvasTexture(normalCanvas(tileNoise(128, 64, 2, 164), 128, 0.4));
+    skinNormalTex.wrapS = skinNormalTex.wrapT = THREE.RepeatWrapping;
+    skinNormalTex.repeat.set(3, 3);
+  }
+  return skinNormalTex;
+}
 const matCache = new Map();
 function cloth(color, rough = 0.88) {
   const key = 'cloth' + color + rough;
   if (!matCache.has(key)) {
-    const f = fabric().normal;
-    f.repeat.set(6, 6);
-    matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, normalMap: f, normalScale: new THREE.Vector2(0.6, 0.6) }));
+    const f = fabric();
+    f.map.repeat.set(6, 6); f.normal.repeat.set(6, 6);
+    matCache.set(key, new THREE.MeshStandardMaterial({ color, map: f.map, roughness: rough, metalness: 0, normalMap: f.normal, normalScale: new THREE.Vector2(0.24, 0.24) }));
   }
   return matCache.get(key);
 }
 function skinMat(color) {
   const key = 'skin' + color;
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0, emissive: new THREE.Color(color).multiplyScalar(0.06) }));
+  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.72, metalness: 0, normalMap: skinNormal(), normalScale: new THREE.Vector2(0.12, 0.12) }));
   return matCache.get(key);
 }
 function hairMat(color) {
   const key = 'hair' + color;
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0.05, normalMap: hairNormal(), normalScale: new THREE.Vector2(0.9, 0.9) }));
+  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.83, metalness: 0, normalMap: hairNormal(), normalScale: new THREE.Vector2(0.9, 0.9) }));
   return matCache.get(key);
 }
 
@@ -294,7 +305,7 @@ function addMesh(parent, geo, mat, x = 0, y = 0, z = 0, shadow = true) {
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
   m.castShadow = shadow;
-  m.receiveShadow = false;
+  m.receiveShadow = true;
   parent.add(m);
   return m;
 }
@@ -333,6 +344,10 @@ export class Human {
     P.spine = J(P.pelvis, 0, 0.07, 0);
     addMesh(P.spine, suit ? G.suitTorso : o.female && !alien ? G.torsoF : G.torsoM, shirt, 0, 0, 0, shadows);
     if (o.collar && !alien && !suit) addMesh(P.spine, G.collar, shirt, 0, 0.44, 0.005, false);
+    if (o.collar && o.longSleeves && !o.coat && !o.vest && !alien && !suit) {
+      addMesh(P.spine, G.pockets, shirt, 0, 0, 0, false);
+      addMesh(P.spine, G.zipper, stdMat(0x697069, { rough: 0.55, metal: 0.2 }), 0, 0.265, 0.116, false);
+    }
     if (o.vest) {
       addMesh(P.spine, G.vest, stdMat(0xf2c21a, { rough: 0.7, emissive: 0x3a2a00, ei: 0.4 }), 0, 0, 0, false);
       const refl = stdMat(0xdadada, { rough: 0.2, metal: 0.8, emissive: 0x777777, ei: 0.6 });
@@ -358,7 +373,7 @@ export class Human {
         e.rotation.set(0, sx * 0.35, sx * -0.35);
       }
     } else {
-      const face = new THREE.MeshStandardMaterial({ map: faceTexture(o), roughness: 0.52, emissive: new THREE.Color(o.skin).multiplyScalar(0.05) });
+      const face = new THREE.MeshStandardMaterial({ map: faceTexture(o), roughness: 0.72, normalMap: skinNormal(), normalScale: new THREE.Vector2(0.1, 0.1) });
       addMesh(P.head, G.head, face, 0, 0.1, 0, shadows);
       addMesh(P.head, G.nose, skin, 0, 0.087, 0.1, false).rotation.x = -0.3;
       for (const sx of [-1, 1]) addMesh(P.head, G.ear, skin, sx * 0.09, 0.1, -0.008, false);
@@ -383,7 +398,7 @@ export class Human {
         addMesh(P.head, G.strawTop, stdMat(0xd8c07a, { rough: 1 }), 0, 0.22, 0, false);
       } else if (hat === 'helmet') {
         addMesh(P.head, G.helmet, stdMat(0xe8ecef, { rough: 0.3, metal: 0.2 }), 0, 0.1, 0, false);
-        addMesh(P.head, G.visor, stdMat(0x1a2a3a, { rough: 0.05, metal: 0.9, emissive: 0x223344, ei: 0.3 }), 0, 0.1, 0, false);
+        addMesh(P.head, G.visor, stdMat(0x1a2a3a, { rough: 0.13, metal: 0.08 }), 0, 0.1, 0, false);
       }
     }
 
@@ -433,8 +448,9 @@ export class Human {
     this.chute.visible = false;
     this.root.add(this.chute);
 
-    this.phase = Math.random() * 10;
-    this.t = Math.random() * 100;
+    const animRnd = mulberry32(o.seed);
+    this.phase = animRnd() * Math.PI * 2;
+    this.t = animRnd() * 100;
     this.state = 'idle';
     this.speed = 0;
     this.gesture = null;       // 'wave' | 'talk' | 'point' | 'dance' | null
@@ -452,7 +468,7 @@ export class Human {
     const t = this.t, sp = this.speed, J2 = this.j;
     const st = this.state;
     const walk = clamp(sp / 1.4, 0, 1), run = smoothstep(2.4, 5.2, sp);
-    const freq = Math.min(sp / 1.5, 0.9 + sp * 0.09);
+    const freq = lerp(sp / 1.4, sp / 2.5, run);
     if (st === 'swim') this.phase += dt * 2.2 * Math.PI * 0.6;
     else this.phase += dt * Math.PI * 2 * freq;
     const ph = this.phase;

@@ -20,8 +20,8 @@ const GradeShader = {
     uSun: { value: new THREE.Vector2(0.5, 0.5) },
     uSunVis: { value: 0 },
     uSunColor: { value: new THREE.Color(1, 0.9, 0.7) },
-    uVignette: { value: 0.55 },
-    uChroma: { value: 0.0012 },
+    uVignette: { value: 0.2 },
+    uChroma: { value: 0.00025 },
     uFlash: { value: 0 },
     uCloud: { value: 0 },
     uNight: { value: 0 },
@@ -46,8 +46,8 @@ const GradeShader = {
         vec2 dv = (uv - sp) * vec2(aspect, 1.0);
         float r = length(dv);
         vec3 fl = vec3(0.0);
-        fl += uSunColor * exp(-r * 9.0) * 0.55;
-        fl += uSunColor * vec3(0.8, 0.85, 1.0) * exp(-abs(dv.y) * 160.0) * exp(-abs(dv.x) * 2.2) * 0.35;
+        fl += uSunColor * exp(-r * 9.0) * 0.16;
+        fl += uSunColor * vec3(0.8, 0.85, 1.0) * exp(-abs(dv.y) * 160.0) * exp(-abs(dv.x) * 2.2) * 0.08;
         vec2 axis = vec2(0.5) - sp;
         for (int i = 0; i < 5; i++){
           float fi = float(i);
@@ -67,14 +67,14 @@ const GradeShader = {
       col = mix(col, vec3(0.85, 0.88, 0.92) * (1.0 - uNight * 0.85), uCloud * 0.85);
       // Grade: a touch of contrast and warmth in the highlights.
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(l), col, 1.06);
+      col = mix(vec3(l), col, 1.0);
       col = col * (1.0 + 0.04 * vec3(0.4, 0.1, -0.3) * smoothstep(0.4, 1.6, l));
       // Vignette.
       col *= mix(1.0, smoothstep(0.95, 0.3, d), uVignette);
       col += vec3(uFlash);
       // Grain.
       float g = hash(uv * uRes + fract(uTime) * 100.0) - 0.5;
-      col += g * 0.018 * (0.4 + l);
+      col += g * 0.003 * (0.4 + l);
       gl_FragColor = vec4(max(col, 0.0), 1.0);
     }`,
 };
@@ -115,18 +115,24 @@ function floatTargetWorks(renderer) {
 }
 
 export class PostFX {
-  constructor(renderer, scene, camera, { quality = 'high' } = {}) {
+  constructor(renderer, scene, camera, { quality = 'high', render4k = false } = {}) {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
     const params = new URLSearchParams(location.search);
-    this.enabled = quality !== 'low' && !params.has('safe') && (params.has('hd') || floatTargetWorks(renderer));
+    // Reflections are useful even when the post-processing path is disabled.
+    this.hdrSupported = quality !== 'low' && floatTargetWorks(renderer);
+    this.enabled = quality !== 'low' && !params.has('safe') && (params.has('hd') || this.hdrSupported);
     document.body.classList.toggle('css-vignette', !this.enabled);
     if (!this.enabled) return;
     const size = renderer.getSize(new THREE.Vector2());
     const dpr = renderer.getPixelRatio();
-    const rt = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, { type: THREE.HalfFloatType, samples: renderer.capabilities.isWebGL2 && quality === 'high' ? 4 : 0 });
+    const rt = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, { type: THREE.HalfFloatType, samples: renderer.capabilities.isWebGL2 && quality === 'high' && !render4k ? 4 : 0 });
     this.composer = new EffectComposer(renderer, rt);
+    // A supplied target is already in physical pixels. Reset the composer's
+    // logical size before adding passes to avoid a second DPR multiplication.
+    this.composer.setSize(size.x, size.y);
+    this.pixelRatio = dpr;
     this.renderPass = new RenderPass(scene, camera);
     this.composer.addPass(this.renderPass);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.42, 0.55, 0.92);
@@ -144,6 +150,8 @@ export class PostFX {
 
   setSize(w, h) {
     if (!this.enabled) return;
+    const dpr = this.renderer.getPixelRatio();
+    if (dpr !== this.pixelRatio) { this.composer.setPixelRatio(dpr); this.pixelRatio = dpr; }
     this.composer.setSize(w, h);
     this.grade.uniforms.uRes.value.set(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
   }

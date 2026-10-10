@@ -68,7 +68,7 @@ export class SkySystem {
     light.castShadow = shadows;
     light.shadow.mapSize.set(shadowSize, shadowSize);
     light.shadow.bias = -0.00025;
-    light.shadow.normalBias = 0.9;
+    light.shadow.normalBias = 0.08;
     const sc = light.shadow.camera;
     sc.near = 10; sc.far = 3000;
     scene.add(light, light.target);
@@ -257,6 +257,9 @@ export class SkySystem {
       L.color.set(0xa8bcff);
       L.intensity = 0.9 * moonI * (0.15 + 0.85 * this.illumination) * smoothstep(-0.06, 0.14, this.moonDir.y);
     }
+    // Keep the astronomical baseline separate so live weather can shade each
+    // frame without compounding its overcast/rain factor over time.
+    this.baseLightIntensity = L.intensity;
     if (this.lightDir.y < 0.08) this.lightDir.y = 0.08;
     this.lightDir.normalize();
 
@@ -276,12 +279,14 @@ export class SkySystem {
     mixColors(this.hemi.color, HEMI_SKY, sy);
     mixColors(this.hemi.groundColor, HEMI_GROUND, sy);
     this.hemi.intensity = lerp(0.55, 1.25, this.day);
+    this.baseHemiIntensity = this.hemi.intensity;
 
     // Fog thins with altitude so high-flying pilots see the whole island.
     const fog = this.scene.fog;
     if (fog) {
       fog.color.copy(this.horizon);
       fog.density = lerp(0.00022, 0.00006, smoothstep(0, 2500, altitude)) * lerp(1, 1.35, this.golden);
+      this.baseFogDensity = fog.density;
     }
 
     // Stars and moon ride with the camera, fading in at dusk.

@@ -69,6 +69,8 @@ h1 span { display: block; background: linear-gradient(90deg, #dffcff, var(--mint
 .swatches button.on { border-color: var(--mint); box-shadow: 0 0 12px rgba(125, 255, 214, 0.5); }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; padding: 3px; border-radius: 10px; background: rgba(2, 10, 18, 0.6); border: 1px solid var(--line); }
 .seg button { border: 0; background: transparent; padding: 8px 4px; border-radius: 7px; font: 600 12px var(--body); color: #a9c1cf; transition: 0.15s; white-space: nowrap; }
+#spawnSel { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+#spawnSel button { min-width: 0; min-height: 42px; padding: 7px 5px; white-space: normal; line-height: 1.2; }
 .seg button:hover { color: #fff; }
 .seg button.on { background: linear-gradient(180deg, rgba(125, 255, 214, 0.24), rgba(125, 255, 214, 0.1)); color: #fff; box-shadow: 0 0 0 1px rgba(125, 255, 214, 0.35) inset; }
 .seg.small button { padding: 6px 8px; font-size: 11px; }
@@ -185,6 +187,8 @@ body.css-vignette::after { content: ''; position: fixed; inset: 0; pointer-event
 #lockHint { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 35; padding: 12px 20px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--panel-strong); font: 500 13px var(--body); display: none; }
 #lockHint.on { display: block; }
 
+#viewToggle { position: absolute; right: 20px; bottom: calc(44px + var(--safe-b)); pointer-events: auto; z-index: 20; font: 500 11px var(--mono); background: var(--panel-strong); }
+body.touch #viewToggle { display: none; }
 /* ---------- Touch ---------- */
 #touchUI { display: none; }
 body.touch #touchUI { display: block; }
@@ -246,4 +250,5 @@ body[data-ctx="rocket"] .tbtns [data-for~="rocket"], body[data-ctx="space"] .tbt
 @media (max-width: 380px) {
   .chips { grid-template-columns: repeat(2, 1fr); }
   .seg button { font-size: 11px; padding: 7px 2px; }
+  #spawnSel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
