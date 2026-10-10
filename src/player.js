@@ -44,6 +44,7 @@ export class Player {
     this.camPos = new THREE.Vector3();
     this.camLook = new THREE.Vector3();
     this.stick = { x: 0, y: 0 };
+    this.chaseFwd = new THREE.Vector3(0, 0, 1); this.chaseUp = new THREE.Vector3(0, 1, 0); this.chaseVeh = null;
     this.kb = { roll: 0, pitch: 0 };   // keyboard deflection, ramped like a real stick
   }
 
@@ -481,28 +482,48 @@ export class Player {
       this.shake = Math.max(this.shake, v.onGround || v.pos.y < 600 ? v.throttle * 0.55 * (v.thrustAcc > 0 ? 1 : 0) : 0);
     } else {
       const flat = v.kind !== 'plane';
-      const heading = flat ? v.heading : Math.atan2(fwd.x, fwd.z);
-      let dir;
-      if (flat) dir = tv2.set(Math.sin(heading + this.lookYaw), 0, Math.cos(heading + this.lookYaw));
-      else dir = tv2.copy(fwd).applyAxisAngle(UP, this.lookYaw);
       const speed = Number.isFinite(v.speed) ? Math.max(0, v.speed) : 0;
       const speedK = clamp(speed / 150, 0, 1);
       const dist = v.camDist * (1 + speedK * 0.25);
-      const want = new THREE.Vector3().copy(v.pos).addScaledVector(dir, -dist);
-      want.y += v.camHeight + (flat ? 0 : 0) - this.lookPitch * dist * 0.8;
-      if (!flat) want.y = Math.max(want.y, v.pos.y - dist * 0.6 + v.camHeight);
-      const gh = W.groundAt(want.x, want.z);
-      if (want.y < gh + 1.5) want.y = gh + 1.5;
-      if (want.y < 1.2) want.y = 1.2;
-      const rate = v.kind === 'plane' ? 7 : v.kind === 'car' ? 9 : 5;
-      this.camPos.lerp(want, 1 - Math.exp(-rate * dt));
-      if (this.camPos.distanceToSquared(want) > 90000) this.camPos.copy(want);
-      cam.position.copy(this.camPos);
-      const planeUp = new THREE.Vector3(0, 1, 0).applyQuaternion(v.quat);
-      cam.up.set(0, 1, 0).lerp(planeUp, v.kind === 'plane' ? 0.35 : 0).normalize();
-      const look = new THREE.Vector3().copy(v.pos).addScaledVector(v.kind === 'plane' ? fwd : dir, v.camDist * 0.8);
-      look.y += v.camHeight * 0.3;
-      cam.lookAt(look);
+      if (!flat) {
+        // Aircraft chase camera: only the view direction is smoothed (never the
+        // position), so the plane stays put in frame at any speed and through loops.
+        if (this.chaseVeh !== v) { this.chaseVeh = v; this.chaseFwd.copy(fwd); this.chaseUp.set(0, 1, 0); }
+        const k = 1 - Math.exp(-4.5 * dt);
+        this.chaseFwd.lerp(fwd, k);
+        if (this.chaseFwd.lengthSq() < 1e-4) this.chaseFwd.copy(fwd);
+        this.chaseFwd.normalize();
+        const planeUp = tv2.set(0, 1, 0).applyQuaternion(v.quat);
+        this.chaseUp.lerp(planeUp, k * 0.5);   // follows the bank only partly
+        if (this.chaseUp.lengthSq() < 1e-4) this.chaseUp.copy(UP);
+        this.chaseUp.normalize();
+        const dir = this.chaseFwd.clone().applyAxisAngle(UP, this.lookYaw);
+        const upv = this.chaseUp.clone();
+        const want = new THREE.Vector3().copy(v.pos).addScaledVector(dir, -dist).addScaledVector(upv, v.camHeight - this.lookPitch * dist * 0.8);
+        const gh = W.groundAt(want.x, want.z);
+        if (want.y < gh + 1.5) want.y = gh + 1.5;
+        if (want.y < 1.2) want.y = 1.2;
+        cam.position.copy(want);
+        this.camPos.copy(want);
+        cam.up.copy(upv);
+        cam.lookAt(tv2.copy(v.pos).addScaledVector(dir, dist * 0.8).addScaledVector(upv, v.camHeight * 0.3));
+      } else {
+        const heading = v.heading;
+        const dir = tv2.set(Math.sin(heading + this.lookYaw), 0, Math.cos(heading + this.lookYaw));
+        const want = new THREE.Vector3().copy(v.pos).addScaledVector(dir, -dist);
+        want.y += v.camHeight - this.lookPitch * dist * 0.8;
+        const gh = W.groundAt(want.x, want.z);
+        if (want.y < gh + 1.5) want.y = gh + 1.5;
+        if (want.y < 1.2) want.y = 1.2;
+        const rate = v.kind === 'car' ? 9 : 5;
+        this.camPos.lerp(want, 1 - Math.exp(-rate * dt));
+        if (this.camPos.distanceToSquared(want) > 90000) this.camPos.copy(want);
+        cam.position.copy(this.camPos);
+        cam.up.set(0, 1, 0);
+        const look = new THREE.Vector3().copy(v.pos).addScaledVector(dir, v.camDist * 0.8);
+        look.y += v.camHeight * 0.3;
+        cam.lookAt(look);
+      }
     }
     const speed = Number.isFinite(v.speed) ? Math.max(0, v.speed) : 0;
     const maxSpeed = Number.isFinite(v.def?.maxSpeed) && v.def.maxSpeed > 0 ? v.def.maxSpeed : 280;
