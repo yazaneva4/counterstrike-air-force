@@ -116,7 +116,7 @@ export class Game {
     const S = this.structures.spawns;
     this.vehicles = [
       new Vehicle('jet', S.hangars[0]),
-      new Vehicle('nova', S.hangars[1]),
+      new Vehicle('talon', S.hangars[1]),
       new Vehicle('prop', S.hangars[2]),
       new Vehicle('heli', S.helipads[0]),
       new Vehicle('heli', S.helipads[1]),

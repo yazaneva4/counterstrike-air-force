@@ -19,7 +19,7 @@ export const LINES = {
     'Keep your gear down below sixty metres and your descent gentle. The runway forgives. The ocean doesn\'t.',
   ],
   pilot: [
-    'The Nova in front of hangar two isn\'t ours. It turned up one morning with no paperwork. Flies like a dream.',
+    'The Talon in front of hangar two isn\'t ours. It turned up one morning with no paperwork. Flies like a dream.',
     'Above eighteen hundred metres something blots out the stars. I\'ve seen it twice. Never on radar.',
     'Bank to turn, don\'t just use the rudder. The Skylark is the gentlest plane on the island.',
   ],

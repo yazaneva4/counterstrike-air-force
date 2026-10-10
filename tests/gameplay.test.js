@@ -19,7 +19,7 @@ function plane(speed = 100, type = 'jet') {
   Object.assign(v, { def: VEHICLE_DEFS[type], type, pos: new THREE.Vector3(0, 1000, 0), quat: new THREE.Quaternion(), vel: new THREE.Vector3(), heading: 0, pitch: 0, onGround: false, speed, throttle: 0, ground: 2, radius: 6, gearDown: false });
   return v;
 }
-const FIXED_WING_TYPES = ['jet', 'prop', 'nova'];
+const FIXED_WING_TYPES = ['jet', 'prop', 'talon'];
 function inputFixture() {
   globalThis.addEventListener = () => {};
   globalThis.document = { getElementById: () => null, addEventListener: () => {} };

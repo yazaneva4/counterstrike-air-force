@@ -8,7 +8,7 @@
 
 import * as THREE from 'three';
 import { clamp, damp, lerp, smoothstep } from '../core/util.js';
-import { buildFighter, buildProp, buildHelicopter, buildSaucer, buildNova } from './models.js';
+import { buildFighter, buildProp, buildHelicopter, buildSaucer, buildTalon } from './models.js';
 import { buildRocket, buildShip, AURORA } from './spacecraft.js';
 import { buildCar, CAR_NAMES, animateCarParts } from './cars.js';
 import { coordinatedTurnRate, bankedStallSpeed } from './flight.js';
@@ -16,7 +16,7 @@ import { coordinatedTurnRate, bankedStallSpeed } from './flight.js';
 export const VEHICLE_DEFS = {
   jet: { name: 'F-7 Falcon', role: 'Air-superiority jet', kind: 'plane', trim: 0.22, maxSpeed: 280, stall: 58, takeoff: 70, thrust: 15, pitchRate: 1.15, rollRate: 2.6, yawRate: 0.45, turn: 0.8, boost: 1.35, weapons: true },
   prop: { name: 'C-2 Skylark', role: 'Light touring plane', kind: 'plane', maxBank: 1.1, trim: 0.5, maxSpeed: 74, stall: 21, takeoff: 27, thrust: 4.2, pitchRate: 0.85, rollRate: 1.6, yawRate: 0.55, turn: 0.6, boost: 1 },
-  nova: { name: 'Nova X-1', role: 'Experimental prototype', kind: 'plane', trim: 0.14, maxSpeed: 330, stall: 42, takeoff: 52, thrust: 20, pitchRate: 1.5, rollRate: 3.4, yawRate: 0.7, turn: 1.05, boost: 1.45, weapons: true },
+  talon: { name: 'F-9 Talon', role: 'Twin-engine air-superiority fighter', kind: 'plane', trim: 0.14, maxSpeed: 330, stall: 42, takeoff: 52, thrust: 20, pitchRate: 1.5, rollRate: 3.4, yawRate: 0.7, turn: 1.05, boost: 1.45, weapons: true },
   heli: { name: 'H-60 Kite', role: 'Rescue helicopter', kind: 'heli', maxSpeed: 72, climb: 14 },
   ufo: { name: 'Visitor Craft', role: 'Anti-gravity saucer', kind: 'ufo', maxSpeed: 170, climb: 48, boost: 2.6 },
   ship: { name: 'Odyssey', role: 'Spaceplane · vertical take-off to orbit', kind: 'ship', maxSpeed: 240, climb: 55, boost: 2.4 },
@@ -44,19 +44,7 @@ function buildFor(type, opts = {}) {
     case 'ship': return buildShip();
     case 'rocket': return buildRocket();
     case 'sedan': case 'gt': case 'gtr': case 'drift': case 'pickup': case 'jeep': return buildCar(type, { color: opts.color });
-    case 'nova': {
-      const n = buildNova();
-      const gear = new THREE.Group();
-      const m = new THREE.MeshStandardMaterial({ color: 0x333344, metalness: 0.8, roughness: 0.3 });
-      for (const [x, z] of [[0, 3.6], [1.4, -1], [-1.4, -1]]) {
-        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.3, 6), m); leg.position.set(x, -1.25, z);
-        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 12), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-        wheel.rotation.z = Math.PI / 2; wheel.position.set(x, -1.9, z);
-        gear.add(leg, wheel);
-      }
-      n.group.add(gear);
-      return { group: n.group, parts: { engines: n.engines, gear, canopyMat: n.canopyMat, flightSurfaces: n.flightSurfaces }, ground: 2.2, radius: 7, length: 9, camDist: 20, camHeight: 5.5 };
-    }
+    case 'talon': return buildTalon();
     default: throw new Error('unknown vehicle ' + type);
   }
 }
@@ -768,7 +756,7 @@ export class Vehicle {
         a.rotation.x = damp(a.rotation.x, -c.roll * side * 0.28 + elevon, 8, dt);
       }
       for (const e of surfaces.elevators || []) e.rotation.x = damp(e.rotation.x, c.pitch * 0.24, 8, dt);
-      if (surfaces.rudder) surfaces.rudder.rotation.y = damp(surfaces.rudder.rotation.y, c.yaw * 0.24, 8, dt);
+      for (const r of surfaces.rudders || (surfaces.rudder ? [surfaces.rudder] : [])) r.rotation.y = damp(r.rotation.y, c.yaw * 0.24, 8, dt);
     }
     if (P.nav) {
       const on = this.occupied || !this.onGround;
@@ -777,14 +765,14 @@ export class Vehicle {
       P.nav.strobe.material.opacity = on && (t % 1.2) < 0.08 ? 1 : 0;
     }
     if (P.gear) P.gear.visible = this.gearDown || this.onGround;
-    if (P.flame) {
+    for (const f of P.flames || (P.flame ? [P] : [])) {
       const th = this.throttle * (this.boosting ? 1.6 : 1);
       const flick = 0.85 + Math.random() * 0.15;
-      P.flame.scale.set(0.6 + th * 0.5, 0.6 + th * 0.5, 0.15 + th * 1.1 * flick);
-      P.flame.material.opacity = (this.boosting ? 0.9 : 0.25 + th * 0.35) * flick;
-      P.flameCore.scale.set(0.8, 0.8, 0.2 + th * 0.8 * flick);
-      P.flameCore.material.opacity = 0.3 + th * 0.5;
-      P.nozzleGlow.material.opacity = 0.25 + th * 0.7;
+      f.flame.scale.set(0.6 + th * 0.5, 0.6 + th * 0.5, 0.15 + th * 1.1 * flick);
+      f.flame.material.opacity = (this.boosting ? 0.9 : 0.25 + th * 0.35) * flick;
+      f.flameCore.scale.set(0.8, 0.8, 0.2 + th * 0.8 * flick);
+      f.flameCore.material.opacity = 0.3 + th * 0.5;
+      f.nozzleGlow.material.opacity = 0.25 + th * 0.7;
     }
     if (P.engines) {
       const th = this.throttle * (this.boosting ? 1.5 : 1);

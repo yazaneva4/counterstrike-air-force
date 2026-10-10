@@ -462,7 +462,7 @@ export class Player {
     cam.near = this.cockpit ? 0.05 : 0.3;
     if (this.cockpit) {
       cam.up.set(0, 1, 0);
-      const seat = v.kind === 'car' ? v.model.spec.eye : { jet: [0, 0.95, 3.4], nova: [0, 1.05, 0.2], prop: [0.3, 0.55, 0.8], heli: [-0.45, 0.4, 1.5], ufo: [0, 2.2, 0], ship: [0, 0.9, 9.4], rocket: [0, 57 + (v.parts.model?.position.y || 0), -1.3] }[v.type] || [0, 1, 0];
+      const seat = v.kind === 'car' ? v.model.spec.eye : { jet: [0, 0.95, 3.4], talon: [0, 1.0, 4.7], prop: [0.3, 0.55, 0.8], heli: [-0.45, 0.4, 1.5], ufo: [0, 2.2, 0], ship: [0, 0.9, 9.4], rocket: [0, 57 + (v.parts.model?.position.y || 0), -1.3] }[v.type] || [0, 1, 0];
       tv2.set(seat[0], seat[1] + (v.kind === 'car' ? v.model.group.position.y : 0), seat[2]).applyQuaternion(v.quat).add(v.pos);
       cam.position.copy(tv2);
       tq.copy(v.quat).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(this.lookPitch, Math.PI + this.lookYaw, 0, 'YXZ')));

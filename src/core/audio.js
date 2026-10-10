@@ -143,7 +143,7 @@ export class AudioEngine {
     R(this.windFilter.frequency, 300 + sp * 8);
     R(this.surfGain.gain, s.space ? 0 : s.coast * 0.07);
     let eng = 0, hiss = 0, chop = 0, hum = 0, roar = 0, crackle = 0;
-    if (t === 'jet' || t === 'nova') {
+    if (t === 'jet' || t === 'talon') {
       eng = 0.05 + th * 0.09; hiss = 0.01 + th * 0.05 + (s.boosting ? 0.06 : 0);
       R(this.osc1.frequency, 55 + th * 90 + (s.boosting ? 20 : 0)); R(this.osc2.frequency, 28 + th * 45);
       R(this.engFilter.frequency, 500 + th * 1400 + (s.boosting ? 800 : 0));

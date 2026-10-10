@@ -10,7 +10,6 @@ import * as THREE from 'three';
 import { stdMat, glowSprite, canvasTexture } from '../core/util.js';
 import { Human, outfitFor } from '../actors/human.js';
 import { mulberry32 } from '../core/noise.js';
-import { buildNova } from './nova.js';
 import { loft, smoothSections, planform, fin, paintLivery, LV, panelSurface } from './shapes.js';
 
 const glass = () => new THREE.MeshStandardMaterial({ color: 0x0c1720, roughness: 0.03, metalness: 0.9, emissive: 0x08121a, emissiveIntensity: 0.4, transparent: true, opacity: 0.86 });
@@ -112,20 +111,23 @@ function aim9(parent, x, y, z) {
 // ---------------------------------------------------------------------------
 // F-7 Falcon: single-engine multirole fighter in two-tone air-superiority grey.
 
-function fighterLivery(tailNo) {
+const FALCON_PAINT = { a: '#a9b3ba', b: '#99a3aa', c: '#6e7982', radome: '#4e5860', glare: '#2f363c', seed: 88, name: 'KESTREL AIR FORCE', tag: 'RESCUE' };
+const TALON_PAINT = { a: '#8e979e', b: '#7b858c', c: '#59636b', radome: '#3c444a', glare: '#252b30', seed: 131, name: 'KESTREL AIR FORCE', tag: '9TH FS' };
+
+function fighterLivery(tailNo, pal = FALCON_PAINT) {
   return paintLivery(1024, 2048, (c, p, r, w, h) => {
-    const rnd = mulberry32(88);
+    const rnd = mulberry32(pal.seed);
     // Two-tone counter-shading: darker upper surfaces, lighter belly.
     const g = c.createLinearGradient(0, 0, w, 0);
-    g.addColorStop(0, '#a9b3ba'); g.addColorStop(0.22, '#99a3aa'); g.addColorStop(0.36, '#6e7982');
-    g.addColorStop(0.64, '#6e7982'); g.addColorStop(0.78, '#99a3aa'); g.addColorStop(1, '#a9b3ba');
+    g.addColorStop(0, pal.a); g.addColorStop(0.22, pal.b); g.addColorStop(0.36, pal.c);
+    g.addColorStop(0.64, pal.c); g.addColorStop(0.78, pal.b); g.addColorStop(1, pal.a);
     c.fillStyle = g; c.fillRect(0, 0, w, h);
     // Weathering streaks.
     for (let i = 0; i < 900; i++) { c.fillStyle = `rgba(${rnd() < 0.5 ? '40,45,50' : '200,205,210'},${rnd() * 0.05})`; c.fillRect(rnd() * w, rnd() * h, 2 + rnd() * 6, 10 + rnd() * 60); }
     // Radome.
-    c.fillStyle = '#4e5860'; LV.rect(c, 0, 0.945, 1, 1, w, h);
+    c.fillStyle = pal.radome; LV.rect(c, 0, 0.945, 1, 1, w, h);
     // Anti-glare panel ahead of the canopy.
-    c.fillStyle = '#2f363c'; LV.rect(c, 0.44, 0.83, 0.56, 0.945, w, h);
+    c.fillStyle = pal.glare; LV.rect(c, 0.44, 0.83, 0.56, 0.945, w, h);
     // Panels and rivets.
     LV.panelGrid(p, w, h, [0.1, 0.16, 0.24, 0.31, 0.38, 0.46, 0.53, 0.6, 0.67, 0.74, 0.8, 0.945], [0.06, 0.16, 0.27, 0.38, 0.62, 0.73, 0.84, 0.94]);
     p.strokeStyle = '#000'; p.lineWidth = 1.4;
@@ -135,9 +137,9 @@ function fighterLivery(tailNo) {
     for (const [u, side] of [[0.3, 'left'], [0.7, 'right']]) {
       const cx = u * w, cy = (1 - 0.34) * h;
       [['#1d3e7a', 56], ['#f1f1ee', 40], ['#c8302a', 23]].forEach(([col, rr]) => { c.fillStyle = col; c.beginPath(); c.ellipse(cx, cy, rr, rr * 0.83, 0, 0, Math.PI * 2); c.fill(); });
-      LV.text(c, 'KESTREL AIR FORCE', u + (side === 'left' ? 0.02 : -0.02), 0.56, w, h, side, 'bold 26px Arial', '#2a3238');
+      LV.text(c, pal.name, u + (side === 'left' ? 0.02 : -0.02), 0.56, w, h, side, 'bold 26px Arial', '#2a3238');
       LV.text(c, tailNo, u + (side === 'left' ? 0.035 : -0.035), 0.2, w, h, side, 'bold 30px Arial', '#2a3238');
-      LV.text(c, 'RESCUE', u + (side === 'left' ? 0.09 : -0.09), 0.79, w, h, side, 'bold 16px Arial', '#c8302a');
+      LV.text(c, pal.tag, u + (side === 'left' ? 0.09 : -0.09), 0.79, w, h, side, 'bold 16px Arial', '#c8302a');
     }
     LV.text(c, 'NO STEP', 0.46, 0.44, w, h, 'left', '12px Arial', '#2a3238');
     LV.text(c, 'NO STEP', 0.54, 0.44, w, h, 'right', '12px Arial', '#2a3238');
@@ -240,6 +242,87 @@ export function buildFighter({ tailNo = '88-0412' } = {}) {
   g.add(gear);
   const nav = navLights(g, new THREE.Vector3(4.9, -0.12, -1.8), new THREE.Vector3(-4.9, -0.12, -1.8), new THREE.Vector3(0, 4.3, -7.8));
   return { group: g, parts: { flame, flameCore, nozzleGlow, gear, nav, pilot: p, flightSurfaces }, ground: 2.5, radius: 7, length: 15.5, camDist: 24, camHeight: 6 };
+}
+
+// ---------------------------------------------------------------------------
+// F-9 Talon: twin-engine, twin-tail air-superiority fighter (F-15 / Su-27 class)
+// in three-tone grey, with shoulder wings, box intakes and two afterburners.
+
+export function buildTalon({ tailNo = '01-0217' } = {}) {
+  const g = new THREE.Group();
+  const lv = once('talonLivery' + tailNo, () => fighterLivery(tailNo, TALON_PAINT));
+  const skin = new THREE.MeshPhysicalMaterial({ map: lv.map, normalMap: lv.normalMap, roughnessMap: lv.roughnessMap, roughness: 1, metalness: 0.18, clearcoat: 0.2, clearcoatRoughness: 0.45 });
+  const surf = once('talonSurf', () => panelSurface('#6f7a82', { rough: 0.6, metal: 0.14, repeat: 0.3 }));
+  const dark = stdMat(0x32393e, { rough: 0.55, metal: 0.3 });
+  const metal = stdMat(0x5a5550, { rough: 0.35, metal: 1 });
+  const hot = stdMat(0x3a2e28, { rough: 0.45, metal: 1 });
+  const body = loft(smoothSections([
+    { z: -8.6, w: 1.5, h: 0.58, y: 0.05, n: 3 }, { z: -6.5, w: 1.62, h: 0.66, y: 0.05, n: 3 }, { z: -3.0, w: 1.7, h: 0.74, y: 0.02, n: 3 },
+    { z: 0.0, w: 1.55, h: 0.82, y: 0.02, n: 2.8 }, { z: 2.5, w: 1.2, h: 0.88, y: 0.05, n: 2.5 }, { z: 4.5, w: 0.88, h: 0.82, y: 0.12, n: 2.3 },
+    { z: 6.3, w: 0.62, h: 0.64, y: 0.1, n: 2.2 }, { z: 8.0, w: 0.34, h: 0.34, y: 0.05 }, { z: 9.4, w: 0.12, h: 0.12, y: 0.02 }, { z: 9.85, w: 0.015, h: 0.015, y: 0.02 },
+  ], 4), { segs: 44 });
+  add(g, body, skin);
+  // Bubble canopy, frame and ejection seat.
+  const canopyG = new THREE.SphereGeometry(0.62, 32, 18, 0, Math.PI * 2, 0, Math.PI * 0.55); canopyG.scale(0.95, 0.9, 2.5);
+  add(g, canopyG, glass(), 0, 0.88, 5.0);
+  const bow = new THREE.TorusGeometry(0.58, 0.035, 6, 24, Math.PI); bow.scale(1, 0.9, 1);
+  add(g, bow, dark, 0, 0.9, 3.65);
+  const p = pilot('pilot', 23);
+  p.root.scale.setScalar(0.92); p.root.position.set(0, 0.0, 4.6);
+  g.add(p.root);
+  add(g, new THREE.BoxGeometry(0.5, 0.9, 0.2), dark, 0, 0.85, 4.0, -0.25);
+  const flames = [], flightSurfaces = { ailerons: [], elevators: [], rudders: [] };
+  for (const s of [1, -1]) {
+    // Box intake under the wing root, with a dark throat.
+    const intake = loft([
+      { z: -0.6, w: 0.5, h: 0.52, y: 0, n: 4 }, { z: 1.2, w: 0.56, h: 0.58, y: 0, n: 4 }, { z: 3.0, w: 0.54, h: 0.54, y: 0, n: 4 },
+    ], { segs: 20 });
+    add(g, intake, skin, s * 1.28, -0.42, 0);
+    add(g, new THREE.BoxGeometry(0.88, 0.8, 0.04), stdMat(0x07080a, { rough: 0.9 }), s * 1.28, -0.42, 3.02);
+    // Wing, leading-edge root extension, stabilator.
+    const lerx = add(g, planform([[1.3, 5.2], [2.2, 2.4], [2.2, -1.0], [1.3, -1.0]], 0.07), surf, 0, 0.0, 0); lerx.scale.x = s;
+    const w = add(g, planform([[1.5, 2.4], [6.5, -2.0], [6.5, -3.6], [1.5, -4.2]], 0.15), surf, 0, -0.08, 0); w.scale.x = s;
+    const st = add(g, planform([[1.5, -6.0], [4.4, -8.0], [4.4, -9.1], [1.5, -9.0]], 0.1), surf, 0, 0.0, 0); st.scale.x = s;
+    // Canted vertical tail.
+    const tail = add(g, fin([[-4.8, 0.55], [-7.9, 3.4], [-9.1, 3.4], [-8.9, 0.55]], 0.13), surf, s * 1.45, 0, 0); tail.rotation.z = -s * 0.3;
+    flightSurfaces.rudders.push(flightSurface(g, surf, [0.08, 1.5, 0.34], [s * 2.2, 2.55, -9.05], 'rudder'));
+    flightSurfaces.rudders[flightSurfaces.rudders.length - 1].rotation.z = -s * 0.3;
+    flightSurfaces.ailerons.push(flightSurface(g, surf, [2.1, 0.07, 0.5], [s * 4.5, -0.03, -3.55], 'aileron'));
+    flightSurfaces.elevators.push(flightSurface(g, surf, [1.2, 0.07, 0.4], [s * 2.8, 0.0, -9.25], 'elevator'));
+    // Missiles: wingtip rails, fuselage stations.
+    add(g, new THREE.BoxGeometry(0.1, 0.1, 2.4), dark, s * 6.55, -0.1, -2.7);
+    aim9(g, s * 6.55, -0.24, -2.6);
+    for (const [mx, mz] of [[0.95, 0.6], [0.95, -2.2]]) aim9(g, s * mx, -0.98, mz);
+    decal(g, roundel(), 1.05, 1.05, new THREE.Vector3(s * 4.0, -0.0, -1.7), new THREE.Euler(-Math.PI / 2, 0, 0));
+    // Engine nozzle, hot liner, petals and afterburner.
+    const noz = new THREE.CylinderGeometry(0.6, 0.68, 1.1, 24, 1, true); noz.rotateX(Math.PI / 2);
+    add(g, noz, metal, s * 0.95, 0.04, -9.05);
+    const liner = new THREE.CylinderGeometry(0.5, 0.52, 0.95, 20, 1, true); liner.rotateX(Math.PI / 2);
+    add(g, liner, hot, s * 0.95, 0.04, -9.0).material.side = THREE.DoubleSide;
+    for (let k = 0; k < 12; k++) {
+      const a = (k / 12) * Math.PI * 2;
+      add(g, new THREE.BoxGeometry(0.2, 0.02, 0.5), metal, s * 0.95 + Math.cos(a) * 0.63, 0.04 + Math.sin(a) * 0.63, -9.55, 0, 0, a + Math.PI / 2);
+    }
+    const flameGeo = new THREE.ConeGeometry(0.46, 4.2, 18, 1, true); flameGeo.rotateX(-Math.PI / 2); flameGeo.translate(0, 0, -2.1);
+    flames.push({
+      flame: add(g, flameGeo, additive(0xff8a3a, 0.8), s * 0.95, 0.04, -9.5),
+      flameCore: add(g, flameGeo.clone().scale(0.55, 0.55, 0.6), additive(0x9ad0ff, 0.9), s * 0.95, 0.04, -9.4),
+      nozzleGlow: add(g, new THREE.CircleGeometry(0.46, 20), additive(0xffb070, 0.9), s * 0.95, 0.04, -9.5, 0, Math.PI, 0),
+    });
+  }
+  // Tail codes and unit marking on both fins.
+  const tailTex = textDecal(tailNo.replace('-', ''), { font: 'bold 90px Arial', color: '#1f262c' });
+  for (const s of [1, -1]) decal(g, tailTex, 1.2, 0.3, new THREE.Vector3(s * 2.12, 2.1, -7.4), new THREE.Euler(0, s * Math.PI / 2, -s * 0.3));
+  // Landing gear (wheel bottoms sit 2.5 m below the origin).
+  const gear = new THREE.Group();
+  gearLeg(gear, 0, 6.3, 1.62, 0.3, { width: 0.18 });
+  gearLeg(gear, 1.8, -1.8, 1.5, 0.45, { width: 0.26 });
+  gearLeg(gear, -1.8, -1.8, 1.5, 0.45, { width: 0.26 });
+  gear.position.y = -0.55;
+  const taxiLight = glowSprite(0xfff4d8, 0.8, 0.9); taxiLight.position.set(0, -1.2, 6.5); gear.add(taxiLight);
+  g.add(gear);
+  const nav = navLights(g, new THREE.Vector3(6.6, -0.1, -2.7), new THREE.Vector3(-6.6, -0.1, -2.7), new THREE.Vector3(0, 3.5, -9.2));
+  return { group: g, parts: { flames, gear, nav, pilot: p, flightSurfaces }, ground: 2.5, radius: 8, length: 19.5, camDist: 28, camHeight: 7 };
 }
 
 // ---------------------------------------------------------------------------
@@ -644,4 +727,3 @@ export function buildDrone(type = 0) {
   return { group: g, orbit, color: c0 };
 }
 
-export { buildNova };
