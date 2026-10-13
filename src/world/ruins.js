@@ -64,6 +64,7 @@ export function buildObservatory(S) {
   const rnd = mulberry32(1888);
   const group = new THREE.Group();
   group.name = 'observatory';
+  group.userData._cull = { skip: true };      // a landmark: always drawn
   S.group.add(group);
   const stone = new THREE.MeshStandardMaterial({ color: 0xa8a294, roughness: 0.92 });
   const pl = plaster();

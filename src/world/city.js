@@ -406,6 +406,8 @@ export function buildCity(S) {
     mk(sides[i].build(), mat);
     S.nightLights.push({ mat, base: 1.7 });
   });
+  // Station canopy on the north side of the monorail loop.
+  furn.box(gx(0), y0 + 24 + 4.6, gz(-120 - 3), 34, 0.4, 9, hex(0x30343a));
   mk(roofs.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
   mk(furn.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.3 }));
   const markMesh = mk(marks.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }), { cast: false });
@@ -462,8 +464,6 @@ export function buildCity(S) {
     }
   }
   mk(rail.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.35 }));
-  // Station canopy on the north side.
-  furn.box(gx(0), RAIL_Y + 4.6, gz(-loopR - 3), 34, 0.4, 9, hex(0x30343a));
   const trainMat = new THREE.MeshStandardMaterial({ color: 0xdfe4e8, roughness: 0.35, metalness: 0.5 });
   const trainGlass = new THREE.MeshStandardMaterial({ color: 0x0a1218, emissive: 0xffe8b0, emissiveIntensity: 0, roughness: 0.15, metalness: 0.7 });
   const stripe = new THREE.MeshStandardMaterial({ color: 0xe8742a, roughness: 0.5 });

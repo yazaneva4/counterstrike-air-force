@@ -73,6 +73,8 @@ export const LINES = {
 
 const ROLE_TITLE = { crew: 'Ground crew', pilot: 'Pilot', villager: 'Villager', farmer: 'Farmer', beach: 'Beachgoer', scientist: 'Researcher', keeper: 'Lighthouse keeper', hiker: 'Hiker' };
 
+const TUMBLE_C = new THREE.Vector3(), TUMBLE_V = new THREE.Vector3();
+
 export class NPC {
   constructor(role, home, rnd, world) {
     this.role = role;
@@ -146,24 +148,30 @@ export class NPC {
     H.gesture = null;
     H.lookLocked = false;
 
-    // Knocked down by a vehicle: a short ballistic tumble, then lying still until they get back up.
+    // Knocked down by a vehicle: a short ballistic tumble about the body's centre (around the axis
+    // perpendicular to the knock, head leading), then lying still until they get back up.
     if (this.tumble) {
       const tb = this.tumble;
       tb.t += dt;
       if (tb.air) {
         tb.vy -= 9.81 * dt;
-        pos.x += tb.vx * dt; pos.z += tb.vz * dt; tb.y += tb.vy * dt;
-        const g = this.world.groundAt(pos.x, pos.z);
-        this.root.rotation.x = -tb.t * 5.5; H.state = 'air';
-        if (tb.y <= 0 && tb.vy < 0) { tb.air = false; tb.y = 0; tb.vx *= 0.25; tb.vz *= 0.25; this.root.rotation.x = 0; ctx.onHit?.(this, 0.4); }
-        pos.y = g + Math.max(0, tb.y);
+        tb.px += tb.vx * dt; tb.pz += tb.vz * dt; tb.y += tb.vy * dt;
+        const g = this.world.groundAt(tb.px, tb.pz);
+        H.state = 'air';
+        this.root.quaternion.setFromAxisAngle(tb.axis, Math.min(tb.t * 5.5, Math.PI * 0.5));
+        const centre = TUMBLE_C.set(0, 0.9, 0), moved = TUMBLE_V.copy(centre).applyQuaternion(this.root.quaternion);
+        this.root.position.set(tb.px + centre.x - moved.x, g + Math.max(0, tb.y) + centre.y - moved.y, tb.pz + centre.z - moved.z);
+        if (tb.y <= 0 && tb.vy < 0) { tb.air = false; tb.y = 0; tb.vx *= 0.25; tb.vz *= 0.25; this.root.quaternion.identity(); ctx.onHit?.(this, 0.4); }
       } else {
         tb.vx *= Math.exp(-4 * dt); tb.vz *= Math.exp(-4 * dt);
-        pos.x += tb.vx * dt; pos.z += tb.vz * dt; pos.y = this.world.groundAt(pos.x, pos.z);
+        const nx = tb.px + tb.vx * dt, nz = tb.pz + tb.vz * dt;
+        if (!this.world.structures.insideBuilding(nx, nz, 0.5) && this.world.groundAt(nx, nz) > 0.3) { tb.px = nx; tb.pz = nz; }
+        this.root.position.set(tb.px, this.world.groundAt(tb.px, tb.pz), tb.pz);
         H.state = 'lie';
-        if (tb.t > 6.5) { this.tumble = null; this.root.rotation.x = 0; H.state = 'idle'; this.timer = 1; }
+        if (tb.t > 6.5) { this.tumble = null; this.root.rotation.set(0, this.heading, 0); H.state = 'idle'; this.timer = 1; }
       }
-      H.speed = 0; this.root.rotation.y = this.heading;
+      H.speed = 0;
+      if (!this.tumble) this.root.rotation.y = this.heading;
       if (ctx.animate) H.animate(dt);
       return;
     }
@@ -176,19 +184,21 @@ export class NPC {
       if (ahead < -1.5) continue;                            // already behind it
       const side = dx * -vz + dz * vx;                       // + = to the vehicle's left
       if (Math.abs(side) < 1.5 && ahead < hz.r + 0.6 && ahead > -1.5 && hz.speed > 5.5) {
-        this.tumble = { t: 0, air: true, y: 0.2, vy: 3.5 + hz.speed * 0.15, vx: hz.vx * 0.55 + (side > 0 ? -vz : vz) * 2, vz: hz.vz * 0.55 + (side > 0 ? vx : -vx) * 2 };
+        const kvx = hz.vx * 0.55 + (side > 0 ? -vz : vz) * 2, kvz = hz.vz * 0.55 + (side > 0 ? vx : -vx) * 2, kl = Math.hypot(kvx, kvz) || 1;
+        this.tumble = { t: 0, air: true, y: 0.2, vy: 3.5 + hz.speed * 0.15, vx: kvx, vz: kvz, px: pos.x, pz: pos.z, axis: new THREE.Vector3(kvz / kl, 0, -kvx / kl) };
         this.target = null; this.partner = null; this.waveTime = 0;
         ctx.onHit?.(this, hz.speed);
         return;
       }
-      if (Math.abs(side) < 3.2 && ahead < 14 && ahead > 0) {
-        // Sidestep sharply away from the vehicle's path.
+      if (Math.abs(side) < 3.2 && ahead < 14 && ahead > 0 && ctx.talkingTo !== this) {
+        // Sidestep sharply away from the vehicle's path (but never into a wall or the sea).
         const sgn = side >= 0 ? 1 : -1;
         this.heading = dampAngle(this.heading, Math.atan2(-vz * sgn, vx * sgn), 9, dt);
-        const run = 4.4;
-        pos.x += Math.sin(this.heading) * run * dt; pos.z += Math.cos(this.heading) * run * dt;
+        const run = 4.4, nx = pos.x + Math.sin(this.heading) * run * dt, nz = pos.z + Math.cos(this.heading) * run * dt;
+        const clear = !this.world.structures.insideBuilding(nx, nz, 0.8) && this.world.groundAt(nx, nz) > 0.3 && Math.abs(this.world.groundAt(nx, nz) - pos.y) < 1.2;
+        if (clear) { pos.x = nx; pos.z = nz; }
         this.target = null;
-        H.state = 'idle'; H.speed = run; H.gesture = null;
+        H.state = 'idle'; H.speed = clear ? run : 0; H.gesture = null;
         pos.y = this.world.groundAt(pos.x, pos.z); this.root.rotation.y = this.heading;
         if (ctx.animate) H.animate(dt);
         return;

@@ -416,7 +416,7 @@ export class Game {
       const d = Math.hypot(v.pos.x - c.x, v.pos.z - c.z);
       v.group.visible = v.occupied || big || d < (v.kind === 'car' ? 500 : 1100) * k || Math.abs(v.pos.y - c.y) > 400;
     }
-    for (const car of this.traffic.cars) car.group.visible = Math.hypot(car.pos.x - c.x, car.pos.z - c.z) < 650 * k;
+    for (const car of this.traffic.cars) car.cullDist = 650 * k + 60;
     // Small buildings and props of the island are culled by distance; big complexes always stay.
     for (const o of this.structures.group.children) {
       let r = o.userData._cull;
@@ -427,7 +427,7 @@ export class Game {
         r = o.userData._cull = { x: s.center.x, z: s.center.z, r: s.radius, skip: s.radius > 260 };
       }
       if (r.skip) continue;
-      o.visible = Math.hypot(r.x - c.x, r.z - c.z) - r.r < 1500 * k || Math.abs(c.y) > 500;
+      o.visible = Math.hypot(r.x - c.x, r.z - c.z) - r.r < 500 + 2200 * k || Math.abs(c.y) > 500;
     }
   }
 
@@ -465,7 +465,7 @@ export class Game {
       out.push(k);
     }
     const w = this.weather?.now;
-    if (w && this.clouds?.wind) props.physics.wind.set(this.clouds.wind.x, 0, this.clouds.wind.z);
+    if (w && this.clouds?.wind && this.location === 'earth') props.physics.wind.set(this.clouds.wind.x, 0, this.clouds.wind.z);
     props.update(dt, { focus: f, kinematics: out, range: 380 });
   }
 
@@ -880,7 +880,7 @@ export class Game {
     this.vegetation.update(dt, this.camera.position);
     this.structures.update(dt, t, this.sky);
     this.seabirds?.update(dt, this.camera);
-    this.fireflies?.update(dt, this.camera, this.sky.night, (x, z) => this.structures.groundAt(x, z), this.weather.now.wet);
+    this.fireflies?.update(dt, this.camera, this.sky.night, (x, z) => { const g = this.structures.groundAt(x, z); return g > 1.5 && !this.structures.roadAt(x, z) && this.terrain.zoneWeight(this.terrain.zone('city'), x, z) < 0.05 ? g : null; }, this.weather.now.wet);
     this.waterfalls?.update(dt, { day: this.sky.day, night: this.sky.night, height: innerHeight, pixelRatio: this.renderer.getPixelRatio(), camera: this.camera });
     this.mysteries.update(dt, t, this.sky, this.fx);
 

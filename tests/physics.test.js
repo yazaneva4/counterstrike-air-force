@@ -35,8 +35,8 @@ test('a ball bounces with restitution and loses energy', () => {
   void peak2;
 });
 
-test('a barrel rolls down a slope while a crate on the same slope slides less', () => {
-  const slope = { groundAt: (x) => -x * 0.25, terrain: { heightAt: (x) => -x * 0.25, normalAt: (x, z, o = new THREE.Vector3()) => o.set(0.25, 1, 0).normalize() }, structures: { colliders: [], platformAt: () => -Infinity }, vegetation: { near() {} } };
+test('a barrel set on a steep slope rolls downhill', () => {
+  const slope = { groundAt: (x) => -x * 0.6, terrain: { heightAt: (x) => -x * 0.6, normalAt: (x, z, o = new THREE.Vector3()) => o.set(0.6, 1, 0).normalize() }, structures: { colliders: [], platformAt: () => -Infinity }, vegetation: { near() {} } };
   const P = new PhysicsWorld(slope, { seaPhysics: false });
   const barrel = P.add('barrel', 0, 0, { sleep: false, roll: Math.PI / 2 });
   run(P, 3);
@@ -93,4 +93,33 @@ test('low gravity makes the same drop slower (Moon)', () => {
   const a = earth.add('ball', 0, 0, { y: 10, sleep: false }), m = moon.add('ball', 0, 0, { y: 10, sleep: false });
   for (let i = 0; i < 60; i++) { earth.step(1 / 60); moon.step(1 / 60); }
   assert.ok(m.p.y > a.p.y + 3, 'lunar ball has fallen less: ' + m.p.y + ' vs ' + a.p.y);
+});
+
+test('an awake body knocks into a sleeping body with a lower id and moves it', () => {
+  const P = new PhysicsWorld(flat(0), { seaPhysics: false });
+  const resting = P.add('crate', 3, 0, { sleep: true });              // lower id, asleep
+  const ball = P.add('crate', 0, 0, { sleep: false });
+  ball.v.set(9, 0, 0);
+  run(P, 2);
+  assert.ok(resting.p.x > 3.2, 'the sleeper was woken and shoved: ' + resting.p.x);
+  assert.ok(ball.p.x < resting.p.x + 0.2, 'the mover did not pass through it');
+});
+
+test('ground friction brings a sliding crate to rest at a plausible distance', () => {
+  const P = new PhysicsWorld(flat(0), { seaPhysics: false });
+  const b = P.add('crate', 0, 0, { sleep: false });
+  b.v.set(4, 0, 0);
+  run(P, 5);
+  const d = b.p.x;
+  // mu 0.65: v^2 / (2 mu g) is about 1.3 m; allow for tumbling and the discrete contacts.
+  assert.ok(d > 0.6 && d < 4, 'slid a plausible distance: ' + d);
+  assert.ok(b.v.length() < 0.05, 'and stopped');
+});
+
+test('props do not feel wind in a vacuum', () => {
+  const P = new PhysicsWorld(flat(0, { air: 0, gravity: 0.165 }), { seaPhysics: false });
+  P.wind.set(20, 0, 0);
+  const ball = P.add('ball', 0, 0, { sleep: false, y: 0.3 });
+  run(P, 3);
+  assert.ok(Math.abs(ball.p.x) < 0.5, 'ball stayed put: ' + ball.p.x);
 });

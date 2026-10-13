@@ -99,6 +99,7 @@ export class Fireflies {
     this.count = count;
     this.pos = new Float32Array(count * 3);
     this.seed = Float32Array.from({ length: count }, (_, i) => (i * 0.61803) % 1);
+    this.seed2 = Float32Array.from({ length: count }, (_, i) => (i * 0.7548776 + 0.3) % 1);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     const tex = canvasTexture(32, 32, (c, w, h) => { const r = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); r.addColorStop(0, 'rgba(220,255,140,1)'); r.addColorStop(0.35, 'rgba(180,255,90,0.5)'); r.addColorStop(1, 'rgba(160,255,80,0)'); c.fillStyle = r; c.fillRect(0, 0, w, h); }, { srgb: false });
@@ -109,19 +110,22 @@ export class Fireflies {
     this.t = 0;
   }
 
+  // groundAt(x, z) returns the ground height, or null where flies should not appear (sea, roads, city).
   update(dt, camera, night, groundAt, wet = 0) {
     this.t += dt;
     const on = night > 0.45 && camera.position.y < 80 && wet < 0.5;
     this.points.visible = on;
     if (!on) return;
     this.mat.opacity = Math.min(1, (night - 0.45) * 3) * (0.55 + 0.45 * Math.sin(this.t * 3));
-    const cx = camera.position.x, cz = camera.position.z;
+    const cx = camera.position.x, cz = camera.position.z, CELL = 70;
+    const wrap = (v, c) => ((v - c + CELL / 2) % CELL + CELL) % CELL - CELL / 2 + c;   // world-fixed lattice wrapped around the camera
     for (let i = 0; i < this.count; i++) {
-      const s = this.seed[i];
-      const a = s * 62.8 + this.t * (0.1 + s * 0.2), r = 3 + s * 28;
-      const x = cx + Math.cos(a) * r * (0.6 + Math.sin(this.t * 0.3 + s * 9) * 0.4), z = cz + Math.sin(a * 1.2) * r;
+      const s = this.seed[i], s2 = this.seed2[i];
+      const bx = s * CELL * 7.0 + Math.sin(this.t * (0.15 + s * 0.2) + s * 40) * 4, bz = s2 * CELL * 7.0 + Math.cos(this.t * (0.12 + s2 * 0.2) + s2 * 30) * 4;
+      const x = wrap(bx, cx), z = wrap(bz, cz);
+      const g = groundAt(x, z);
       this.pos[i * 3] = x; this.pos[i * 3 + 2] = z;
-      this.pos[i * 3 + 1] = groundAt(x, z) + 0.6 + (Math.sin(this.t * 0.8 + s * 40) * 0.5 + 0.5) * 2.4;
+      this.pos[i * 3 + 1] = g == null ? -500 : g + 0.6 + (Math.sin(this.t * 0.8 + s * 40) * 0.5 + 0.5) * 2.4;
     }
     this.points.geometry.attributes.position.needsUpdate = true;
   }

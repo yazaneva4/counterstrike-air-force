@@ -39,7 +39,7 @@ function contactPoints(shape) {
   return { pts, pr: 0.02 };
 }
 
-const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3(), vsTmp = new THREE.Vector3();
 const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
 const STEP = 1 / 90;
@@ -159,7 +159,8 @@ export class PhysicsWorld {
 
   // Impulse resolution at world point `pt` with surface normal `n` against a
   // surface moving with velocity `vs`. Returns the normal impulse magnitude.
-  _contact(b, pt, n, vs, e, mu) {
+  _contact(b, pt, n, vsIn, e, mu) {
+    const vs = vsTmp.copy(vsIn);                // the scratch vectors below are reused, so keep our own copy
     v1.copy(pt).sub(b.p);                       // r
     v2.copy(b.w).cross(v1).add(b.v).sub(vs);    // relative point velocity
     const vn = v2.dot(n);
@@ -274,13 +275,13 @@ export class PhysicsWorld {
         // Drift with the wave motion and wind.
         b.v.x += this.wind.x * 0.05 * h; b.v.z += this.wind.z * 0.05 * h;
       }
-    } else if (b.shape.density < 0.3) {
-      // Light objects (cones, balls) feel the wind.
-      const k = (b.shape.density < 0.1 ? 0.9 : 0.25) * h;
+    } else if (b.shape.density < 0.3 && (this.world.air ?? 1) > 0.005) {
+      // Light objects (cones, balls) feel the wind (not in a vacuum).
+      const k = (b.shape.density < 0.1 ? 0.9 : 0.25) * h * Math.min(1, (this.world.air ?? 1) * 20);
       b.v.x += (this.wind.x - b.v.x) * k * 0.15; b.v.z += (this.wind.z - b.v.z) * k * 0.15;
     }
-    // Air drag.
-    const ad = Math.exp(-0.05 * h);
+    // Air drag (absent on the Moon, thin on Mars).
+    const ad = Math.exp(-0.05 * h * Math.min(1, (this.world.air ?? 1) * 20));
     b.v.multiplyScalar(ad);
   }
 
@@ -345,7 +346,9 @@ export class PhysicsWorld {
 
   _pairs(b) {
     this._near(b.p.x, b.p.z, b.radius + 1.6, (o) => {
-      if (o === b || o.id < b.id) return;       // each pair once
+      // Each pair once: an awake body handles every sleeping neighbour (sleepers never run this),
+      // and two awake bodies are handled by the lower id.
+      if (o === b || (!o.sleeping && o.id < b.id)) return;
       v1.copy(b.p).sub(o.p);
       const d = v1.length(), R = (b.radius + o.radius) * 0.8;
       if (d >= R || d < 1e-5) return;

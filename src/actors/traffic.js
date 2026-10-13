@@ -107,7 +107,7 @@ class RoadCar {
 
   update(dt, night, focus, others) {
     const d = this.pos.distanceTo(focus);
-    this.group.visible = d < 700;
+    this.group.visible = d < (this.cullDist || 700);
     if (d > 700) return;
     // Yield to anything ahead in our lane.
     const hx = Math.sin(this.heading), hz = Math.cos(this.heading);

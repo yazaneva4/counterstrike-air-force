@@ -33,15 +33,19 @@ function descend(terrain, x, z, max = 260) {
 // read well from a distance and keep the drop believable.
 export function findFalls(terrain, { count = 8, window = 14, minDrop = 38, spacing = 320 } = {}) {
   const found = [];
+  const traced = new Set();            // 40 m cells already covered by a traced path
+  const cellKey = (x, z) => Math.floor(x / 40) * 4099 + Math.floor(z / 40);
   const rnd = mulberry32(81);
   const n = new THREE.Vector3();
-  for (let z = -HALF + 120; z < HALF - 120; z += 22) for (let x = -HALF + 120; x < HALF - 120; x += 22) {
+  for (let z = -HALF + 120; z < HALF - 120; z += 36) for (let x = -HALF + 120; x < HALF - 120; x += 36) {
     const h = terrain.heightAt(x + rnd() * 8, z + rnd() * 8);
     if (h < 60 || h > 380) continue;
+    if (traced.has(cellKey(x, z))) continue;
     terrain.normalAt(x, z, n);
     if (n.y > 0.75 || n.y < 0.25) continue;
     if (terrain.zones.some((zn) => zn.mode !== 'add' && terrain.zoneWeight(zn, x, z) > 0.02)) continue;
     const path = descend(terrain, x, z, 420);
+    for (const p of path) traced.add(cellKey(p[0], p[2]));
     if (path.length < window + 2) continue;
     // Best moderate cascade (38-120 m) and best grand fall on this path.
     let mod = -1, modDrop = 0, grand = -1, grandDrop = 0;
@@ -183,7 +187,7 @@ export class Waterfalls {
     this.mistMat = new THREE.ShaderMaterial({
       uniforms: { uMap: { value: mistTexture() }, uTint: { value: new THREE.Color(0.92, 0.96, 1) }, uScale: { value: 600 } },
       transparent: true, depthWrite: false,
-      vertexShader: 'attribute float aAlpha; attribute float aSize; uniform float uScale; varying float vA; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vA = aAlpha * smoothstep(2200.0, 500.0, -mv.z); gl_PointSize = aSize * uScale / max(1.0, -mv.z); gl_Position = projectionMatrix * mv; }',
+      vertexShader: 'attribute float aAlpha; attribute float aSize; uniform float uScale; varying float vA; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vA = aAlpha * (1.0 - smoothstep(500.0, 2200.0, -mv.z)); gl_PointSize = aSize * uScale / max(1.0, -mv.z); gl_Position = projectionMatrix * mv; }',
       fragmentShader: 'uniform sampler2D uMap; uniform vec3 uTint; varying float vA; void main(){ vec4 t = texture2D(uMap, gl_PointCoord); gl_FragColor = vec4(uTint, t.a * vA); }',
     });
     this.points = new THREE.Points(g, this.mistMat);
