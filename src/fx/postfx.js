@@ -25,10 +25,13 @@ const GradeShader = {
     uFlash: { value: 0 },
     uCloud: { value: 0 },
     uNight: { value: 0 },
+    uRays: { value: 0 },
+    uGolden: { value: 0 },
+    uStorm: { value: 0 },
   },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
   fragmentShader: /* glsl */`
-    uniform sampler2D tDiffuse; uniform float uTime, uSunVis, uVignette, uChroma, uFlash, uCloud, uNight;
+    uniform sampler2D tDiffuse; uniform float uTime, uSunVis, uVignette, uChroma, uFlash, uCloud, uNight, uRays, uGolden, uStorm;
     uniform vec2 uRes, uSun; uniform vec3 uSunColor;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -63,12 +66,32 @@ const GradeShader = {
         col += fl * uSunVis;
       }
 
+      // God rays: radial streaks marched from each pixel toward the sun. Bright sky
+      // and sun glare leak through gaps in clouds, trees and terrain.
+      if (uRays > 0.01 && uSunVis > 0.02){
+        vec2 delta = (uSun - uv) * (1.0 / 20.0) * 0.9;
+        vec2 suv = uv;
+        float decay = 1.0, acc = 0.0;
+        float jitter = hash(uv * uRes + uTime);
+        suv += delta * jitter;
+        for (int i = 0; i < 20; i++){
+          suv += delta;
+          vec3 s = texture2D(tDiffuse, clamp(suv, 0.0, 1.0)).rgb;
+          float l = max(dot(s, vec3(0.2126, 0.7152, 0.0722)) - 1.1, 0.0);
+          acc += l * decay;
+          decay *= 0.93;
+        }
+        col += uSunColor * acc * 0.05 * uRays * uSunVis * (1.0 - length(uv - uSun) * 0.6);
+      }
       // Inside a cloud: soft white-out.
       col = mix(col, vec3(0.85, 0.88, 0.92) * (1.0 - uNight * 0.85), uCloud * 0.85);
       // Grade: a touch of contrast and warmth in the highlights.
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
       col = mix(vec3(l), col, 1.0);
       col = col * (1.0 + 0.04 * vec3(0.4, 0.1, -0.3) * smoothstep(0.4, 1.6, l));
+      // Golden hour: warm highlights, teal shadows. Storms: desaturated and cool.
+      col = mix(col, col * vec3(1.12, 1.0, 0.82) + vec3(0.0, 0.004, 0.012) * (1.0 - smoothstep(0.0, 0.6, l)), uGolden * 0.8);
+      col = mix(col, vec3(l) * vec3(0.9, 0.97, 1.08), uStorm * 0.35);
       // Vignette.
       col *= mix(1.0, smoothstep(0.95, 0.3, d), uVignette);
       col += vec3(uFlash);
@@ -156,7 +179,7 @@ export class PostFX {
     this.grade.uniforms.uRes.value.set(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
   }
 
-  update(dt, { sunScreen, sunVis = 0, sunColor, cloud = 0, night = 0, flash = 0 } = {}) {
+  update(dt, { sunScreen, sunVis = 0, sunColor, cloud = 0, night = 0, flash = 0, rays = 0, golden = 0, storm = 0 } = {}) {
     if (!this.enabled) return;
     const u = this.grade.uniforms;
     u.uTime.value += dt;
@@ -166,6 +189,7 @@ export class PostFX {
     u.uCloud.value = cloud;
     u.uNight.value = night;
     u.uFlash.value = flash;
+    u.uRays.value = rays; u.uGolden.value = golden; u.uStorm.value = storm;
     // Subtle by day (the HDR sky would veil everything), rich at night for lamps.
     this.bloom.strength = 0.16 + night * 0.5;
     this.bloom.threshold = 2.4 - night * 1.75;

@@ -50,6 +50,14 @@ export class AudioEngine {
       this.surfGain = ctx.createGain(); this.surfGain.gain.value = 0;
       noise().connect(this.surfFilter); this.surfFilter.connect(this.surfGain); this.surfGain.connect(this.master);
 
+      // Rain: broadband hiss. Waterfalls: a deep, steady roar.
+      this.rainFilter = ctx.createBiquadFilter(); this.rainFilter.type = 'highpass'; this.rainFilter.frequency.value = 1500;
+      this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;
+      noise().connect(this.rainFilter); this.rainFilter.connect(this.rainGain); this.rainGain.connect(this.master);
+      this.fallFilter = ctx.createBiquadFilter(); this.fallFilter.type = 'lowpass'; this.fallFilter.frequency.value = 850; this.fallFilter.Q.value = 0.5;
+      this.fallGain = ctx.createGain(); this.fallGain.gain.value = 0;
+      noise().connect(this.fallFilter); this.fallFilter.connect(this.fallGain); this.fallGain.connect(this.master);
+
       // Engine voice bus.
       this.engGain = ctx.createGain(); this.engGain.gain.value = 0;
       this.engFilter = ctx.createBiquadFilter(); this.engFilter.type = 'lowpass'; this.engFilter.frequency.value = 900; this.engFilter.Q.value = 2;
@@ -142,6 +150,8 @@ export class AudioEngine {
     R(this.windGain.gain, Math.min(0.28, 0.015 + sp * 0.0009 + (s.altitude > 800 ? 0.03 : 0)) * (s.space ? 0 : 1));
     R(this.windFilter.frequency, 300 + sp * 8);
     R(this.surfGain.gain, s.space ? 0 : s.coast * 0.07);
+    R(this.rainGain.gain, s.space ? 0 : (s.rain || 0) * (t ? 0.05 : 0.1), 0.4);
+    R(this.fallGain.gain, s.space ? 0 : (s.fall || 0) * 0.14, 0.4);
     let eng = 0, hiss = 0, chop = 0, hum = 0, roar = 0, crackle = 0;
     if (t === 'jet' || t === 'talon') {
       eng = 0.05 + th * 0.09; hiss = 0.01 + th * 0.05 + (s.boosting ? 0.06 : 0);
@@ -233,6 +243,14 @@ export class AudioEngine {
   enter() { this._tone(220, { type: 'triangle', peak: 0.08, d: 0.08 }); this._tone(330, { type: 'triangle', peak: 0.06, d: 0.1, when: 0.07 }); }
   zap() { this._tone(1400, { type: 'square', peak: 0.03, d: 0.09, slide: 0.35 }); }
   pop() { this._tone(880, { peak: 0.1, d: 0.2 }); this._tone(1320, { peak: 0.08, d: 0.3, when: 0.06, reverb: true }); this._noise({ peak: 0.12, d: 0.25, freq: 3000, type: 'highpass' }); }
+  // Thunder: a sharp crack for near strikes, then a long rolling rumble that lasts longer the farther away it is.
+  thunder(dist = 800) {
+    const k = Math.max(0.12, 1 - dist / 3600);
+    if (dist < 1200) this._noise({ peak: 0.7 * k, a: 0.004, d: 0.5, freq: 2600, type: 'bandpass' });
+    this._noise({ peak: 0.6 * k, a: 0.08, d: 2.6 + dist / 700, freq: 150 + 600 * k, when: 0.05 });
+    this._noise({ peak: 0.35 * k, a: 0.5, d: 3.6 + dist / 600, freq: 90, when: 0.5 });
+    this._tone(44, { type: 'sine', peak: 0.4 * k, a: 0.1, d: 2.8, slide: 0.55, reverb: true });
+  }
   crash() { this._noise({ peak: 0.9, a: 0.005, d: 1.8, freq: 700 }); this._tone(60, { type: 'sine', peak: 0.6, d: 1.4, slide: 0.5 }); }
   teleport() { this._tone(300, { type: 'sine', peak: 0.12, d: 0.6, slide: 6, reverb: true }); }
   talk() { this._tone(520, { type: 'triangle', peak: 0.04, d: 0.06 }); this._tone(660, { type: 'triangle', peak: 0.035, d: 0.06, when: 0.06 }); }

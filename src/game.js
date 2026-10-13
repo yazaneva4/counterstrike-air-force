@@ -110,6 +110,12 @@ export class Game {
     this.mist.uniforms.uCover.value = 0.85;
     this.scene.add(this.mist.mesh);
     this.weather = new Weather(this.scene, { rain: q === 'low' ? 700 : 1600 });
+    this.weather.groundAt = (x, z) => this.structures.groundAt(x, z);
+    this.weather.onLightning = ({ dist, strength, pos }) => {
+      if (this.location !== 'earth' || this.space.active) return;
+      this.flash = Math.max(this.flash, 0.28 * strength);
+      setTimeout(() => { this.audio.thunder(dist); if (dist < 600) this.props?.explode(pos, { radius: 25, strength: 5 }); }, Math.min(9000, dist / 343 * 1000));
+    };
     const pavement = new Set();
     this.structures.group.traverse((o) => {
       for (const m of [o.material].flat()) if (m?.isMeshStandardMaterial && m.polygonOffset && m.roughness >= 0.8) pavement.add(m);
@@ -949,6 +955,7 @@ export class Game {
     this.audio.update({
       dt, vehicle: p.mode === 'vehicle' && v ? (v.kind === 'car' ? 'car' : v.type) : null, skid: v?.skid || 0, throttle: v?.throttle || 0, speed: v ? v.speed : Math.hypot(p.vel.x, p.vel.z),
       rpm: v?.rpm || 0, boosting: v?.boosting, beam: v?.beamActive, night: this.sky.night, altitude: f.y, coast, space: false, menu: false,
+      rain: f.y < 1500 ? this.weather.now.rain : 0, fall: f.y < 400 && this.waterfalls ? (() => { const n = this.waterfalls.nearest(f.x, f.z); return n ? smoothstep(420, 30, n.dist) : 0; })() : 0,
     });
   }
 
@@ -973,6 +980,7 @@ export class Game {
     this.post.update(dt, {
       sunScreen: new THREE.Vector2(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5),
       sunVis: this.sunVis * (1 - this.cloudFog) * 0.9, sunColor: sky.sunColor, cloud: this.cloudFog, night: sky.night, flash: this.flash,
+      rays: (1 - this.weather.now.rain * 0.7) * (this.settings.quality === 'high' ? 1 : 0.7) * (cam.position.y < 2500 ? 1 : 0), golden: sky.golden, storm: this.weather.now.storm,
     });
     this.post.render();
   }
@@ -985,6 +993,13 @@ export class Game {
     if (I.hit('KeyH')) document.querySelector('#help').classList.toggle('on');
     if (I.hit('KeyP')) { this.photo = !this.photo; document.body.classList.toggle('photo', this.photo); }
     this.sky.timeScale = I.down('KeyT') ? 60 : 1;
+    if (I.hit('KeyU')) {
+      const order = ['live', 'clear', 'cloudy', 'rain', 'storm', 'fog'];
+      this._wxIdx = ((this._wxIdx ?? 0) + 1) % order.length;
+      const name = order[this._wxIdx];
+      const o = this.weather.setOverride(name === 'live' ? null : name);
+      H.toast(o ? 'Weather: ' + o.label + ' · U to change' : this.weather.describe(), 2.5);
+    }
     if (I.hit('KeyY') && this.sky.real) { this.sky.offsetMs = 0; this.hud.toast('Back to real time', 1.6); }
     if (I.hit('KeyT')) this.hud.toast('Time-lapse · hold T', 1.2);
     if (H.mapOpen && this.t - (this._mapT || 0) > 0.5) { this._mapT = this.t; H.drawBigMap(); }

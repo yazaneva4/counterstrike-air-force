@@ -15,8 +15,20 @@ const CODES = { 0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast'
 
 export class Weather {
   constructor(scene, { rain = 1400 } = {}) {
-    this.target = { cloud: 0.3, wind: 4, dir: 70, rain: 0, fog: 0, temp: 27, label: 'default' };
-    this.now = { cloud: 0.3, wind: 4, rain: 0, fog: 0, wet: 0 };
+    this.target = { cloud: 0.3, wind: 4, dir: 70, rain: 0, fog: 0, storm: 0, temp: 27, label: 'default' };
+    this.now = { cloud: 0.3, wind: 4, rain: 0, fog: 0, wet: 0, storm: 0 };
+    this.override = null;
+    this.flashK = 0;               // lightning brightness, decays quickly
+    this.nextBolt = 8;
+    this.onLightning = null;       // ({ dist, pos }) => void, set by the game
+    this.groundAt = null;
+    // One reusable lightning bolt: a jagged main channel with a few branches.
+    this.boltGeo = new THREE.BufferGeometry();
+    this.boltGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(120 * 3), 3));
+    this.bolt = new THREE.LineSegments(this.boltGeo, new THREE.LineBasicMaterial({ color: 0xd8e6ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    this.bolt.frustumCulled = false; this.bolt.renderOrder = 9;
+    scene.add(this.bolt);
+    this.boltLife = 0;
     this.live = false;
     this.timer = 0;
     this.loaded = null;
@@ -52,7 +64,7 @@ export class Weather {
       const wet = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95 || c.precipitation > 0.05;
       this.target = {
         cloud: clamp((c.cloud_cover ?? 30) / 100, 0, 1), wind: clamp(c.wind_speed_10m ?? 4, 0, 40), dir: c.wind_direction_10m ?? 70,
-        rain: wet ? clamp(0.35 + (c.precipitation || 0) / 4 + (code >= 63 ? 0.25 : 0), 0.3, 1) : 0, fog: code === 45 || code === 48 ? 1 : 0,
+        rain: wet ? clamp(0.35 + (c.precipitation || 0) / 4 + (code >= 63 ? 0.25 : 0), 0.3, 1) : 0, fog: code === 45 || code === 48 ? 1 : 0, storm: code >= 95 ? 1 : 0,
         temp: c.temperature_2m ?? this.target.temp, label: CODES[code] || (wet ? 'rain' : 'fair'),
       };
       this.live = true;
@@ -75,10 +87,24 @@ export class Weather {
     return `${this.live ? 'Live weather' : 'Weather'}: ${t.label}, ${Math.round(t.temp)}°C, wind ${t.wind.toFixed(0)} m/s, cloud ${Math.round(t.cloud * 100)}%`;
   }
 
+  // Player-chosen weather: null returns to the live conditions.
+  setOverride(name) {
+    const P = {
+      clear: { cloud: 0.05, wind: 3, rain: 0, fog: 0, storm: 0, label: 'clear skies' },
+      cloudy: { cloud: 0.85, wind: 8, rain: 0, fog: 0, storm: 0, label: 'overcast' },
+      rain: { cloud: 0.95, wind: 9, rain: 0.8, fog: 0, storm: 0, label: 'heavy rain' },
+      storm: { cloud: 1, wind: 18, rain: 1, fog: 0, storm: 1, label: 'thunderstorm' },
+      fog: { cloud: 0.6, wind: 2, rain: 0, fog: 1, storm: 0, label: 'fog' },
+    };
+    this.override = name && P[name] ? { name, ...P[name] } : null;
+    return this.override;
+  }
+
   update(dt, camera, sky, clouds, fog, ocean, altitude = 0) {
     this.timer -= dt;
     if (this.timer <= 0) { this.timer = 600; this.refresh(); }
-    const T = this.target, N = this.now, k = 0.25;
+    const T = this.override ? { ...this.target, ...this.override } : this.target, N = this.now, k = this.override ? 0.6 : 0.25;
+    N.storm = damp(N.storm, T.storm || 0, 0.5, dt);
     N.cloud = damp(N.cloud, T.cloud, k, dt); N.wind = damp(N.wind, T.wind, k, dt); N.rain = damp(N.rain, T.rain, 0.4, dt); N.fog = damp(N.fog, T.fog, 0.3, dt);
     // Pavement stays wet after a shower instead of drying in one frame.
     N.wet = damp(N.wet ?? 0, N.rain, N.rain > (N.wet ?? 0) ? 0.08 : 0.004, dt);
@@ -90,7 +116,8 @@ export class Weather {
     clouds.uniforms.uDark.value = over * 0.45 + N.rain * 0.25;
     // Sun and haze under overcast or rain.
     sky.light.intensity = (sky.baseLightIntensity ?? sky.light.intensity) * (1 - 0.5 * over - 0.25 * N.rain);
-    sky.hemi.intensity = (sky.baseHemiIntensity ?? sky.hemi.intensity) * (1 - 0.2 * over);
+    sky.hemi.intensity = (sky.baseHemiIntensity ?? sky.hemi.intensity) * (1 - 0.2 * over) * (1 + this.flashK * 4);
+    this._lightning(dt, camera, altitude);
     if (fog) fog.density = (sky.baseFogDensity ?? fog.density) * (1 + over * 0.5 + N.rain * 1.2 + N.fog * 6 * (1 - smoothstep(0, 800, altitude)));
     // Trees and sea respond to wind.
     windUniforms.uAmp.value = clamp(0.35 + N.wind / 5, 0.3, 2.4);
@@ -100,6 +127,37 @@ export class Weather {
     const inten = N.rain * (altitude < 1500 ? 1 : 0);
     this.rain.visible = inten > 0.02;
     if (this.rain.visible) this._rain(dt, camera, inten, N.wind, to);
+  }
+
+  // Storm lightning: random strikes around the camera, a flash across the sky and a delayed thunderclap.
+  _lightning(dt, camera, altitude) {
+    this.flashK = Math.max(0, this.flashK - dt * 5);
+    if (this.boltLife > 0) {
+      this.boltLife -= dt;
+      this.bolt.material.opacity = Math.max(0, this.boltLife / 0.35) * (0.6 + Math.random() * 0.4);
+      if (this.boltLife <= 0) this.bolt.visible = false;
+    }
+    if (this.now.storm < 0.35 || altitude > 2500) return;
+    this.nextBolt -= dt;
+    if (this.nextBolt > 0) return;
+    this.nextBolt = 5 + Math.random() * 14 * (1.4 - this.now.storm);
+    const a = Math.random() * Math.PI * 2, dist = 350 + Math.random() * 2300;
+    const x = camera.position.x + Math.cos(a) * dist, z = camera.position.z + Math.sin(a) * dist;
+    const gy = this.groundAt ? Math.max(0, this.groundAt(x, z)) : 0, top = 1100 + Math.random() * 300;
+    const pos = this.boltGeo.attributes.position.array;
+    let n = 0, px = x, py = top, pz = z;
+    const segs = 22;
+    for (let i = 1; i <= segs; i++) {
+      const f = i / segs, nx = x + (Math.random() - 0.5) * 140 * (1 - f * 0.4), nz = z + (Math.random() - 0.5) * 140 * (1 - f * 0.4), ny = top + (gy - top) * f;
+      pos[n++] = px; pos[n++] = py; pos[n++] = pz; pos[n++] = nx; pos[n++] = ny; pos[n++] = nz;
+      if (i % 5 === 0 && n < 100 * 3) { pos[n++] = nx; pos[n++] = ny; pos[n++] = nz; pos[n++] = nx + (Math.random() - 0.5) * 260; pos[n++] = ny - 120 - Math.random() * 160; pos[n++] = nz + (Math.random() - 0.5) * 260; }
+      px = nx; py = ny; pz = nz;
+    }
+    this.boltGeo.setDrawRange(0, n / 3);
+    this.boltGeo.attributes.position.needsUpdate = true;
+    this.bolt.visible = true; this.boltLife = 0.35;
+    this.flashK = Math.min(1, 1.2 - dist / 3500);
+    this.onLightning?.({ dist, pos: new THREE.Vector3(x, gy, z), strength: this.flashK });
   }
 
   _rain(dt, camera, inten, wind, to) {
