@@ -400,19 +400,8 @@ export class Human {
         e.rotation.set(0, sx * 0.35, sx * -0.35);
       }
     } else {
-      const face = new THREE.MeshStandardMaterial({ map: faceTexture(o), roughness: 0.64, normalMap: skinNormal(), normalScale: new THREE.Vector2(0.1, 0.1) });
-      face.emissive = new THREE.Color(o.skin).multiply(new THREE.Color(1, 0.55, 0.45)).multiplyScalar(0.07);
-      addMesh(P.head, G.head, face, 0, 0.1, 0, shadows);
-      // Eyelids: skin patches that flick shut now and then so faces feel alive.
-      this.lids = [];
-      for (const sx of [-1, 1]) {
-        const lid = addMesh(P.head, G.lid || (G.lid = new THREE.SphereGeometry(0.019, 10, 8)), skin, sx * 0.032, 0.1 + 0.016, 0.1, false);
-        lid.scale.set(1.15, 0.6, 0.3); lid.visible = false;
-        this.lids.push(lid);
-      }
-      this.blinkT = 1 + Math.random() * 4;
-      addMesh(P.head, G.nose, skin, 0, 0.087, 0.1, false).rotation.x = -0.3;
-      for (const sx of [-1, 1]) addMesh(P.head, G.ear, skin, sx * 0.09, 0.1, -0.008, false);
+      // Stylised, faceless head: a smooth sculpted shape reads as cool and calm instead of uncanny.
+      addMesh(P.head, G.head, skin, 0, 0.1, 0, shadows);
       if (!suit) {
         if (o.hairStyle !== 'bald') addMesh(P.head, G.hairShort, hair, 0, 0.1, 0, false);
         if (o.hairStyle === 'long') addMesh(P.head, G.hairLong, hair, 0, 0.08, -0.03, false);
@@ -499,12 +488,6 @@ export class Human {
 
   // Animate. state: idle|walk|swim|air|chute|sit|lie|pilot|dead
   animate(dt) {
-    if (this.lids) {
-      this.blinkT -= dt;
-      const b = this.blinkT < 0 ? Math.sin(clamp(1 + this.blinkT / 0.16, 0, 1) * Math.PI) : 0;
-      for (const l of this.lids) { l.visible = b > 0.05; l.scale.y = 0.15 + b * 0.6; }
-      if (this.blinkT < -0.16) this.blinkT = 2 + Math.random() * 4.5;
-    }
     this.t += dt;
     const t = this.t, sp = this.speed, J2 = this.j;
     const st = this.state;
