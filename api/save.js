@@ -8,7 +8,7 @@ import { put, get, BlobPreconditionFailedError } from '@vercel/blob';
 const ID = /^[a-f0-9]{32}$/;
 const MYSTERIES = ['monolith', 'crop', 'crash', 'pyramid', 'stones', 'vortex', 'mothership', 'moon', 'ares'];
 const CHARACTERS = ['pilot', 'explorer', 'scientist', 'crew'];
-const SPAWNS = ['airbase', 'spaceport', 'village', 'beach', 'farm'];
+const SPAWNS = ['airbase', 'spaceport', 'village', 'beach', 'farm', 'motorsport', 'city'];
 const TIMES = ['live', 'dawn', 'day', 'sunset', 'night'];
 const int = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
 

@@ -21,6 +21,7 @@ import { Traffic } from './actors/traffic.js';
 import { Vehicle } from './vehicles/vehicles.js';
 import { Props } from './physics/props.js';
 import { Waterfalls, buildSeaStacks } from './world/nature.js';
+import { Seabirds, Fireflies } from './actors/birds.js';
 import { placeIslandProps } from './physics/placement.js';
 import { CAR_COLORS } from './vehicles/cars.js';
 import { Player } from './player.js';
@@ -153,6 +154,8 @@ export class Game {
     this.animals = new Animals(W, this.scene);
     this.aliens = new Aliens(W, this.scene);
     this.traffic = new Traffic(this.scene, W);
+    this.seabirds = new Seabirds(this.scene, this.terrain, { count: q === 'low' ? 24 : 48 });
+    this.fireflies = new Fireflies(this.scene, { count: q === 'low' ? 40 : 90 });
     this.lapTimer = new LapTimer(this.structures.race);
 
     await step(0.9, 'Scattering crates and cones');
@@ -876,6 +879,8 @@ export class Game {
     this.mist.update(dt, this.sky, this.scene.fog);
     this.vegetation.update(dt, this.camera.position);
     this.structures.update(dt, t, this.sky);
+    this.seabirds?.update(dt, this.camera);
+    this.fireflies?.update(dt, this.camera, this.sky.night, (x, z) => this.structures.groundAt(x, z), this.weather.now.wet);
     this.waterfalls?.update(dt, { day: this.sky.day, night: this.sky.night, height: innerHeight, pixelRatio: this.renderer.getPixelRatio(), camera: this.camera });
     this.mysteries.update(dt, t, this.sky, this.fx);
 
