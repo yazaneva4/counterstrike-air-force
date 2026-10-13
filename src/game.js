@@ -20,6 +20,7 @@ import { Aliens } from './actors/aliens.js';
 import { Traffic } from './actors/traffic.js';
 import { Vehicle } from './vehicles/vehicles.js';
 import { Props } from './physics/props.js';
+import { Waterfalls, buildSeaStacks } from './world/nature.js';
 import { placeIslandProps } from './physics/placement.js';
 import { CAR_COLORS } from './vehicles/cars.js';
 import { Player } from './player.js';
@@ -89,9 +90,12 @@ export class Game {
     this._others = [];
 
     await step(0.32, 'Growing forests');
-    this.vegetation = new Vegetation(this.terrain, { density, isBlocked: (x, z) => this.structures.isBlocked(x, z, 3), extra: { palm: this.structures.cityPalms } });
+    this.waterfalls = new Waterfalls(this.terrain, this.scene, { count: q === 'low' ? 5 : 8, lowDetail: q === 'low' });
+    this.vegetation = new Vegetation(this.terrain, { density, isBlocked: (x, z) => this.structures.isBlocked(x, z, 3) || this.waterfalls.blocks(x, z), extra: { palm: [...this.structures.cityPalms, ...this.structures.observatoryPlants.palm], rock: this.waterfalls.rocks, fern: [...this.waterfalls.ferns, ...this.structures.observatoryPlants.fern], flower: [...this.waterfalls.flowers, ...this.structures.observatoryPlants.flower], bush: this.structures.observatoryPlants.bush } });
     W.vegetation = this.vegetation;
     this.scene.add(this.vegetation.group);
+    this.seaStacks = buildSeaStacks(this.terrain, this.vegetation, { count: q === 'low' ? 24 : 46 });
+    this.scene.add(this.seaStacks);
 
     await step(0.46, 'Lighting the sky');
     const shadows = q !== 'low';
@@ -102,6 +106,9 @@ export class Game {
     this.scene.add(this.ocean.mesh);
     this.clouds = new Clouds({ count: q === 'low' ? 26 : 46 });
     this.scene.add(this.clouds.mesh);
+    this.mist = new Clouds({ count: q === 'low' ? 22 : 46, seed: 91, mist: this.terrain, opacity: 0.5 });
+    this.mist.uniforms.uCover.value = 0.85;
+    this.scene.add(this.mist.mesh);
     this.weather = new Weather(this.scene, { rain: q === 'low' ? 700 : 1600 });
     const pavement = new Set();
     this.structures.group.traverse((o) => {
@@ -821,8 +828,10 @@ export class Game {
     this.world.wetness = this.weather.now.wet;
     this.ocean.update(dt, this.sky, this.scene.fog);
     this.clouds.update(dt, this.sky, this.scene.fog);
+    this.mist.update(dt, this.sky, this.scene.fog);
     this.vegetation.update(dt, this.camera.position);
     this.structures.update(dt, t, this.sky);
+    this.waterfalls?.update(dt, { day: this.sky.day, night: this.sky.night, height: innerHeight, pixelRatio: this.renderer.getPixelRatio(), camera: this.camera });
     this.mysteries.update(dt, t, this.sky, this.fx);
 
     const onFoot = p.mode === 'foot';

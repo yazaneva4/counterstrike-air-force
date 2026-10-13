@@ -25,21 +25,34 @@ function puffTexture() {
 const NIGHT_LIT = new THREE.Color(0.05, 0.065, 0.1), NIGHT_SHADE = new THREE.Color(0.012, 0.016, 0.026);
 
 export class Clouds {
-  constructor({ count = 46, seed = 5 } = {}) {
+  // mist: pass a terrain to hang low, wide banks of fog around ridges and valleys instead of high cumulus.
+  constructor({ count = 46, seed = 5, mist = null, opacity = 0.92 } = {}) {
     const rnd = mulberry32(seed);
+    this.baseOpacity = opacity;
     const offsets = [], scales = [], seeds = [];
     this.centers = [];
     for (let c = 0; c < count; c++) {
-      const cx = (rnd() - 0.5) * 11000, cz = (rnd() - 0.5) * 11000;
-      const cy = 780 + rnd() * 420;
-      const size = 140 + rnd() * 220;
+      let cx = (rnd() - 0.5) * 11000, cz = (rnd() - 0.5) * 11000;
+      let cy = 780 + rnd() * 420;
+      let size = 140 + rnd() * 220;
+      if (mist) {
+        // Banks of mist sit 10-45 m above mountain ground.
+        for (let t = 0; t < 40; t++) {
+          cx = (rnd() - 0.5) * 4600; cz = (rnd() - 0.5) * 4600;
+          const h = mist.heightAt(cx, cz);
+          if (h > 30 && h < 340) { cy = h + 10 + rnd() * 35; break; }
+          cy = -9999;
+        }
+        if (cy < -9000) continue;
+        size = 70 + rnd() * 110;
+      }
       this.centers.push({ x: cx, y: cy, z: cz, r: size });
       const puffs = 10 + Math.floor(rnd() * 12);
       for (let p = 0; p < puffs; p++) {
         const a = rnd() * Math.PI * 2, rr = Math.sqrt(rnd()) * size;
         const x = cx + Math.cos(a) * rr * 1.25, z = cz + Math.sin(a) * rr * 0.8;
         const up = (1 - rr / size);
-        const y = cy + up * size * 0.45 * rnd() + rnd() * 20;
+        const y = cy + (mist ? rnd() * 12 : up * size * 0.45 * rnd() + rnd() * 20);
         offsets.push(x, y, z);
         scales.push((0.55 + rnd() * 0.6) * size * (0.7 + up * 0.6));
         seeds.push(rnd());
@@ -63,7 +76,7 @@ export class Clouds {
       uWind: { value: new THREE.Vector2() },
       uFogColor: { value: new THREE.Color() },
       uFogDensity: { value: 0.0002 },
-      uOpacity: { value: 0.92 },
+      uOpacity: { value: opacity },
       uCover: { value: 0.5 },     // fraction of puffs shown (live cloud cover)
       uDark: { value: 0 },        // overcast / rain darkening
     };
@@ -117,7 +130,7 @@ export class Clouds {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 5;
     this.windX = 0; this.windZ = 0;
-    this.wind = { x: 6, z: 2.5 };
+    this.wind = mist ? { x: 0.45, z: 0.2 } : { x: 6, z: 2.5 };
   }
 
   update(dt, sky, fog) {
@@ -128,7 +141,7 @@ export class Clouds {
     const night = sky.night;
     u.uLit.value.copy(sky.sunColor).multiplyScalar(1.6 * sky.day).lerp(NIGHT_LIT, night);
     u.uShade.value.copy(sky.horizon).multiplyScalar(0.75).lerp(NIGHT_SHADE, night);
-    u.uOpacity.value = 0.92 - night * 0.3;
+    u.uOpacity.value = this.baseOpacity - night * 0.3 * (this.baseOpacity / 0.92);
     if (fog) { u.uFogColor.value.copy(fog.color); u.uFogDensity.value = fog.density; }
   }
 

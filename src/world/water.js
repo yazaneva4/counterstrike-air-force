@@ -106,9 +106,12 @@ export class Ocean {
           R.y = abs(R.y);
           vec3 sky = mix(uHorizon, uZenith, pow(clamp(R.y, 0.0, 1.0), 0.55));
 
-          vec3 deep = mix(vec3(0.004, 0.02, 0.04), vec3(0.01, 0.075, 0.12), uDay);
-          vec3 shallow = mix(vec3(0.01, 0.05, 0.07), vec3(0.05, 0.42, 0.42), uDay);
-          vec3 body = mix(shallow, deep, smoothstep(0.5, 16.0, depth));
+          vec3 deep = mix(vec3(0.004, 0.02, 0.04), vec3(0.008, 0.085, 0.15), uDay);
+          vec3 shallow = mix(vec3(0.01, 0.06, 0.08), vec3(0.06, 0.62, 0.6), uDay);
+          vec3 sandy = mix(vec3(0.02, 0.06, 0.06), vec3(0.5, 0.68, 0.55), uDay);
+          // Lagoon gradient: pale sand-bottom shallows, wide turquoise, then deep teal.
+          vec3 body = mix(sandy, shallow, smoothstep(0.2, 3.2, depth));
+          body = mix(body, deep, smoothstep(2.5, 30.0, depth));
           // Light scattering through wave crests facing the sun.
           float sss = pow(max(dot(V, -uSunDir), 0.0), 3.0) * max(g.x + g.y, 0.0) * 3.0;
           body += vec3(0.0, 0.25, 0.22) * sss * uDay;

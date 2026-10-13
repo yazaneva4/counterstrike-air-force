@@ -12,6 +12,7 @@ import { mulberry32 } from '../core/noise.js';
 import { tint, smoothstep } from '../core/util.js';
 import { barkTexture, leafCard, needleCard, frondCard } from '../core/textures.js';
 import { HALF } from './terrain.js';
+import { fernGeometry, fernTexture, flowerGeometry, flowerTexture } from './undergrowth.js';
 
 export const windUniforms = { uTime: { value: 0 }, uAmp: { value: 1 } };
 
@@ -348,6 +349,7 @@ function woodDepth(sway) {
 }
 
 const CHUNKS = 6;
+const FLOWER_COLORS = [0xe8508c, 0xf4d230, 0xffffff, 0x9a62f4, 0xff8030, 0xff4a3a];
 
 // Single specimens of each species (used by props elsewhere and dev previews).
 export function treeSpecimen(kind = 'broad') {
@@ -382,6 +384,8 @@ export class Vegetation {
       broad: { parts: [part(broad.wood, barkMaterial(1), woodDepth(1)), part(broad.leaf, leafMaterial(leafTex, 1), leafDepth(leafTex, 1))], lo: broadLo(), loMat: vegMaterial(), items: [], r: 1.3, top: broad.top },
       palm: { parts: [part(palm.wood, barkMaterial(2, 0xd8c8b0), woodDepth(2)), part(palm.leaf, leafMaterial(frondTex, 2), leafDepth(frondTex, 2))], items: [], r: 0.8, top: palm.top },
       bush: { parts: [part(bushGeo(), leafMaterial(leafTex, 0.5, 0xd0e0c0), null, false)], items: [], r: 0 },
+      fern: { parts: [part(fernGeometry(), leafMaterial(fernTexture(), 0.4, 0xd6f2b4), null, false)], items: [], r: 0 },
+      flower: { parts: [part(flowerGeometry(), leafMaterial(flowerTexture(), 0.3, 0xffffff), null, false)], items: [], r: 0 },
       rock: { parts: [part(rockGeo(), vegMaterial(), null)], items: [], r: 1.6, top: 1.6 },
       cactus: { parts: [part(cactusGeo(), vegMaterial(), null)], items: [], r: 0.6, top: 6 },
     };
@@ -418,12 +422,22 @@ export class Vegetation {
         }
         if (h < 5.5 && b.coast < 420) {
           if (roll < 0.035 && slope > 0.9) species.palm.items.push([px, h, pz]);
+          else if (roll < 0.075 && slope > 0.9) species.fern.items.push([px, h, pz]);
           continue;
         }
         if (slope < 0.7) { if (roll < 0.03) species.rock.items.push([px, h, pz]); continue; }
         if (h > snowLine - 30) { if (roll < 0.01) species.rock.items.push([px, h, pz]); continue; }
 
         const treeChance = smoothstep(-0.05, 0.4, forest) * 0.72 + 0.025;
+        // Forest floor: ferns thicken under the canopy, wildflowers speckle the meadows.
+        if (h < 280 && slope > 0.7) {
+          const lush = smoothstep(-0.1, 0.35, forest);
+          if (rnd() < lush * 0.7) { for (let k = 0; k < 2; k++) species.fern.items.push([px + (rnd() - 0.5) * 7, h, pz + (rnd() - 0.5) * 7]); }
+          else if (h < 160 && rnd() < 0.16) {
+            const fx = px + (rnd() - 0.5) * 5, fz = pz + (rnd() - 0.5) * 5;
+            for (let k = 0; k < 3; k++) species.flower.items.push([fx + (rnd() - 0.5) * 2.2, h, fz + (rnd() - 0.5) * 2.2]);
+          }
+        }
         if (roll < treeChance) {
           const alpine = smoothstep(120, 260, h) + b.mountain * 0.5;
           (rnd() < 0.35 + alpine * 0.6 ? species.pine : species.broad).items.push([px, h, pz]);
@@ -454,7 +468,7 @@ export class Vegetation {
         const [first, ...rest] = sp.parts;
         const mk = (pt) => {
           const im = new THREE.InstancedMesh(pt.geo, pt.mat, list.length);
-          im.castShadow = pt.cast && name !== 'bush';
+          im.castShadow = pt.cast && name !== 'bush' && name !== 'fern' && name !== 'flower';
           im.receiveShadow = true;
           if (pt.depth) im.customDepthMaterial = pt.depth;
           return im;
@@ -471,7 +485,8 @@ export class Vegetation {
           // Foliage hue varies from tree to tree (a few turn autumn-gold).
           const v = 0.82 + rnd() * 0.3;
           const autumn = name === 'broad' && rnd() < 0.08 ? 1 : 0;
-          color.setRGB(v * (0.92 + rnd() * 0.12 + autumn * 0.45), v * (1 - autumn * 0.1), v * (0.9 + rnd() * 0.1 - autumn * 0.3));
+          if (name === 'flower') color.set(FLOWER_COLORS[(rnd() * FLOWER_COLORS.length) | 0]);
+          else color.setRGB(v * (0.92 + rnd() * 0.12 + autumn * 0.45), v * (1 - autumn * 0.1), v * (0.9 + rnd() * 0.1 - autumn * 0.3));
           im.setColorAt(i, color);
           if (sp.r > 0) this._addCollider(it[0], it[2], sp.r * sc, it[1] + (sp.top || 2) * s.y);
         });
@@ -501,7 +516,7 @@ export class Vegetation {
           this.group.add(lo);
         }
         const cx = -HALF + ((bi % CHUNKS) + 0.5) * chunkSize, cz = -HALF + (Math.floor(bi / CHUNKS) + 0.5) * chunkSize;
-        this.chunks.push({ hi, lo, x: cx, z: cz, far: name === 'bush' ? 600 : name === 'rock' ? 1400 : 800 });
+        this.chunks.push({ hi, lo, x: cx, z: cz, far: name === 'bush' ? 600 : name === 'rock' ? 1400 : name === 'fern' ? 300 : name === 'flower' ? 240 : 800 });
       });
     }
     this.counts = Object.fromEntries(Object.entries(species).map(([k, v]) => [k, v.items.length]));

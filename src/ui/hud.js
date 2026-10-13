@@ -521,7 +521,7 @@ export class HUD {
     ctx.font = `600 ${12 * d}px 'DM Mono', monospace`;
     ctx.textAlign = 'center';
     const labels = onEarth
-      ? [PLACES.airbase, PLACES.village, PLACES.farm, PLACES.lighthouse, PLACES.beach, PLACES.stones, PLACES.turbines, PLACES.spaceport, PLACES.speedway, PLACES.city, { name: 'Red Mesa', x: -1300, z: -60 }, { name: 'Mount Kestrel', x: PLACES.peak.x, z: PLACES.peak.z + 160 }]
+      ? [PLACES.airbase, PLACES.village, PLACES.farm, PLACES.lighthouse, PLACES.beach, PLACES.stones, PLACES.turbines, PLACES.spaceport, PLACES.speedway, PLACES.city, PLACES.observatory, { name: 'Red Mesa', x: -1300, z: -60 }, { name: 'Mount Kestrel', x: PLACES.peak.x, z: PLACES.peak.z + 160 }]
       : G.location === 'moon' ? [{ name: 'Kestrel-1 site', x: 70, z: -70 }, { name: 'Mare Serenitatis', x: 900, z: -900 }] : [{ name: 'Ares Station', x: 160, z: 170 }, { name: 'Jezero Crater Rim', x: 0, z: 2300 }, { name: 'Ares Vallis', x: 1200, z: -1150 }];
     for (const l of labels) {
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(l.name, X(l.x) + d, Z(l.z) + d);

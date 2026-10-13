@@ -32,6 +32,7 @@ export const PLACES = {
   spaceport: { name: 'Kestrel Spaceport', x: 1780, z: 110 },
   speedway: { name: 'Kestrel Speedway', x: -250, z: 1290 },
   city: { name: 'Port Kestrel', x: 990, z: 1270 },
+  observatory: { name: 'The Overgrown Observatory', x: 560, z: -1285 },
 };
 
 const COL = (hex) => new THREE.Color(hex);
@@ -161,6 +162,7 @@ export class Terrain {
     zones.push({ id: 'spaceport', shape: 'circle', x: P.spaceport.x, z: P.spaceport.z, r: 180, blend: 110, h: Math.max(9, this._avgRaw(P.spaceport.x, P.spaceport.z, 150)) });
     zones.push({ id: 'speedway', shape: 'rect', x: P.speedway.x, z: P.speedway.z, hw: 480, hd: 270, blend: 150, h: Math.max(9, this._avgRaw(P.speedway.x, P.speedway.z, 220)) });
     zones.push({ id: 'city', shape: 'rect', x: P.city.x, z: P.city.z, hw: 290, hd: 290, blend: 130, h: Math.max(9, this._avgRaw(P.city.x, P.city.z, 260)) });
+    zones.push({ id: 'observatory', shape: 'circle', x: P.observatory.x, z: P.observatory.z, r: 44, blend: 70, h: this._avgRaw(P.observatory.x, P.observatory.z, 40) });
     zones.push({ id: 'turbines', shape: 'rect', x: P.turbines.x, z: P.turbines.z, hw: 60, hd: 330, blend: 150, mode: 'add', amount: 28 });
     for (const z of zones) if (z.mode === 'add') z.h = 0;
   }
@@ -357,6 +359,7 @@ export class Terrain {
     if (near(P.spaceport, 300)) return P.spaceport.name;
     if (Math.abs(x - P.speedway.x) < 520 && Math.abs(z - P.speedway.z) < 290) return P.speedway.name;
     if (Math.abs(x - P.city.x) < 330 && Math.abs(z - P.city.z) < 330) return P.city.name;
+    if (near(P.observatory, 130)) return P.observatory.name;
     if (near(P.farm, 380)) return P.farm.name;
     if (near(P.stones, 160)) return P.stones.name;
     if (near(P.crash, 220)) return P.crash.name;

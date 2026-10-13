@@ -11,6 +11,7 @@ import { canvasTexture, stdMat, mesh, glowSprite, glowTexture, tint, lerp, clamp
 import { PLACES, HALF, MAP_SIZE } from './terrain.js';
 import { buildRaceTrack } from './racetrack.js';
 import { buildCity } from './city.js';
+import { buildObservatory } from './ruins.js';
 import { buildSpaceport } from './spaceport.js';
 import { plaster, roofTiles } from '../core/textures.js';
 import { treeSpecimen } from './vegetation.js';
@@ -137,6 +138,7 @@ export class Structures {
     buildSpaceport(this);
     buildRaceTrack(this);
     buildCity(this);
+    buildObservatory(this);
   }
 
   h(x, z) { return this.terrain.heightAt(x, z); }
