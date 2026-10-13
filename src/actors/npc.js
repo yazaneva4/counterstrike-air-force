@@ -146,6 +146,55 @@ export class NPC {
     H.gesture = null;
     H.lookLocked = false;
 
+    // Knocked down by a vehicle: a short ballistic tumble, then lying still until they get back up.
+    if (this.tumble) {
+      const tb = this.tumble;
+      tb.t += dt;
+      if (tb.air) {
+        tb.vy -= 9.81 * dt;
+        pos.x += tb.vx * dt; pos.z += tb.vz * dt; tb.y += tb.vy * dt;
+        const g = this.world.groundAt(pos.x, pos.z);
+        this.root.rotation.x = -tb.t * 5.5; H.state = 'air';
+        if (tb.y <= 0 && tb.vy < 0) { tb.air = false; tb.y = 0; tb.vx *= 0.25; tb.vz *= 0.25; this.root.rotation.x = 0; ctx.onHit?.(this, 0.4); }
+        pos.y = g + Math.max(0, tb.y);
+      } else {
+        tb.vx *= Math.exp(-4 * dt); tb.vz *= Math.exp(-4 * dt);
+        pos.x += tb.vx * dt; pos.z += tb.vz * dt; pos.y = this.world.groundAt(pos.x, pos.z);
+        H.state = 'lie';
+        if (tb.t > 6.5) { this.tumble = null; this.root.rotation.x = 0; H.state = 'idle'; this.timer = 1; }
+      }
+      H.speed = 0; this.root.rotation.y = this.heading;
+      if (ctx.animate) H.animate(dt);
+      return;
+    }
+    // Hazards: moving vehicles. Get out of the way, and go down if one connects.
+    if (ctx.hazards && this.mode !== 'lie' && this.mode !== 'sit') for (const hz of ctx.hazards) {
+      const dx = pos.x - hz.x, dz = pos.z - hz.z, d = Math.hypot(dx, dz);
+      if (d > 14 || hz.speed < 4) continue;
+      const vx = hz.vx / hz.speed, vz = hz.vz / hz.speed;
+      const ahead = dx * vx + dz * vz;                       // how far in front of the vehicle we are
+      if (ahead < -1.5) continue;                            // already behind it
+      const side = dx * -vz + dz * vx;                       // + = to the vehicle's left
+      if (Math.abs(side) < 1.5 && ahead < hz.r + 0.6 && ahead > -1.5 && hz.speed > 5.5) {
+        this.tumble = { t: 0, air: true, y: 0.2, vy: 3.5 + hz.speed * 0.15, vx: hz.vx * 0.55 + (side > 0 ? -vz : vz) * 2, vz: hz.vz * 0.55 + (side > 0 ? vx : -vx) * 2 };
+        this.target = null; this.partner = null; this.waveTime = 0;
+        ctx.onHit?.(this, hz.speed);
+        return;
+      }
+      if (Math.abs(side) < 3.2 && ahead < 14 && ahead > 0) {
+        // Sidestep sharply away from the vehicle's path.
+        const sgn = side >= 0 ? 1 : -1;
+        this.heading = dampAngle(this.heading, Math.atan2(-vz * sgn, vx * sgn), 9, dt);
+        const run = 4.4;
+        pos.x += Math.sin(this.heading) * run * dt; pos.z += Math.cos(this.heading) * run * dt;
+        this.target = null;
+        H.state = 'idle'; H.speed = run; H.gesture = null;
+        pos.y = this.world.groundAt(pos.x, pos.z); this.root.rotation.y = this.heading;
+        if (ctx.animate) H.animate(dt);
+        return;
+      }
+    }
+
     const toPlayerX = ctx.player.x - pos.x, toPlayerZ = ctx.player.z - pos.z;
     const pd = Math.hypot(toPlayerX, toPlayerZ);
     const nearPlayer = ctx.playerOnFoot && pd < 6;
@@ -234,6 +283,7 @@ export class NPCManager {
   constructor(world, scene, { count = 1 } = {}) {
     this.world = world;
     this.list = [];
+    this.range = 600;            // people beyond this are hidden (scaled by quality)
     this.group = new THREE.Group();
     this.group.name = 'npcs';
     scene.add(this.group);
@@ -282,8 +332,8 @@ export class NPCManager {
     const cam = camera.position;
     for (const n of this.list) {
       const d = n.pos.distanceTo(cam);
-      n.root.visible = d < 600;
-      if (d > 900) continue;
+      n.root.visible = d < this.range;
+      if (d > this.range * 1.5) continue;
       ctx.animate = d < 220;
       n.update(dt, ctx);
     }

@@ -156,6 +156,9 @@ export class Game {
     this.lapTimer = new LapTimer(this.structures.race);
 
     await step(0.9, 'Scattering crates and cones');
+    this.lodScale = { low: 0.3, medium: 0.6, high: 1.1, '4k': 1.2 }[q] ?? 1;
+    this.vegetation.lod = this.lodScale;
+    this.npcs.range = 650 * this.lodScale;
     this.props = new Props(W, this.scene);
     this._wirePropAudio(this.props);
     placeIslandProps(this);
@@ -394,6 +397,34 @@ export class Game {
         }
       }
       if (dead) { this.scene.remove(b.m); this.bolts.splice(i, 1); }
+    }
+  }
+
+  // Distance culling: vehicles, traffic and small structures far from the camera are hidden,
+  // which saves hundreds of draw calls on phones without changing anything you can see.
+  _lod(dt) {
+    this._lodT = (this._lodT || 0) - dt;
+    if (this._lodT > 0) return;
+    this._lodT = 0.35;
+    const c = this.camera.position, k = this.lodScale || 1;
+    for (const v of this.vehicles) {
+      if (v.destroyed) continue;
+      const big = v.kind === 'rocket' || v.kind === 'ship';
+      const d = Math.hypot(v.pos.x - c.x, v.pos.z - c.z);
+      v.group.visible = v.occupied || big || d < (v.kind === 'car' ? 500 : 1100) * k || Math.abs(v.pos.y - c.y) > 400;
+    }
+    for (const car of this.traffic.cars) car.group.visible = Math.hypot(car.pos.x - c.x, car.pos.z - c.z) < 650 * k;
+    // Small buildings and props of the island are culled by distance; big complexes always stay.
+    for (const o of this.structures.group.children) {
+      let r = o.userData._cull;
+      if (!r) {
+        const box = new THREE.Box3().setFromObject(o);
+        if (box.isEmpty()) { o.userData._cull = { skip: true }; continue; }
+        const s = box.getBoundingSphere(new THREE.Sphere());
+        r = o.userData._cull = { x: s.center.x, z: s.center.z, r: s.radius, skip: s.radius > 260 };
+      }
+      if (r.skip) continue;
+      o.visible = Math.hypot(r.x - c.x, r.z - c.z) - r.r < 1500 * k || Math.abs(c.y) > 500;
     }
   }
 
@@ -816,6 +847,7 @@ export class Game {
       if (res) this._vehicleEvent(v, res);
     }
     this._stepProps(this.props, dt);
+    this._lod(dt);
     if (p.vehicle && p.mode === 'vehicle') p._vehicleCamera(dt);
     this._rocketFx(dt);
     if (p.mode === 'dead') p.deadCamera(dt, t);
@@ -860,6 +892,14 @@ export class Game {
       onTeleport: () => this.audio.teleport(),
       onFlee: () => { if (flying) this.hud.toast('The saucer bolted into the clouds…', 2.5); },
     };
+    // Moving vehicles that people must dodge (and that can knock them down).
+    const hz = this._hazards || (this._hazards = []);
+    hz.length = 0;
+    const addHz = (x, z, vx, vz, r) => { const sp = Math.hypot(vx, vz); if (sp > 4) hz.push({ x, z, vx, vz, speed: sp, r }); };
+    for (const v of this.vehicles) if (v.kind === 'car' && !v.destroyed && v.onGround) addHz(v.pos.x, v.pos.z, v.vel.x, v.vel.z, 2.6);
+    for (const c of this.traffic.cars) addHz(c.pos.x, c.pos.z, Math.sin(c.heading) * (c.v || 0), Math.cos(c.heading) * (c.v || 0), 2.6);
+    ctx.hazards = hz;
+    ctx.onHit = (npc, speed) => { if (npc.pos.distanceTo(this.focusPos()) < 40) { this.audio.thump(Math.min(8, 2 + speed * 0.4)); if (speed > 3) this.hud.toast(npc.name + ' is knocked flat. Watch out for pedestrians!', 2.6); } };
     this.npcs.update(dt, ctx, cam);
     this.aliens.update(dt, t, ctx);
     const beams = [];

@@ -104,7 +104,7 @@ export class Weather {
     this.timer -= dt;
     if (this.timer <= 0) { this.timer = 600; this.refresh(); }
     const T = this.override ? { ...this.target, ...this.override } : this.target, N = this.now, k = this.override ? 0.6 : 0.25;
-    N.storm = damp(N.storm, T.storm || 0, 0.5, dt);
+    N.storm = damp(N.storm ?? 0, T.storm || 0, 0.5, dt);
     N.cloud = damp(N.cloud, T.cloud, k, dt); N.wind = damp(N.wind, T.wind, k, dt); N.rain = damp(N.rain, T.rain, 0.4, dt); N.fog = damp(N.fog, T.fog, 0.3, dt);
     // Pavement stays wet after a shower instead of drying in one frame.
     N.wet = damp(N.wet ?? 0, N.rain, N.rain > (N.wet ?? 0) ? 0.08 : 0.004, dt);
@@ -116,7 +116,7 @@ export class Weather {
     clouds.uniforms.uDark.value = over * 0.45 + N.rain * 0.25;
     // Sun and haze under overcast or rain.
     sky.light.intensity = (sky.baseLightIntensity ?? sky.light.intensity) * (1 - 0.5 * over - 0.25 * N.rain);
-    sky.hemi.intensity = (sky.baseHemiIntensity ?? sky.hemi.intensity) * (1 - 0.2 * over) * (1 + this.flashK * 4);
+    sky.hemi.intensity = (sky.baseHemiIntensity ?? sky.hemi.intensity) * (1 - 0.2 * over) * (1 + (this.flashK || 0) * 4);
     this._lightning(dt, camera, altitude);
     if (fog) fog.density = (sky.baseFogDensity ?? fog.density) * (1 + over * 0.5 + N.rain * 1.2 + N.fog * 6 * (1 - smoothstep(0, 800, altitude)));
     // Trees and sea respond to wind.
@@ -131,7 +131,8 @@ export class Weather {
 
   // Storm lightning: random strikes around the camera, a flash across the sky and a delayed thunderclap.
   _lightning(dt, camera, altitude) {
-    this.flashK = Math.max(0, this.flashK - dt * 5);
+    if (!this.boltGeo) return;
+    this.flashK = Math.max(0, (this.flashK || 0) - dt * 5);
     if (this.boltLife > 0) {
       this.boltLife -= dt;
       this.bolt.material.opacity = Math.max(0, this.boltLife / 0.35) * (0.6 + Math.random() * 0.4);

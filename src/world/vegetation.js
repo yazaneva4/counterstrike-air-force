@@ -272,22 +272,21 @@ function cactusGeo() {
 // Cheap far-distance silhouettes (vertex coloured).
 function pineLo() {
   const branches = [
-    tint(T(new THREE.ConeGeometry(3.7, 6.2, 10, 2), 0, 4.5, 0), 0x203d20),
-    tint(T(new THREE.ConeGeometry(3.0, 6.4, 10, 2), 0, 7.2, 0), 0x254723),
-    tint(T(new THREE.ConeGeometry(2.0, 6.3, 10, 2), 0, 9.8, 0), 0x2c5128),
-    tint(T(new THREE.CylinderGeometry(0.3, 0.4, 3, 8), 0, 1.5, 0), 0x3a2c22),
+    tint(T(new THREE.ConeGeometry(3.7, 6.2, 8, 1), 0, 4.5, 0), 0x203d20),
+    tint(T(new THREE.ConeGeometry(3.0, 6.4, 8, 1), 0, 7.2, 0), 0x254723),
+    tint(T(new THREE.ConeGeometry(2.0, 6.3, 8, 1), 0, 9.8, 0), 0x2c5128),
+    tint(T(new THREE.CylinderGeometry(0.3, 0.4, 3, 5), 0, 1.5, 0), 0x3a2c22),
   ];
   return merge(branches.map((g) => { g.deleteAttribute('uv'); return g; }));
 }
 function broadLo() {
-  const parts = [tint(T(new THREE.CylinderGeometry(0.3, 0.45, 5, 8), 0, 2.5, 0), 0x3f3024)];
+  // Far silhouette: a trunk and two lumpy crowns (roughly 180 triangles instead of 800).
+  const parts = [tint(T(new THREE.CylinderGeometry(0.3, 0.45, 5, 6), 0, 2.5, 0), 0x3f3024)];
   for (const [x, y, z, sx, sy, sz, color] of [
-    [0, 7.3, 0, 3.2, 2.9, 3.1, 0x355a24],
-    [-1.7, 6.6, 0.3, 2.2, 2.1, 2.3, 0x41672c],
-    [1.5, 7.1, -0.5, 2.3, 2.2, 2.2, 0x3b6128],
-    [0.2, 8.7, 0.6, 2.1, 1.8, 2.0, 0x456b30],
+    [0, 7.3, 0, 3.4, 3.1, 3.3, 0x355a24],
+    [-0.4, 8.9, 0.4, 2.3, 2.0, 2.2, 0x456b30],
   ]) {
-    const crown = new THREE.SphereGeometry(1, 12, 8);
+    const crown = new THREE.SphereGeometry(1, 8, 6);
     crown.scale(sx, sy, sz); crown.translate(x, y, z);
     parts.push(tint(jitter(crown, 0.16, Math.round((x + y + z) * 17)), color));
   }
@@ -348,7 +347,7 @@ function woodDepth(sway) {
   return applySway(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), sway);
 }
 
-const CHUNKS = 6;
+const CHUNKS = 10;
 const FLOWER_COLORS = [0xe8508c, 0xf4d230, 0xffffff, 0x9a62f4, 0xff8030, 0xff4a3a];
 
 // Single specimens of each species (used by props elsewhere and dev previews).
@@ -371,6 +370,7 @@ export function treeSpecimen(kind = 'broad') {
 export class Vegetation {
   constructor(terrain, { density = 1, isBlocked = () => false, extra = {} } = {}) {
     this.terrain = terrain;
+    this.lod = 1;                // draw-distance multiplier (set from the quality level)
     this.group = new THREE.Group();
     this.group.name = 'vegetation';
     this.hash = new Map(); // "cx,cz" -> [{x,z,r,top}]
@@ -543,10 +543,10 @@ export class Vegetation {
     if (!cam) return;
     const high = cam.y > 900;
     for (const c of this.chunks) {
-      const d = Math.hypot(cam.x - c.x, cam.z - c.z);
-      const near = d < c.far && !high;
+      const d = Math.hypot(cam.x - c.x, cam.z - c.z), far = c.far * this.lod;
+      const near = d < far && !high;
       if (c.lo) { for (const m of c.hi) m.visible = near; c.lo.visible = !near; }
-      else { const v = d < c.far * 2.2; for (const m of c.hi) m.visible = v; }
+      else { const v = d < far * 2.2 && !high; for (const m of c.hi) m.visible = v; }
     }
   }
 }
