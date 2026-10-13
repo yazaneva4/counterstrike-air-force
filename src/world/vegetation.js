@@ -367,7 +367,7 @@ export function treeSpecimen(kind = 'broad') {
 }
 
 export class Vegetation {
-  constructor(terrain, { density = 1, isBlocked = () => false } = {}) {
+  constructor(terrain, { density = 1, isBlocked = () => false, extra = {} } = {}) {
     this.terrain = terrain;
     this.group = new THREE.Group();
     this.group.name = 'vegetation';
@@ -434,6 +434,9 @@ export class Vegetation {
         }
       }
     }
+
+    // Hand-placed plants (city palms, planted gardens) join the scattered ones.
+    for (const [kind, list] of Object.entries(extra)) if (species[kind] && list) species[kind].items.push(...list);
 
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
     const color = new THREE.Color();

@@ -154,7 +154,7 @@ function buildMenu() {
     settings.profile.skin = +b.dataset.i; save(); audio.init(); audio.click();
     sk.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
   }));
-  segmented($('#spawnSel'), 'spawn', [['airbase', 'Airbase'], ['spaceport', 'Spaceport'], ['village', 'Village'], ['beach', 'Beach'], ['farm', 'Farm'], ['motorsport', 'Race paddock']]);
+  segmented($('#spawnSel'), 'spawn', [['airbase', 'Airbase'], ['spaceport', 'Spaceport'], ['village', 'Village'], ['beach', 'Beach'], ['farm', 'Farm'], ['motorsport', 'Race paddock'], ['city', 'Port Kestrel']]);
   segmented($('#timeSel'), 'time', [['live', 'Real time'], ['dawn', 'Dawn'], ['day', 'Day'], ['sunset', 'Sunset'], ['night', 'Night']]);
   segmented($('#qualitySel'), 'quality', [['auto', 'Auto'], ['4k', '4K Ultra'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]);
   $('#hostBtn').onclick = () => { audio.init(); pendingRoom = { host: true }; $('#roomStatus').textContent = 'A room will open when you enter the island'; $('#roomCode').value = ''; };

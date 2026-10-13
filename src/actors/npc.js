@@ -262,6 +262,7 @@ export class NPCManager {
     add('scientist', { x: C.x - 70, z: C.z + 92, r: 14, lines: 'mission', title: 'Flight director' }, 2);
     add('astronaut', { x: C.x - 12, z: C.z + 62, r: 22, lines: 'astronaut', title: 'Astronaut' }, 2);
     const out = new THREE.Vector2(Math.cos(P.beach.angle), Math.sin(P.beach.angle));
+    add('villager', { x: P.city.x, z: P.city.z, r: 200, title: 'City resident' }, 16);
     add('beach', { x: P.beach.x - out.x * 25, z: P.beach.z - out.y * 25, r: 90 }, 5);
     (S.beachSpots || []).slice(0, 7).forEach((b, i) => add('beach', { x: b.x, z: b.z, r: 1, mode: i % 3 === 0 ? 'sit' : 'lie' }, 1));
   }

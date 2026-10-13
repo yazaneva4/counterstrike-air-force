@@ -152,11 +152,18 @@ export class Traffic {
     const types = ['sedan', 'pickup', 'jeep', 'gt', 'sedan', 'pickup', 'sedan'];
     world.structures.roads.forEach((road, i) => {
       if (road.pts.length < 2) return;
-      if (this.cars.length >= 8) return;
+      if (this.cars.length >= 8 || road.city) return;
       for (let k = 0; k < (i === 0 ? 2 : 1); k++) {
         const n = this.cars.length;
         this.cars.push(new RoadCar(scene, world, road, types[n % types.length], CAR_COLORS[(n * 3 + 1) % CAR_COLORS.length], 11 + (n % 4) * 2.5, (k * 0.5 + 0.13 * n) % 1));
       }
+    });
+    // City avenues: a few more cars cruising the grid.
+    const city = world.structures.roads.filter((r) => r.city);
+    city.forEach((road, i) => {
+      if (i % 2 || this.cars.length >= 14) return;
+      const n = this.cars.length;
+      this.cars.push(new RoadCar(scene, world, road, types[n % types.length], CAR_COLORS[(n * 3 + 2) % CAR_COLORS.length], 9 + (n % 3) * 2, (0.2 + 0.31 * i) % 1));
     });
     const g = (x, z) => world.groundAt(x, z);
     // Airliner: wide oval at cruise altitude with long contrails.

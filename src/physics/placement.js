@@ -58,6 +58,18 @@ export function placeIslandProps(game) {
     for (let k = 0; k < 6; k++) props.add('ball', R.start.x + 6 + k * 0.7, R.start.z - 9 + (rnd() - 0.5), { sleep: false });
   }
 
+  // Port Kestrel: crates and drums in the alleys, tyres and cones at the kerbs.
+  const city = S.city;
+  if (city) for (let i = 0; i < 26; i++) {
+    const lines = [-240, -120, 0, 120, 240];
+    const alongX = rnd() < 0.5, line = lines[(rnd() * lines.length) | 0], a = (rnd() - 0.5) * 460;
+    const off = (rnd() < 0.5 ? -1 : 1) * (11.4 + rnd() * 0.8);
+    const x = alongX ? city.x + a : city.x + line + off, z = alongX ? city.z + line + off : city.z + a;
+    if (lines.some((l) => Math.abs((alongX ? a : a) - l) < 16)) continue;
+    cluster(x, z, { crates: 1 + (rnd() * 2 | 0), barrels: 1 + (rnd() * 2 | 0), boxes: 1, spread: 2.5 });
+  }
+  for (let k = 0; k < 8; k++) props.add('cone', city ? city.x + 8 + k * 1.6 : 0, city ? city.z - 18 : 0, { yaw: rnd() * 6.283 });
+
   // Beach: balls and crates on the sand, barrels and crates adrift offshore.
   const B = S.spawns.beach;
   if (B) {

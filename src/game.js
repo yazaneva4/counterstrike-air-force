@@ -89,7 +89,7 @@ export class Game {
     this._others = [];
 
     await step(0.32, 'Growing forests');
-    this.vegetation = new Vegetation(this.terrain, { density, isBlocked: (x, z) => this.structures.isBlocked(x, z, 3) });
+    this.vegetation = new Vegetation(this.terrain, { density, isBlocked: (x, z) => this.structures.isBlocked(x, z, 3), extra: { palm: this.structures.cityPalms } });
     W.vegetation = this.vegetation;
     this.scene.add(this.vegetation.group);
 
@@ -126,6 +126,7 @@ export class Game {
       new Vehicle('prop', { x: RUNWAY.x0 + 90, y: this.structures.baseY, z: 626, heading: Math.PI / 2 }),
       new Vehicle('ufo', { x: PLACES.crash.x, y: this.terrain.heightAt(PLACES.crash.x, PLACES.crash.z), z: PLACES.crash.z, heading: 0.7 }),
       new Vehicle('rocket', { ...S.rocketPad, lz: S.lz }),
+      new Vehicle('heli', S.cityHelipad),
       new Vehicle('ship', S.shipPad),
       ...this._parkCars(),
     ];
@@ -204,6 +205,7 @@ export class Game {
     const list = [
       ['gtr', 80, 590, 0, 2], ['drift', 96, 590, 0, 3],
       ...['gtr', 'drift', 'gt', 'gtr', 'drift', 'gt'].map((t, i) => [t, sp.speedwayGrid[i].x, sp.speedwayGrid[i].z, sp.speedwayGrid[i].heading, i + 2]),
+      ...(sp.city ? [['sedan', sp.city.x + 6.5, sp.city.z + 55, 0, 4], ['gt', sp.city.x - 6.5, sp.city.z + 120, Math.PI, 5], ['pickup', sp.city.x + 120, sp.city.z + 40, 0.1, 6], ['jeep', sp.city.x - 110, sp.city.z - 20, 3.2, 1]] : []),
       ['pickup', 60, 590, Math.PI / 2, 2], ['jeep', -262, 592, -Math.PI / 2, 5],
       ['sedan', sp.village.x + 30, sp.village.z + 8, 0.4, 0], ['gt', sp.village.x - 26, sp.village.z + 34, -0.6, 6],
       ['pickup', sp.farm.x + 12, sp.farm.z + 10, 1.2, 3], ['jeep', sp.beach.x + 20, sp.beach.z - 24, 2.5, 7],
@@ -257,6 +259,7 @@ export class Game {
       airbase: { x: -150, z: 590, h: 0 }, village: { x: S.village.x, z: S.village.z, h: Math.PI },
       beach: { x: S.beach.x, z: S.beach.z, h: Math.PI }, farm: { x: S.farm.x, z: S.farm.z, h: 0 },
       spaceport: { x: S.spaceport.x, z: S.spaceport.z, h: S.spaceport.heading },
+      city: { x: S.city.x, z: S.city.z, h: S.city.heading },
     }[spawn] || { x: -150, z: 590, h: 0 };
     if (spawn === 'motorsport') {
       const pit = S.speedway;

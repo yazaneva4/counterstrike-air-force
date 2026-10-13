@@ -10,6 +10,7 @@ import { mulberry32 } from '../core/noise.js';
 import { canvasTexture, stdMat, mesh, glowSprite, glowTexture, tint, lerp, clamp } from '../core/util.js';
 import { PLACES, HALF, MAP_SIZE } from './terrain.js';
 import { buildRaceTrack } from './racetrack.js';
+import { buildCity } from './city.js';
 import { buildSpaceport } from './spaceport.js';
 import { plaster, roofTiles } from '../core/textures.js';
 import { treeSpecimen } from './vegetation.js';
@@ -135,6 +136,7 @@ export class Structures {
     this._turbines();
     buildSpaceport(this);
     buildRaceTrack(this);
+    buildCity(this);
   }
 
   h(x, z) { return this.terrain.heightAt(x, z); }
@@ -738,7 +740,8 @@ export class Structures {
     for (const fn of this.spinners) fn(dt, t);
     const night = sky.night;
     const dusk = Math.max(night, sky.golden * 0.35);
-    for (const l of this.nightLights) l.mat.emissiveIntensity = l.base * dusk;
+    this.dusk = dusk;
+    for (const l of this.nightLights) l.mat.emissiveIntensity = l.base * dusk + (l.floor || 0);
     for (const pm of this.nightPoints) pm.opacity = 0.25 + dusk * 0.75;
     for (const b of this.blinkers) {
       const max = b.max ?? 1;
