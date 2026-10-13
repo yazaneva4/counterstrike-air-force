@@ -8,6 +8,8 @@
 // people and spacecraft simply walk and fly there with local gravity.
 
 import * as THREE from 'three';
+import { Props } from '../physics/props.js';
+import { buildStation } from './station.js';
 import { Noise, mulberry32 } from '../core/noise.js';
 import { groundDetail } from '../core/textures.js';
 import { createEarth } from './globe.js';
@@ -101,7 +103,7 @@ export class SurfaceWorld {
         mapCanvas: null, mapSize: SIZE, zones: [],
       },
       structures: {
-        platformAt: (x, z) => self.platformAt(x, z), collide: (p, r, y) => self.collide(p, r, y),
+        platformAt: (x, z) => self.platformAt(x, z), collide: (p, r, y) => self.collide(p, r, y), roadAt: () => false,
         isBlocked: () => false, groundAt: (x, z) => self.groundAt(x, z), addBox: () => {},
       },
       vegetation: { near() {} },
@@ -111,6 +113,7 @@ export class SurfaceWorld {
       gravity: cfg.gravity, air: cfg.air, limit: HALF - 150,
     };
     this.world.terrain.mapCanvas = this._paintMap(512);
+    if (body === 'mars') buildStation(this); else this._moonCamp();
   }
 
   // ---- Height model -------------------------------------------------------------
@@ -498,84 +501,21 @@ export class SurfaceWorld {
     this.anim.push((dt, t) => { ring.material.opacity = 0.15 + 0.25 * (Math.sin(t * 2.2) * 0.5 + 0.5); ring.scale.setScalar(1 + (t * 0.3 % 1) * 0.8); });
   }
 
-  _marsProps() {
-    const white = stdMat(0xe9e6e0, { rough: 0.55, metal: 0.1 });
-    const metal = stdMat(0x8a8d90, { rough: 0.35, metal: 0.85 });
-    const dark = stdMat(0x1c1d20, { rough: 0.5, metal: 0.4 });
-    const panel = new THREE.MeshStandardMaterial({ color: 0x1b2d4c, metalness: 0.6, roughness: 0.3 });
-    // ---- Ares Station habitat ----
-    const S = new THREE.Group();
-    const winTex = canvasTexture(512, 128, (ctx, w, h) => {
-      ctx.fillStyle = '#e9e6e0'; ctx.fillRect(0, 0, w, h);
-      for (let x = 10; x < w; x += 42) { ctx.fillStyle = '#1b2530'; ctx.fillRect(x, 50, 26, 26); ctx.fillStyle = '#ffd89a'; ctx.globalAlpha = 0.25; ctx.fillRect(x + 2, 52, 22, 22); ctx.globalAlpha = 1; }
-      ctx.fillStyle = '#c8302a'; ctx.fillRect(0, 100, w, 6);
-    }, { repeat: true });
-    winTex.repeat.set(3, 1);
-    const domeMat = new THREE.MeshStandardMaterial({ map: winTex, roughness: 0.5, metalness: 0.1, emissive: 0xffd89a, emissiveMap: winTex, emissiveIntensity: 0.2 });
-    const domes = [[0, 0, 9], [22, 6, 6.5], [-18, 10, 6.5], [4, -20, 5.5]];
-    const gy = this.heightAt(160, 130);
-    for (const [x, z, r] of domes) {
-      add(S, new THREE.CylinderGeometry(r, r, 2.4, 32, 1, true), domeMat, x, 1.2, z);
-      add(S, new THREE.SphereGeometry(r, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), white, x, 2.4, z);
-      this.addBox(160 + x, 130 + z, r * 0.75, r * 0.75, gy + r + 3);
-    }
-    const green = new THREE.MeshStandardMaterial({ color: 0x9fd8a8, transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.2, emissive: 0x3aa050, emissiveIntensity: 0.25 });
-    add(S, new THREE.SphereGeometry(5.5, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), green, 4, 0.2, -20);
-    for (const [a, b] of [[0, 1], [0, 2], [0, 3]]) {
-      const [x1, z1] = domes[a], [x2, z2] = domes[b];
-      const len = Math.hypot(x2 - x1, z2 - z1);
-      const tube = add(S, new THREE.CylinderGeometry(1.4, 1.4, len, 16).rotateZ(Math.PI / 2), white, (x1 + x2) / 2, 1.4, (z1 + z2) / 2);
-      tube.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
-    }
-    // Solar field and an antenna mast.
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) {
-      const px = -40 + c * 8, pz = 30 + r * 7;
-      add(S, new THREE.BoxGeometry(6.5, 0.08, 4), panel, px, 1.6, pz, -0.5, 0, 0);
-      add(S, new THREE.CylinderGeometry(0.08, 0.08, 1.6, 6), metal, px, 0.8, pz);
-    }
-    add(S, new THREE.CylinderGeometry(0.2, 0.3, 18, 8), metal, 30, 9, -12);
-    const dsh = new THREE.SphereGeometry(2.2, 16, 8, 0, Math.PI * 2, 0, 0.9); dsh.rotateX(-0.9);
-    add(S, dsh, white, 30, 17, -12);
-    const beacon = glowSprite(0xff3a2a, 3, 0); beacon.position.set(30, 18.5, -12); S.add(beacon);
-    this.anim.push((dt, t) => { beacon.material.opacity = (t % 1.6) < 0.12 ? 1 : 0.08; });
-    const sign = canvasTexture(512, 128, (ctx, w, h) => { ctx.fillStyle = '#16202a'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#f4f4f4'; ctx.font = 'bold 60px Arial'; ctx.textAlign = 'center'; ctx.fillText('ARES STATION', w / 2, 84); });
-    add(S, new THREE.PlaneGeometry(8, 2), new THREE.MeshBasicMaterial({ map: sign }), 0, 4.2, 9.2);
-    this._place(S, 160, 130, -0.3);
+  // Supplies by the Kestrel-1 lander: live physics props in lunar gravity.
+  _moonCamp() {
+    const props = new Props(this.world, this.scene, { seaPhysics: false });
+    const rnd = mulberry32(88);
+    for (let i = 0; i < 6; i++) props.add('crate', 60 + rnd() * 18, -22 + rnd() * 14, { yaw: rnd() * 6.28 });
+    for (let i = 0; i < 5; i++) props.add('barrel', 50 + rnd() * 12, -50 + rnd() * 10, { color: [0xd8d4c8, 0xe8742a][i % 2] });
+    for (let i = 0; i < 4; i++) props.add('box', 78 + rnd() * 8, -26 + rnd() * 8, { yaw: rnd() * 6.28 });
+    for (let i = 0; i < 4; i++) props.add('ball', 66 + i * 0.8, -12, { sleep: false, color: 0xf2f2ee });
+    this.world.colliders = this.colliders;
+    props.physics.reindexStatics();
+    this.props = props;
+  }
 
-    // ---- Rover: rocker-bogie, six wheels, mast camera; drives a slow loop ----
-    const rover = new THREE.Group();
-    add(rover, new THREE.BoxGeometry(2.2, 0.8, 3), white, 0, 1.4, 0);
-    add(rover, new THREE.BoxGeometry(2.3, 0.1, 3.1), stdMat(0xc49a44, { rough: 0.4, metal: 0.8 }), 0, 1.85, 0);
-    add(rover, new THREE.CylinderGeometry(0.35, 0.35, 1.1, 12).rotateX(Math.PI / 2.8), dark, 0, 1.6, -1.8);
-    for (let k = 0; k < 6; k++) add(rover, new THREE.BoxGeometry(0.05, 0.6, 0.4), dark, 0, 1.7, -1.9 - k * 0.05);
-    const mast = new THREE.Group(); mast.position.set(0.7, 1.9, 1.1); rover.add(mast);
-    add(mast, new THREE.CylinderGeometry(0.08, 0.08, 1.8, 8), white, 0, 0.9, 0);
-    const head = new THREE.Group(); head.position.y = 1.9; mast.add(head);
-    add(head, new THREE.BoxGeometry(0.7, 0.3, 0.35), white);
-    add(head, new THREE.BoxGeometry(0.16, 0.16, 0.05), dark, 0.18, 0, 0.19);
-    add(head, new THREE.BoxGeometry(0.16, 0.16, 0.05), dark, -0.18, 0, 0.19);
-    const wheels = [];
-    const tyre = new THREE.CylinderGeometry(0.42, 0.42, 0.4, 16); tyre.rotateZ(Math.PI / 2);
-    for (const s of [1, -1]) {
-      add(rover, new THREE.BoxGeometry(0.1, 0.1, 2.8), metal, s * 1.2, 0.95, 0, 0.15, 0, 0);
-      for (const z of [1.25, 0, -1.25]) wheels.push(add(rover, tyre, stdMat(0x8a8d90, { rough: 0.5, metal: 0.6 }), s * 1.35, 0.42, z));
-    }
-    // Robotic arm folded at the front.
-    add(rover, new THREE.BoxGeometry(0.12, 0.12, 1.4), white, -0.6, 1.2, 1.7);
-    add(rover, new THREE.BoxGeometry(0.3, 0.3, 0.3), metal, -0.6, 1.1, 2.4);
-    this.scene.add(rover);
-    const rc = new THREE.Vector3(-60, 0, 90);
-    let ra = 0;
-    this.anim.push((dt, t) => {
-      ra += dt * 0.012;
-      const x = rc.x + Math.cos(ra) * 45, z = rc.z + Math.sin(ra) * 45;
-      const nx = rc.x + Math.cos(ra + 0.01) * 45, nz = rc.z + Math.sin(ra + 0.01) * 45;
-      rover.position.set(x, this.heightAt(x, z), z);
-      rover.rotation.y = Math.atan2(nx - x, nz - z);
-      for (const w of wheels) w.rotation.x += dt * 1.3;
-      head.rotation.y = Math.sin(t * 0.3) * 0.8;
-    });
-    this.rover = rover;
+  _marsProps() {
+    // Ares Station itself is built in station.js once the world object exists.
 
     // ---- The Ares Beacon ----
     const B = this.beaconAt;

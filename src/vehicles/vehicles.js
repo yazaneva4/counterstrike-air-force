@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { clamp, damp, lerp, smoothstep } from '../core/util.js';
 import { buildFighter, buildProp, buildHelicopter, buildSaucer, buildTalon } from './models.js';
+import { buildRover } from './rover.js';
 import { buildRocket, buildShip, AURORA } from './spacecraft.js';
 import { buildCar, CAR_NAMES, animateCarParts } from './cars.js';
 import { coordinatedTurnRate, bankedStallSpeed } from './flight.js';
@@ -28,6 +29,8 @@ export const VEHICLE_DEFS = {
   drift: { name: CAR_NAMES.drift, role: 'Rear-drive drift car', kind: 'car', maxSpeed: 72, accel: 10.5, brake: 13, steerMax: 0.78, mu: 1.18, off: 0.56, rearGrip: 0.86, driftTune: true },
   pickup: { name: CAR_NAMES.pickup, role: 'Pickup truck', kind: 'car', maxSpeed: 44, accel: 5, brake: 11, steerMax: 0.55, mu: 1.05, off: 0.88 },
   jeep: { name: CAR_NAMES.jeep, role: 'Off-road 4x4', kind: 'car', maxSpeed: 38, accel: 5.6, brake: 11, steerMax: 0.62, mu: 1.1, off: 0.96 },
+  // Pressurised exploration rover for the Moon and Mars (slow, grippy, huge tyres).
+  rover: { name: 'Ares Rover', role: 'Six-wheel exploration rover', kind: 'car', maxSpeed: 17, accel: 3.6, brake: 6.5, steerMax: 0.5, mu: 0.95, off: 1 },
 };
 
 const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
@@ -45,6 +48,7 @@ function buildFor(type, opts = {}) {
     case 'rocket': return buildRocket();
     case 'sedan': case 'gt': case 'gtr': case 'drift': case 'pickup': case 'jeep': return buildCar(type, { color: opts.color });
     case 'talon': return buildTalon();
+    case 'rover': return buildRover();
     default: throw new Error('unknown vehicle ' + type);
   }
 }
@@ -819,6 +823,13 @@ export class Vehicle {
   }
 
   _animCar(dt, world) {
+    const P = this.parts;
+    if (P.camHead) {
+      const t = performance.now() / 1000;
+      P.camHead.rotation.y = Math.sin(t * 0.4) * 0.6; P.dish.rotation.y = t * 0.15;
+      P.beacon.material.opacity = (t % 1.8) < 0.14 ? 1 : 0;
+      for (const l of P.barLamps) l.material.emissiveIntensity = this.lights ? 3 : 0.05;
+    }
     animateCarParts(this.parts, this.ground, dt, { vf: this.carVf, steer: this.steer, lit: this.occupied ? this.lights : !!this.aiLights, braking: this.braking, night: world.night || 0 });
   }
 

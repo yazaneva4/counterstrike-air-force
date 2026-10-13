@@ -566,6 +566,13 @@ export class Game {
     this.surface = S;
     this._setWorld(body);
     S.scene.add(v.group);
+    if (!S.vehicles) {
+      // A drivable rover waits by the landing site on each world.
+      const at = body === 'mars' ? [140, 160] : [50, -18];
+      S.vehicles = [new Vehicle('rover', { x: at[0], y: S.groundAt(at[0], at[1]), z: at[1], heading: body === 'mars' ? 2.4 : 0.8 })];
+      for (const rv of S.vehicles) S.scene.add(rv.group);
+    }
+    this.vehicles = [v, ...S.vehicles];
     v.group.quaternion.identity();
     v.heading = 0;
     v.pos.set(0, S.groundAt(0, 0) + 850, 160);
@@ -592,7 +599,7 @@ export class Game {
     } else {
       const S = this.surfaces[loc];
       this.world = S.world;
-      this.vehicles = [this.spaceVehicle];
+      this.vehicles = [this.spaceVehicle, ...(S.vehicles || [])];
       this.npcs = NO_NPCS;
       S.scene.add(p.root, this.fx.sparks.points, this.fx.smoke.points);
       p.setSuit(true);
@@ -753,7 +760,7 @@ export class Game {
     if (v && !v.destroyed && v.kind === 'rocket' && v.launched && v.vel.y > 0 && v.pos.y - this.world.groundAt(v.pos.x, v.pos.z) > 1500) { this.enterSpace(); I.endFrame(); return; }
     this._remotes(dt, S.scene);
     this.net.update(dt, p.netState(), this.sky.time);
-    this.audio.update({ dt, vehicle: p.mode === 'vehicle' && v ? v.type : null, throttle: v?.throttle || 0, speed: v ? v.speed : 0, rpm: v?.rpm || 0, boosting: v?.boosting, night: 0, altitude: 0, coast: 0, space: true, vacuum: S.world.air < 0.01, menu: false, thrust: v?.thrustAcc > 0 });
+    this.audio.update({ dt, vehicle: p.mode === 'vehicle' && v ? (v.kind === 'car' ? 'car' : v.type) : null, throttle: v?.throttle || 0, speed: v ? v.speed : 0, rpm: v?.rpm || 0, boosting: v?.boosting, night: 0, altitude: 0, coast: 0, space: true, vacuum: S.world.air < 0.01, menu: false, thrust: v?.thrustAcc > 0 });
     this.hud.update(dt);
     const sunScreen = this._sunFlare(dt, S.sunDir, (x, z) => S.heightAt(x, z));
     this.flash = Math.max(0, this.flash - dt * 1.5);

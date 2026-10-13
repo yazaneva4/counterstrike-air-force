@@ -4,13 +4,14 @@
 import * as THREE from 'three';
 import { Human, outfitFor } from '../actors/human.js';
 import { buildFighter, buildProp, buildHelicopter, buildSaucer, buildTalon } from '../vehicles/models.js';
+import { buildRover } from '../vehicles/rover.js';
 import { buildRocket, buildShip, AURORA } from '../vehicles/spacecraft.js';
 import { buildCar, animateCarParts } from '../vehicles/cars.js';
 import { mulberry32 } from '../core/noise.js';
 import { CHARACTERS } from '../player.js';
 
 const builders = { jet: () => buildFighter({ color: 0x7a8a96 }), prop: () => buildProp({ stripe: 0x2a8a4a }), heli: () => buildHelicopter({ color: 0x2a6a4a }), ufo: () => buildSaucer({ glow: 0xffa86a }), talon: () => buildTalon(), rocket: () => buildRocket(), ship: () => buildShip(),
-  sedan: (c) => buildCar('sedan', { color: c }), gt: (c) => buildCar('gt', { color: c }), gtr: (c) => buildCar('gtr', { color: c }), drift: (c) => buildCar('drift', { color: c }), pickup: (c) => buildCar('pickup', { color: c }), jeep: (c) => buildCar('jeep', { color: c }) };
+  sedan: (c) => buildCar('sedan', { color: c }), gt: (c) => buildCar('gt', { color: c }), gtr: (c) => buildCar('gtr', { color: c }), drift: (c) => buildCar('drift', { color: c }), pickup: (c) => buildCar('pickup', { color: c }), jeep: (c) => buildCar('jeep', { color: c }), rover: () => buildRover() };
 const ROCKET_SIDEWAYS = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 
 export class RemotePlayer {
