@@ -403,6 +403,14 @@ export class Game {
     }
   }
 
+  // Where fireflies may glow: dry land away from roads and the city.
+  _fireflyGround = (x, z) => {
+    const g = this.structures.groundAt(x, z);
+    if (g <= 1.5 || this.structures.roadAt(x, z)) return null;
+    const city = this._cityZone === undefined ? (this._cityZone = this.terrain.zone('city') || null) : this._cityZone;
+    return city && this.terrain.zoneWeight(city, x, z) > 0.05 ? null : g;
+  };
+
   // Distance culling: vehicles, traffic and small structures far from the camera are hidden,
   // which saves hundreds of draw calls on phones without changing anything you can see.
   _lod(dt) {
@@ -416,7 +424,7 @@ export class Game {
       const d = Math.hypot(v.pos.x - c.x, v.pos.z - c.z);
       v.group.visible = v.occupied || big || d < (v.kind === 'car' ? 500 : 1100) * k || Math.abs(v.pos.y - c.y) > 400;
     }
-    for (const car of this.traffic.cars) car.cullDist = 650 * k + 60;
+    for (const car of this.traffic.cars) car.cullDist = Math.min(700, 650 * k + 60);
     // Small buildings and props of the island are culled by distance; big complexes always stay.
     for (const o of this.structures.group.children) {
       let r = o.userData._cull;
@@ -427,7 +435,7 @@ export class Game {
         r = o.userData._cull = { x: s.center.x, z: s.center.z, r: s.radius, skip: s.radius > 260 };
       }
       if (r.skip) continue;
-      o.visible = Math.hypot(r.x - c.x, r.z - c.z) - r.r < 500 + 2200 * k || Math.abs(c.y) > 500;
+      o.visible = Math.hypot(r.x - c.x, r.z - c.z) - r.r < Math.max(600, 1500 * k) || Math.abs(c.y) > 500;
     }
   }
 
@@ -466,6 +474,7 @@ export class Game {
     }
     const w = this.weather?.now;
     if (w && this.clouds?.wind && this.location === 'earth') props.physics.wind.set(this.clouds.wind.x, 0, this.clouds.wind.z);
+    else if (this.location !== 'earth') props.physics.wind.set(0, 0, 0);
     props.update(dt, { focus: f, kinematics: out, range: 380 });
   }
 
@@ -880,7 +889,7 @@ export class Game {
     this.vegetation.update(dt, this.camera.position);
     this.structures.update(dt, t, this.sky);
     this.seabirds?.update(dt, this.camera);
-    this.fireflies?.update(dt, this.camera, this.sky.night, (x, z) => { const g = this.structures.groundAt(x, z); return g > 1.5 && !this.structures.roadAt(x, z) && this.terrain.zoneWeight(this.terrain.zone('city'), x, z) < 0.05 ? g : null; }, this.weather.now.wet);
+    this.fireflies?.update(dt, this.camera, this.sky.night, this._fireflyGround, this.weather.now.wet);
     this.waterfalls?.update(dt, { day: this.sky.day, night: this.sky.night, height: innerHeight, pixelRatio: this.renderer.getPixelRatio(), camera: this.camera });
     this.mysteries.update(dt, t, this.sky, this.fx);
 

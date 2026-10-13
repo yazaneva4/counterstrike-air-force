@@ -353,17 +353,19 @@ export class PhysicsWorld {
       const d = v1.length(), R = (b.radius + o.radius) * 0.8;
       if (d >= R || d < 1e-5) return;
       v1.multiplyScalar(1 / d);
-      const depth = R - d, tot = b.invM + o.invM;
-      b.p.addScaledVector(v1, depth * (b.invM / tot)); o.p.addScaledVector(v1, -depth * (o.invM / tot));
       v2.copy(b.v).sub(o.v);
       const vn = v2.dot(v1);
+      // A sleeper wakes on a real hit or deep overlap; a gentle touch treats it as immovable.
+      if (o.sleeping && (-vn > 0.4 || d < R * 0.7)) this.wake(o);
+      const oInv = o.sleeping ? 0 : o.invM, depth = R - d, tot = b.invM + oInv;
+      b.p.addScaledVector(v1, depth * (b.invM / tot));
+      if (oInv) { o.p.addScaledVector(v1, -depth * (oInv / tot)); o.dirty = true; }
       if (vn < 0) {
         const j = -(1.25) * vn / tot;
-        b.v.addScaledVector(v1, j * b.invM); o.v.addScaledVector(v1, -j * o.invM);
+        b.v.addScaledVector(v1, j * b.invM);
+        if (oInv) o.v.addScaledVector(v1, -j * oInv);
         if (this.onImpact && -vn > 2.5) this.onImpact(b.kind, -vn, b.p);
       }
-      if (o.sleeping && (-vn > 0.4 || d < R * 0.7)) this.wake(o);
-      o.dirty = true;
     });
   }
 

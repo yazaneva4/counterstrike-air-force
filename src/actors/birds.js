@@ -99,6 +99,8 @@ export class Fireflies {
     this.count = count;
     this.pos = new Float32Array(count * 3);
     this.seed = Float32Array.from({ length: count }, (_, i) => (i * 0.61803) % 1);
+    this.gy = new Float32Array(count).fill(NaN);   // cached ground height (re-queried a few flies per frame)
+    this.frame = 0;
     this.seed2 = Float32Array.from({ length: count }, (_, i) => (i * 0.7548776 + 0.3) % 1);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
@@ -118,14 +120,16 @@ export class Fireflies {
     if (!on) return;
     this.mat.opacity = Math.min(1, (night - 0.45) * 3) * (0.55 + 0.45 * Math.sin(this.t * 3));
     const cx = camera.position.x, cz = camera.position.z, CELL = 70;
+    this.frame++;
     const wrap = (v, c) => ((v - c + CELL / 2) % CELL + CELL) % CELL - CELL / 2 + c;   // world-fixed lattice wrapped around the camera
     for (let i = 0; i < this.count; i++) {
       const s = this.seed[i], s2 = this.seed2[i];
       const bx = s * CELL * 7.0 + Math.sin(this.t * (0.15 + s * 0.2) + s * 40) * 4, bz = s2 * CELL * 7.0 + Math.cos(this.t * (0.12 + s2 * 0.2) + s2 * 30) * 4;
       const x = wrap(bx, cx), z = wrap(bz, cz);
-      const g = groundAt(x, z);
+      if (Number.isNaN(this.gy[i]) || (i + this.frame) % 8 === 0) { const q = groundAt(x, z); this.gy[i] = q == null ? -1e4 : q; }
+      const g = this.gy[i];
       this.pos[i * 3] = x; this.pos[i * 3 + 2] = z;
-      this.pos[i * 3 + 1] = g == null ? -500 : g + 0.6 + (Math.sin(this.t * 0.8 + s * 40) * 0.5 + 0.5) * 2.4;
+      this.pos[i * 3 + 1] = g < -9000 ? -500 : g + 0.6 + (Math.sin(this.t * 0.8 + s * 40) * 0.5 + 0.5) * 2.4;
     }
     this.points.geometry.attributes.position.needsUpdate = true;
   }

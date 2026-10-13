@@ -45,7 +45,6 @@ export function findFalls(terrain, { count = 8, window = 14, minDrop = 38, spaci
     if (n.y > 0.75 || n.y < 0.25) continue;
     if (terrain.zones.some((zn) => zn.mode !== 'add' && terrain.zoneWeight(zn, x, z) > 0.02)) continue;
     const path = descend(terrain, x, z, 420);
-    for (const p of path) traced.add(cellKey(p[0], p[2]));
     if (path.length < window + 2) continue;
     // Best moderate cascade (38-120 m) and best grand fall on this path.
     let mod = -1, modDrop = 0, grand = -1, grandDrop = 0;
@@ -58,6 +57,7 @@ export function findFalls(terrain, { count = 8, window = 14, minDrop = 38, spaci
       if (i0 < 0 || path[i0 + window][1] < 3) return;
       const seg = path.slice(i0, i0 + window + 1);
       const dist = Math.hypot(seg[0][0] - 200, seg[0][2] + 300);
+      for (const q of path) traced.add(cellKey(q[0], q[2]));      // only accepted falls claim their drainage
       found.push({ x: seg[0][0], z: seg[0][2], drop, len: window * 5, path: seg, kind, score: Math.min(drop, 120) + bonus - dist * 0.06 });
     };
     if (modDrop >= minDrop) push(mod, modDrop, 'cascade', 40);
