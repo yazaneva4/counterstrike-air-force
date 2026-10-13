@@ -19,6 +19,8 @@ import { Animals } from './actors/animals.js';
 import { Aliens } from './actors/aliens.js';
 import { Traffic } from './actors/traffic.js';
 import { Vehicle } from './vehicles/vehicles.js';
+import { Props } from './physics/props.js';
+import { placeIslandProps } from './physics/placement.js';
 import { CAR_COLORS } from './vehicles/cars.js';
 import { Player } from './player.js';
 import { Particles, Trail } from './fx/particles.js';
@@ -138,6 +140,11 @@ export class Game {
     this.aliens = new Aliens(W, this.scene);
     this.traffic = new Traffic(this.scene, W);
     this.lapTimer = new LapTimer(this.structures.race);
+
+    await step(0.9, 'Scattering crates and cones');
+    this.props = new Props(W, this.scene);
+    this._wirePropAudio(this.props);
+    placeIslandProps(this);
 
     await step(0.88, 'Preparing orbit');
     this.fx = { sparks: new Particles(3500), smoke: new Particles(3200, { additive: false }) };
@@ -367,13 +374,64 @@ export class Game {
         } else if (b.m.position.y < this.world.groundAt(b.m.position.x, b.m.position.z)) {
           dead = true;
           this.fx.sparks.burst(b.m.position, { count: 10, speed: 10, color: 0x9ff4ff, size: 1.5, life: 0.5 });
+          this.props?.explode(b.m.position, { radius: 6, strength: 6 });
         }
       }
       if (dead) { this.scene.remove(b.m); this.bolts.splice(i, 1); }
     }
   }
 
+  // Feed the physics world the things that move through it and advance it.
+  _stepProps(props, dt) {
+    if (!props) return;
+    const p = this.player, f = this.focusPos(), pool = this._kinPool || (this._kinPool = []), out = this._kin || (this._kin = []);
+    out.length = 0;
+    let n = 0;
+    const slot = () => pool[n] || (pool[n] = { pos: new THREE.Vector3(), yaw: 0, half: [1, 1, 1], vel: new THREE.Vector3() });
+    for (const v of this.vehicles) {
+      if (v.destroyed || !v.group.visible || v.kind === 'rocket' || v.kind === 'ship' || v.kind === 'ufo') continue;
+      if (Math.abs(v.pos.x - f.x) > 90 || Math.abs(v.pos.z - f.z) > 90) continue;
+      const gy = this.world.groundAt(v.pos.x, v.pos.z);
+      if (v.pos.y - v.ground - gy > 3) continue;
+      const k = slot(); n++;
+      k.pos.set(v.pos.x, v.pos.y - v.ground, v.pos.z);
+      k.yaw = v.heading || 0;
+      if (v.kind === 'car') { k.half[0] = (v.track || 1.76) / 2 + 0.2; k.half[1] = 0.75; k.half[2] = (v.wb || 2.7) / 2 + 0.95; }
+      else if (v.kind === 'heli') { k.half[0] = 1.1; k.half[1] = 1.6; k.half[2] = 4.5; }
+      else { k.half[0] = 1.0; k.half[1] = 1.4; k.half[2] = (v.def?.length || 14) / 2; }
+      k.vel.copy(v.vel);
+      out.push(k);
+    }
+    if (this.traffic && this.location === 'earth') for (const c of this.traffic.cars) {
+      if (Math.abs(c.pos.x - f.x) > 90 || Math.abs(c.pos.z - f.z) > 90) continue;
+      const k = slot(); n++;
+      k.pos.set(c.pos.x, this.world.groundAt(c.pos.x, c.pos.z), c.pos.z); k.yaw = c.heading; k.half[0] = 1.0; k.half[1] = 0.75; k.half[2] = 2.6;
+      k.vel.set(Math.sin(c.heading) * (c.v || 0), 0, Math.cos(c.heading) * (c.v || 0));
+      out.push(k);
+    }
+    if (p.mode === 'foot' && !p.swimming) {
+      const k = slot(); n++;
+      k.pos.copy(p.pos); k.yaw = 0; k.half[0] = 0.42; k.half[1] = 0.9; k.half[2] = 0.42; k.vel.copy(p.vel);
+      out.push(k);
+    }
+    const w = this.weather?.now;
+    if (w && this.clouds?.wind) props.physics.wind.set(this.clouds.wind.x, 0, this.clouds.wind.z);
+    props.update(dt, { focus: f, kinematics: out, range: 380 });
+  }
+
+  // Clunks and thuds when props hit things near the player (rate-limited).
+  _wirePropAudio(props) {
+    let last = 0;
+    props.physics.onImpact = (kind, speed, pos) => {
+      const now = performance.now();
+      if (now - last < 90 || pos.distanceTo(this.focusPos()) > 45) return;
+      last = now;
+      this.audio.thump(Math.min(7, speed * (kind === 'ball' ? 0.4 : 0.9)));
+    };
+  }
+
   _explode(p, local = true) {
+    this.props?.explode(p, { radius: 50, strength: 22 });
     this.fx.sparks.burst(p, { count: 160, speed: 45, color: 0xffa24a, size: 4, life: 1.6, gravity: -9, intensity: 2.5 });
     this.fx.sparks.burst(p, { count: 60, speed: 25, color: 0xfff0c0, size: 6, life: 0.6, gravity: 0, intensity: 3 });
     this.fx.smoke.smoke(p, { count: 40, size: 9, life: 5, speed: 8, rise: 5, color: 0x3a3632 });
@@ -403,6 +461,7 @@ export class Game {
       this.audio.splash();
     }
     this._explode(where, v === p.vehicle || where.distanceTo(this.focusPos()) < 600);
+    if (this.location === 'earth') this.props?.debris(where, v.vel, { count: v.kind === 'plane' ? 22 : 14, color: v.model?.paintHex ?? 0x7a8088 });
     v.crash();
     if (this.net.online) this.net.send({ t: 'fx', k: 'crash', p: where.toArray().map((x) => Math.round(x)), L: this.location });
     if (v === p.vehicle) {
@@ -668,6 +727,7 @@ export class Game {
     const cam = this.camera;
     cam.fov = p.fov; cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
     const focus = this.focusPos();
+    this._stepProps(S.props, dt);
     S.update(dt, t, cam, focus);
     this.fx.sparks.update(dt); this.fx.smoke.update(dt);
     this.fx.sparks.setPixelScale(innerHeight * this.renderer.getPixelRatio());
@@ -732,6 +792,7 @@ export class Game {
       const res = v.update(dt, v === p.vehicle ? p.ctl : null, this.world);
       if (res) this._vehicleEvent(v, res);
     }
+    this._stepProps(this.props, dt);
     if (p.vehicle && p.mode === 'vehicle') p._vehicleCamera(dt);
     this._rocketFx(dt);
     if (p.mode === 'dead') p.deadCamera(dt, t);
