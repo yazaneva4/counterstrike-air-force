@@ -6,33 +6,103 @@ import * as THREE from 'three';
 import { stdMat, clamp, dampAngle, TAU } from '../core/util.js';
 import { mulberry32 } from '../core/noise.js';
 import { PLACES } from '../world/terrain.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+// Smooth body of revolution (spline-smoothed profile) used for the torso and limbs.
+function lathe(profile, segs = 24, sx = 1, sz = 1) {
+  const pts = profile.map(([r, y]) => new THREE.Vector3(Math.max(r, 0.001), y, 0));
+  const sm = new THREE.CatmullRomCurve3(pts, false, 'centripetal').getPoints((pts.length - 1) * 3);
+  const g = new THREE.LatheGeometry(sm.map((v) => new THREE.Vector2(Math.max(v.x, 0.001), v.y)), segs);
+  g.scale(sx, 1, sz);
+  g.computeVertexNormals();
+  return g;
+}
+
+// Hide texture: soft colour mottling, short-hair streaks and (for Holsteins) irregular black patches.
+const hideCache = new Map();
+function hideTexture(base, patchy, seed) {
+  const key = base + patchy + seed;
+  if (hideCache.has(key)) return hideCache.get(key);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const x = c.getContext('2d');
+  const rnd = mulberry32(seed);
+  x.fillStyle = '#' + new THREE.Color(base).getHexString(); x.fillRect(0, 0, 256, 256);
+  if (patchy) {
+    x.fillStyle = '#1d1a18';
+    for (let i = 0; i < 7; i++) {
+      const px = rnd() * 256, py = 40 + rnd() * 170, r = 18 + rnd() * 30;
+      x.beginPath();
+      for (let k = 0; k <= 12; k++) { const a = k / 12 * Math.PI * 2, rr = r * (0.65 + rnd() * 0.6); x.lineTo(px + Math.cos(a) * rr * 1.4, py + Math.sin(a) * rr); }
+      x.fill();
+    }
+  }
+  for (let i = 0; i < 2600; i++) {
+    x.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},${0.015 + rnd() * 0.025})`;
+    x.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 2, 6 + rnd() * 14);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4;
+  hideCache.set(key, t);
+  return t;
+}
 
 function cowModel(rnd) {
   const g = new THREE.Group();
-  const white = stdMat(0xf2efe8, { rough: 0.85 });
-  const black = stdMat(0x1f1c1a, { rough: 0.85 });
-  const pink = stdMat(0xe8b0a8, { rough: 0.7 });
-  const bodyMat = rnd() < 0.5 ? white : stdMat(0x7a4a2a, { rough: 0.85 });
-  const add = (geo, mat, x, y, z, sx = 1, sy = 1, sz = 1) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; g.add(m); return m; };
-  add(new THREE.CapsuleGeometry(0.5, 1.2, 4, 12), bodyMat, 0, 1.2, 0, 1, 1, 1).rotation.x = Math.PI / 2;
-  if (bodyMat === white) for (let i = 0; i < 4; i++) add(new THREE.SphereGeometry(0.3, 8, 6), black, (rnd() - 0.5) * 0.7, 1.3 + rnd() * 0.3, (rnd() - 0.5) * 1.2, 1, 0.6, 1.2);
-  const head = new THREE.Group(); head.position.set(0, 1.45, 1.05); g.add(head);
-  const hm = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.45, 0.6), bodyMat); hm.position.z = 0.2; hm.castShadow = true; head.add(hm);
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.28, 0.2), pink); snout.position.set(0, -0.1, 0.52); head.add(snout);
-  for (const s of [-1, 1]) {
-    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 6), stdMat(0xe8e0c8)); horn.position.set(s * 0.18, 0.28, 0.05); horn.rotation.z = -s * 0.6; head.add(horn);
-    const ear = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.12), bodyMat); ear.position.set(s * 0.28, 0.12, 0.05); head.add(ear);
+  const holstein = rnd() < 0.5;
+  const seed = Math.floor(rnd() * 1e6);
+  const baseColor = holstein ? 0xf1ede4 : [0x7a4a2a, 0x5c3a24, 0x9a6a3a][Math.floor(rnd() * 3)];
+  const hide = new THREE.MeshStandardMaterial({ map: hideTexture(baseColor, holstein, seed), roughness: 0.88, metalness: 0 });
+  const pink = stdMat(0xc98f86, { rough: 0.6 });
+  const dark = stdMat(0x2a2220, { rough: 0.7 });
+  const horn = stdMat(0xe6dcc0, { rough: 0.5 });
+  const add = (parent, geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+  // Barrel torso: deep chest, slightly sloped back, tapering rump.
+  const body = lathe([[0.1, -1.18], [0.38, -1.08], [0.5, -0.85], [0.52, -0.5], [0.5, -0.1], [0.52, 0.4], [0.55, 0.7], [0.46, 0.95], [0.26, 1.1]], 28, 0.82, 1.1);
+  body.rotateX(Math.PI / 2);
+  add(g, body, hide, 0, 1.22, 0);
+  // Udder and teats.
+  const udder = new THREE.SphereGeometry(0.2, 14, 10); udder.scale(1, 0.75, 1.1);
+  add(g, udder, pink, 0, 0.7, -0.72);
+  for (const [x, z] of [[-0.07, -0.65], [0.07, -0.65], [-0.07, -0.8], [0.07, -0.8]]) add(g, new THREE.CylinderGeometry(0.018, 0.012, 0.07, 8), pink, x, 0.58, z);
+  // Neck and head (smooth, unmarked).
+  const neck = lathe([[0.2, -0.25], [0.24, -0.1], [0.27, 0.1], [0.3, 0.3]], 20);
+  neck.rotateX(Math.PI / 2 - 0.35);
+  add(g, neck, hide, 0, 1.36, 1.05);
+  const dewlap = new THREE.SphereGeometry(0.2, 12, 8); dewlap.scale(0.55, 0.9, 1.3);
+  add(g, dewlap, hide, 0, 1.0, 1.1);
+  const head = new THREE.Group(); head.position.set(0, 1.28, 1.42); g.add(head);
+  const skull = new THREE.SphereGeometry(0.22, 20, 16); skull.scale(0.9, 1.0, 1.25);
+  add(head, skull, hide, 0, 0, 0.12);
+  const muzzle = lathe([[0.13, -0.18], [0.125, -0.05], [0.1, 0.1], [0.06, 0.16]], 16);
+  muzzle.rotateX(Math.PI / 2 + 0.35);
+  add(head, muzzle, pink, 0, -0.14, 0.4);
+  for (const sd of [-1, 1]) {
+    const hn = new THREE.ConeGeometry(0.04, 0.22, 10); hn.translate(0, 0.11, 0);
+    const h = add(head, hn, horn, sd * 0.15, 0.2, 0.0); h.rotation.z = -sd * 0.9; h.rotation.x = -0.1;
+    const ear = new THREE.SphereGeometry(0.09, 10, 8); ear.scale(1.5, 0.4, 0.85);
+    const e = add(head, ear, hide, sd * 0.27, 0.1, 0.02); e.rotation.z = sd * -0.25;
   }
+  // Legs: thigh / cannon / hoof with a knee joint for the walk cycle.
   const legs = [];
-  for (const [x, z] of [[0.28, 0.6], [-0.28, 0.6], [0.28, -0.6], [-0.28, -0.6]]) {
-    const leg = new THREE.Group(); leg.position.set(x, 0.85, z); g.add(leg);
-    const lm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.85, 6), bodyMat); lm.position.y = -0.42; lm.castShadow = true; leg.add(lm);
-    const hoof = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.1, 6), black); hoof.position.y = -0.84; leg.add(hoof);
+  for (const [x, z, hind] of [[0.26, 0.62, false], [-0.26, 0.62, false], [0.27, -0.78, true], [-0.27, -0.78, true]]) {
+    const leg = new THREE.Group(); leg.position.set(x, 0.92, z); g.add(leg);
+    const upper = lathe([[0.085, -0.42], [0.105, -0.3], [0.145, -0.1], [0.15, 0.05]], 14, 1, hind ? 1.15 : 1);
+    add(leg, upper, hide, 0, 0, 0);
+    const lower = lathe([[0.06, -0.46], [0.066, -0.3], [0.078, -0.1], [0.085, 0.02]], 12);
+    add(leg, lower, hide, 0, -0.4, hind ? -0.04 : 0);
+    const hoof = lathe([[0.09, -0.05], [0.1, -0.02], [0.08, 0.0], [0.06, 0.02]], 12); hoof.scale(1, 1, 1.15);
+    add(leg, hoof, dark, 0, -0.84, hind ? -0.04 : 0.01);
     legs.push(leg);
   }
-  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 4), bodyMat); tail.position.set(0, 1.2, -1.1); tail.rotation.x = 0.3; g.add(tail);
+  // Tail with a tuft.
+  const tail = new THREE.Group(); tail.position.set(0, 1.45, -1.15); g.add(tail);
+  const cord = lathe([[0.03, -0.75], [0.03, -0.4], [0.04, 0]], 8); add(tail, cord, hide, 0, -0.38, 0);
+  add(tail, new THREE.SphereGeometry(0.07, 10, 8), dark, 0, -0.82, 0).scale.set(1, 2.2, 1);
+  tail.rotation.x = 0.15;
   return { group: g, head, legs, tail };
 }
+
+export { cowModel };
 
 export class Animals {
   constructor(world, scene) {
@@ -57,6 +127,15 @@ export class Animals {
     wing.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.3, -0.9, 0.35, -0.1, 0, 0, -0.25, 0, 0, 0.3, 0.9, 0.35, -0.1, 0, 0, -0.25], 3));
     wing.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, side: THREE.DoubleSide, roughness: 0.8 });
+    // Body, tail, head and beak (wings flap separately so the body never squashes).
+    const parts = [];
+    const bd = new THREE.SphereGeometry(0.12, 12, 8); bd.scale(0.9, 0.85, 2.6); parts.push(bd);
+    const hd = new THREE.SphereGeometry(0.075, 10, 8); hd.translate(0, 0.03, 0.34); parts.push(hd);
+    const tl = new THREE.ConeGeometry(0.1, 0.3, 6); tl.rotateX(-Math.PI / 2); tl.scale(1, 0.25, 1); tl.translate(0, 0, -0.42); parts.push(tl);
+    for (const g of parts) { g.deleteAttribute('uv'); }
+    const bodyGeo = mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)));
+    const beakGeo = new THREE.ConeGeometry(0.025, 0.12, 6); beakGeo.rotateX(Math.PI / 2); beakGeo.translate(0, 0.02, 0.46); beakGeo.deleteAttribute('uv');
+    const bodyMesh = (n) => new THREE.InstancedMesh(mergeGeometries([bodyGeo, beakGeo.toNonIndexed ? beakGeo.toNonIndexed() : beakGeo]), mat, n);
     this.flocks = [];
     const P = PLACES;
     const centers = [[P.beach.x, P.beach.z, 40], [P.lighthouse.x, P.lighthouse.z, 55], [P.village.x, P.village.z, 70], [P.airbase.x + 600, P.airbase.z + 300, 60]];
@@ -64,10 +143,12 @@ export class Animals {
       const n = 14;
       const im = new THREE.InstancedMesh(wing, mat, n);
       im.frustumCulled = false;
+      const bodies = bodyMesh(n); bodies.frustumCulled = false; bodies.castShadow = false;
+      this.scene.add(bodies);
       const birds = [];
       for (let i = 0; i < n; i++) birds.push({ r: 30 + rnd() * 60, a: rnd() * TAU, h: alt + rnd() * 30, sp: 0.25 + rnd() * 0.2, flap: rnd() * 10 });
       this.scene.add(im);
-      this.flocks.push({ im, birds, cx, cz, base: this.world.groundAt(cx, cz) });
+      this.flocks.push({ im, bodies, birds, cx, cz, base: this.world.groundAt(cx, cz) });
     }
   }
 
@@ -133,8 +214,11 @@ export class Animals {
         s.set(1, Math.sin(b.flap), 1);
         m4.compose(p, q, s);
         f.im.setMatrixAt(i, m4);
+        m4.compose(p, q, s.set(1, 1, 1));
+        f.bodies.setMatrixAt(i, m4);
       });
       f.im.instanceMatrix.needsUpdate = true;
+      f.bodies.instanceMatrix.needsUpdate = true;
     }
   }
 }
