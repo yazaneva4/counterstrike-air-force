@@ -16,7 +16,10 @@ import { mulberry32 } from '../core/noise.js';
 // Body of revolution around +Y from [[radius, y], ...] (ascending y),
 // squashed to an ellipse (sx, sz) for anatomical cross-sections.
 function lathe(profile, segs = 16, sx = 1, sz = 1) {
-  const g = new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.0005), y)), segs);
+  // Smooth the hand-authored profile with a spline so limbs and torso read as organic forms, not stacked rings.
+  const pts = profile.map(([r, y]) => new THREE.Vector3(Math.max(r, 0.0005), y, 0));
+  const sm = pts.length > 3 ? new THREE.CatmullRomCurve3(pts, false, 'centripetal').getPoints((pts.length - 1) * 3) : pts;
+  const g = new THREE.LatheGeometry(sm.map((v) => new THREE.Vector2(Math.max(v.x, 0.0005), v.y)), segs);
   g.scale(sx, 1, sz);
   g.computeVertexNormals();
   return g;
@@ -29,16 +32,16 @@ const G = {}; // shared geometries
 function geos() {
   if (G.ready) return G;
   // Torso: waist, ribcage, chest and shoulders, neck opening.
-  G.torsoM = lathe([[0.05, -0.04], [0.13, -0.02], [0.135, 0.06], [0.15, 0.16], [0.165, 0.26], [0.168, 0.33], [0.155, 0.39], [0.12, 0.435], [0.06, 0.46], [0.045, 0.47]], 24, 1.22, 0.66);
-  G.torsoF = lathe([[0.05, -0.04], [0.125, -0.02], [0.12, 0.07], [0.135, 0.17], [0.15, 0.26], [0.15, 0.33], [0.14, 0.39], [0.11, 0.43], [0.055, 0.455], [0.042, 0.465]], 24, 1.12, 0.68);
-  G.hips = lathe([[0.05, -0.135], [0.12, -0.11], [0.158, -0.07], [0.165, -0.02], [0.155, 0.04], [0.135, 0.085]], 22, 1.06, 0.74);
-  G.hipsF = lathe([[0.05, -0.135], [0.13, -0.11], [0.17, -0.07], [0.178, -0.02], [0.16, 0.04], [0.13, 0.085]], 22, 1.1, 0.76);
+  G.torsoM = lathe([[0.05, -0.04], [0.13, -0.02], [0.135, 0.06], [0.15, 0.16], [0.165, 0.26], [0.168, 0.33], [0.155, 0.39], [0.12, 0.435], [0.06, 0.46], [0.045, 0.47]], 32, 1.22, 0.66);
+  G.torsoF = lathe([[0.05, -0.04], [0.125, -0.02], [0.12, 0.07], [0.135, 0.17], [0.15, 0.26], [0.15, 0.33], [0.14, 0.39], [0.11, 0.43], [0.055, 0.455], [0.042, 0.465]], 32, 1.12, 0.68);
+  G.hips = lathe([[0.05, -0.135], [0.12, -0.11], [0.158, -0.07], [0.165, -0.02], [0.155, 0.04], [0.135, 0.085]], 32, 1.06, 0.74);
+  G.hipsF = lathe([[0.05, -0.135], [0.13, -0.11], [0.17, -0.07], [0.178, -0.02], [0.16, 0.04], [0.13, 0.085]], 32, 1.1, 0.76);
   G.belt = new THREE.TorusGeometry(0.152, 0.014, 6, 28); G.belt.rotateX(Math.PI / 2); G.belt.scale(1.06, 1, 0.74);
   G.buckle = new THREE.BoxGeometry(0.045, 0.03, 0.01);
   G.pockets = mergeGeometries([-1, 1].map(side => new THREE.BoxGeometry(0.078, 0.095, 0.008).translate(side * 0.078, 0.28, 0.106)));
   G.zipper = new THREE.BoxGeometry(0.004, 0.29, 0.004);
   G.collar = new THREE.TorusGeometry(0.058, 0.014, 6, 20); G.collar.rotateX(Math.PI / 2);
-  G.neck = lathe([[0.056, -0.01], [0.05, 0.05], [0.048, 0.1], [0.052, 0.13]], 14);
+  G.neck = lathe([[0.056, -0.01], [0.05, 0.05], [0.048, 0.1], [0.052, 0.13]], 24);
   // Head: a sphere sculpted into a skull with jaw, chin and flatter face.
   const head = new THREE.SphereGeometry(0.105, 64, 48);
   const p = head.attributes.position;
@@ -76,12 +79,12 @@ function geos() {
   G.beard = hairShell(head, (x, y, z) => z > -0.015 && (y < -0.064 || (Math.abs(x) > 0.052 && y < -0.012)), 0.005);
   // Limbs (shaped with muscle bulges).
   G.deltoid = new THREE.SphereGeometry(0.05, 14, 10); G.deltoid.scale(0.95, 0.85, 0.9);
-  G.upperArm = lathe([[0.036, -0.3], [0.04, -0.24], [0.047, -0.13], [0.05, -0.05], [0.048, 0], [0.025, 0.03]], 14, 1, 0.92);
-  G.sleeve = lathe([[0.056, -0.15], [0.058, -0.13], [0.058, -0.03], [0.05, 0.03], [0.02, 0.05]], 16, 1, 0.95);
-  G.forearm = lathe([[0.027, -0.27], [0.031, -0.21], [0.041, -0.1], [0.041, -0.03], [0.032, 0.02]], 14, 1.08, 0.85);
+  G.upperArm = lathe([[0.036, -0.3], [0.04, -0.24], [0.047, -0.13], [0.05, -0.05], [0.048, 0], [0.025, 0.03]], 24, 1, 0.92);
+  G.sleeve = lathe([[0.056, -0.15], [0.058, -0.13], [0.058, -0.03], [0.05, 0.03], [0.02, 0.05]], 24, 1, 0.95);
+  G.forearm = lathe([[0.027, -0.27], [0.031, -0.21], [0.041, -0.1], [0.041, -0.03], [0.032, 0.02]], 24, 1.08, 0.85);
   G.hand = buildHand();
-  G.thigh = lathe([[0.055, -0.46], [0.06, -0.41], [0.074, -0.26], [0.085, -0.1], [0.084, 0], [0.06, 0.04]], 16, 1, 1);
-  G.shin = lathe([[0.034, -0.44], [0.038, -0.39], [0.053, -0.25], [0.058, -0.15], [0.05, -0.03], [0.046, 0.02]], 16, 1, 0.95);
+  G.thigh = lathe([[0.055, -0.46], [0.06, -0.41], [0.074, -0.26], [0.085, -0.1], [0.084, 0], [0.06, 0.04]], 24, 1, 1);
+  G.shin = lathe([[0.034, -0.44], [0.038, -0.39], [0.053, -0.25], [0.058, -0.15], [0.05, -0.03], [0.046, 0.02]], 24, 1, 0.95);
   G.shoe = buildShoe();
   G.sole = new THREE.BoxGeometry(0.1, 0.02, 0.27); G.sole.translate(0, -0.066, 0.045);
   // Headwear and gear.
@@ -139,26 +142,26 @@ function hairShell(head, inside, offset) {
 }
 
 function buildHand() {
+  // Rounded palm, tapered fingers with a natural curl, and an opposable thumb.
   const parts = [];
-  const palm = new THREE.BoxGeometry(0.075, 0.085, 0.028); palm.translate(0, -0.045, 0);
+  const palm = new THREE.SphereGeometry(0.05, 14, 10); palm.scale(0.86, 0.95, 0.4); palm.translate(0, -0.05, 0);
   parts.push(palm);
   for (let f = 0; f < 4; f++) {
-    const len = [0.062, 0.07, 0.066, 0.052][f];
-    const fg = new THREE.CapsuleGeometry(0.0085, len, 3, 6);
-    fg.rotateX(0.35); fg.translate(-0.027 + f * 0.018, -0.09 - len * 0.45, 0.008);
+    const len = [0.05, 0.058, 0.054, 0.042][f];
+    const fg = new THREE.CapsuleGeometry(0.0095 - f * 0.0005, len, 4, 8);
+    fg.rotateX(0.3 + f * 0.04); fg.translate(-0.026 + f * 0.0175, -0.098 - len * 0.45, 0.008);
     parts.push(fg);
   }
-  const th = new THREE.CapsuleGeometry(0.01, 0.045, 3, 6); th.rotateZ(0.7); th.rotateX(0.3); th.translate(0.045, -0.04, 0.012);
+  const th = new THREE.CapsuleGeometry(0.0115, 0.038, 4, 8); th.rotateZ(0.75); th.rotateX(0.35); th.translate(0.04, -0.045, 0.014);
   parts.push(th);
-  const g = merge(parts); g.computeVertexNormals();
-  return g;
+  return merge(parts);
 }
 
 function buildShoe() {
-  const upper = new THREE.SphereGeometry(0.06, 16, 10); upper.scale(0.8, 0.62, 2.1); upper.translate(0, -0.03, 0.05);
-  const heel = new THREE.CylinderGeometry(0.045, 0.047, 0.07, 14); heel.translate(0, -0.03, -0.05);
-  const g = merge([upper, heel]); g.computeVertexNormals();
-  return g;
+  const upper = new THREE.SphereGeometry(0.06, 20, 12); upper.scale(0.82, 0.6, 2.05); upper.translate(0, -0.03, 0.05);
+  const toe = new THREE.SphereGeometry(0.05, 14, 10); toe.scale(0.9, 0.55, 1.1); toe.translate(0, -0.042, 0.15);
+  const heel = new THREE.CylinderGeometry(0.044, 0.047, 0.07, 18); heel.translate(0, -0.03, -0.05);
+  return merge([upper, toe, heel]);
 }
 
 export const SKIN_TONES = [0xf1c7a5, 0xe0ac86, 0xc68a62, 0xa66d47, 0x7c4c32, 0x5a3825, 0xf6d6bd, 0xd29c74];
