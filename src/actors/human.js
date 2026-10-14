@@ -40,7 +40,7 @@ function geos() {
   G.collar = new THREE.TorusGeometry(0.058, 0.014, 6, 20); G.collar.rotateX(Math.PI / 2);
   G.neck = lathe([[0.056, -0.01], [0.05, 0.05], [0.048, 0.1], [0.052, 0.13]], 14);
   // Head: a sphere sculpted into a skull with jaw, chin and flatter face.
-  const head = new THREE.SphereGeometry(0.105, 36, 28);
+  const head = new THREE.SphereGeometry(0.105, 64, 48);
   const p = head.attributes.position;
   for (let i = 0; i < p.count; i++) {
     let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
@@ -50,6 +50,17 @@ function geos() {
     if (z > 0.06 && Math.abs(y) < 0.05) z *= 0.97;            // flatter face plane
     if (z < -0.02 && y > 0) z *= 1.06;                        // occiput
     if (Math.abs(x) > 0.07 && Math.abs(y - 0.01) < 0.03 && z > 0.02) x *= 1.03; // cheekbones
+    if (z > 0.05) { // faceless but anatomical: brow ridge, eye sockets, soft lips and chin pad
+      const g = (cx, cy, rx, ry) => Math.exp(-(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2));
+      z += 0.011 * g(0, 0.034, 0.08, 0.014);                              // brow ridge
+      for (const sx of [-1, 1]) z -= 0.009 * g(sx * 0.036, 0.016, 0.02, 0.013); // eye sockets
+      z += 0.012 * g(0, 0.004, 0.011, 0.03);                              // nose bridge
+      z += 0.015 * g(0, -0.022, 0.015, 0.014);                            // nose tip
+      for (const sx of [-1, 1]) z += 0.006 * g(sx * 0.016, -0.026, 0.009, 0.008); // nostrils
+      z += 0.006 * g(0, -0.052, 0.027, 0.009);                            // lips
+      z -= 0.004 * g(0, -0.062, 0.03, 0.004);                             // mouth line
+      z += 0.006 * g(0, -0.088, 0.022, 0.014);                            // chin
+    }
     p.setXYZ(i, x, y, z);
   }
   head.computeVertexNormals();
@@ -402,6 +413,7 @@ export class Human {
     } else {
       // Stylised, faceless head: a smooth sculpted shape reads as cool and calm instead of uncanny.
       addMesh(P.head, G.head, skin, 0, 0.1, 0, shadows);
+      for (const sx of [-1, 1]) addMesh(P.head, G.ear, skin, sx * 0.09, 0.1, -0.008, false);
       if (!suit) {
         if (o.hairStyle !== 'bald') addMesh(P.head, G.hairShort, hair, 0, 0.1, 0, false);
         if (o.hairStyle === 'long') addMesh(P.head, G.hairLong, hair, 0, 0.08, -0.03, false);
