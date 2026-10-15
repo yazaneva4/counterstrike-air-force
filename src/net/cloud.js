@@ -22,8 +22,12 @@ export const cloud = {
     try {
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), timeout);
-      const r = await fetch(`${API}?id=${id}`, { signal: ctl.signal, cache: 'no-store' });
-      clearTimeout(t);
+      let r;
+      try {
+        r = await fetch(`${API}?id=${id}`, { signal: ctl.signal, cache: 'no-store' });
+      } finally {
+        clearTimeout(t);
+      }
       // Only the real API answers with JSON; a plain 404 means this host has no API.
       const isApi = (r.headers.get('content-type') || '').includes('application/json');
       if (!isApi) return null;
