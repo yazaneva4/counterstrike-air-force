@@ -110,8 +110,33 @@ function geos() {
   G.ring = new THREE.TorusGeometry(0.12, 0.03, 8, 24); G.ring.rotateX(Math.PI / 2);
   G.glove = new THREE.SphereGeometry(0.05, 12, 10); G.glove.scale(1, 1.3, 0.8);
   G.boot = new THREE.BoxGeometry(0.13, 0.12, 0.3, 2, 2, 2); G.boot.translate(0, -0.04, 0.04);
-  G.alienHead = new THREE.SphereGeometry(0.16, 28, 22); G.alienHead.scale(1, 1.25, 1.05);
-  G.alienEye = new THREE.SphereGeometry(0.05, 16, 12); G.alienEye.scale(1.55, 0.8, 0.5);
+  // Grey visitor head: large domed cranium tapering to a small chin, with sculpted
+  // eye sockets, nostril slits, a thin mouth and brow (all in the mesh).
+  {
+    const ah = new THREE.SphereGeometry(0.16, 72, 56);
+    const q = ah.attributes.position;
+    for (let i = 0; i < q.count; i++) {
+      let x = q.getX(i), y = q.getY(i), z = q.getZ(i);
+      y *= 1.22; z *= 1.02;
+      if (y < 0) { const k = clamp(-y / 0.2, 0, 1); x *= 1 - k * k * 0.62; z *= 1 - k * 0.3; }
+      if (z < -0.02 && y > 0) z *= 1.12;                        // rear bulge of the cranium
+      if (z > 0.06) {
+        const g = (cx, cy, rx, ry) => Math.exp(-(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2));
+        for (const sx of [-1, 1]) z -= 0.012 * g(sx * 0.066, -0.012, 0.04, 0.026);   // eye sockets
+        z += 0.004 * g(0, -0.015, 0.1, 0.012);                                       // brow
+        z += 0.004 * g(0, -0.07, 0.006, 0.02);                                       // nasal ridge
+        for (const sx of [-1, 1]) z -= 0.007 * g(sx * 0.009, -0.088, 0.005, 0.006);  // nostrils
+        z -= 0.008 * g(0, -0.128, 0.028, 0.0045);                                   // mouth
+        z += 0.003 * g(0, -0.14, 0.02, 0.01);
+      }
+      q.setXYZ(i, x, y, z);
+    }
+    ah.computeVertexNormals();
+    G.alienHead = ah;
+  }
+  G.alienEye = new THREE.SphereGeometry(0.05, 28, 20); G.alienEye.scale(1.6, 0.85, 0.4);
+  G.alienGlint = new THREE.SphereGeometry(0.008, 8, 6);
+  G.alienNeck = lathe([[0.034, -0.02], [0.03, 0.04], [0.032, 0.1], [0.04, 0.13]], 20);
   G.ready = true;
   return G;
 }
@@ -128,7 +153,7 @@ function hairShell(head, inside, offset) {
     if (!ok) continue;
     for (let k = 0; k < 3; k++) {
       const i = t + k, x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-      const tuft = offset * (1 + 0.35 * Math.sin(x * 260) * Math.sin(y * 210 + z * 170)) + (y > 0.08 ? 0.004 : 0);
+      const tuft = offset * (1 + 0.3 * Math.sin(x * 520 + y * 90) * Math.sin(y * 410 + z * 330)) + (y > 0.08 ? 0.004 : 0);
       pos.push(x + n.getX(i) * tuft, y + n.getY(i) * tuft, z + n.getZ(i) * tuft);
     }
   }
@@ -321,7 +346,7 @@ function cloth(color, rough = 0.88) {
   if (!matCache.has(key)) {
     const f = fabric();
     f.map.repeat.set(6, 6); f.normal.repeat.set(6, 6);
-    matCache.set(key, new THREE.MeshStandardMaterial({ color, map: f.map, roughness: rough, metalness: 0, normalMap: f.normal, normalScale: new THREE.Vector2(0.24, 0.24) }));
+    matCache.set(key, new THREE.MeshStandardMaterial({ color, map: f.map, roughness: rough, metalness: 0, normalMap: f.normal, normalScale: new THREE.Vector2(0.45, 0.45) }));
   }
   return matCache.get(key);
 }
@@ -336,9 +361,12 @@ function skinMat(color) {
   if (!matCache.has(key)) matCache.set(key, skinPhys(color));
   return matCache.get(key);
 }
+let _eye, _glint;
+function alienEyeMat() { return _eye || (_eye = new THREE.MeshPhysicalMaterial({ color: 0x020203, roughness: 0.22, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.08, envMapIntensity: 0.35 })); }
+function glintMat() { return _glint || (_glint = new THREE.MeshBasicMaterial({ color: 0xffffff })); }
 function hairMat(color) {
   const key = 'hair' + color;
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.83, metalness: 0, normalMap: hairNormal(), normalScale: new THREE.Vector2(0.9, 0.9) }));
+  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05, normalMap: hairNormal(), normalScale: new THREE.Vector2(1.3, 1.3) }));
   return matCache.get(key);
 }
 
@@ -359,7 +387,8 @@ export class Human {
     this.alien = alien;
     const o = this.outfit = Object.assign({ skin: 0xe0ac86, hair: 0x3a2618, eye: '#3b2414', shirt: 0x2e5c8a, pants: 0x2b3a55, shoes: 0x222222, hairStyle: 'short', height: 1.76, build: 1, seed: 1 }, outfit);
     const suit = !!o.suit && !alien;
-    const alienSkin = stdMat(0x9aa89a, { rough: 0.35, metal: 0.1, emissive: 0x1c2a22, ei: 1 });
+    const alienSkin = stdMat(0x9aa89a, { rough: 0.42, metal: 0.05, emissive: 0x16221b, ei: 1 });
+    if (!alienSkin.normalMap) { alienSkin.normalMap = skinNormal(); alienSkin.normalScale.set(0.22, 0.22); }
     const skin = alien ? alienSkin : skinMat(o.skin);
     const suitWhite = stdMat(0xeceae4, { rough: 0.78 });
     const suitGrey = stdMat(0x8c8f93, { rough: 0.6, metal: 0.3 });
@@ -373,7 +402,7 @@ export class Human {
     this.root.name = 'human';
     const body = this.body = J(this.root, 0, 0, 0);
     const s = alien ? 1 : o.height / 1.78;
-    body.scale.set(s * (alien ? 0.82 : o.build), alien ? 0.95 : s, s * (alien ? 0.8 : lerp(1, o.build, 0.5)));
+    body.scale.set(s * (alien ? 0.7 : o.build), alien ? 0.95 : s, s * (alien ? 0.72 : lerp(1, o.build, 0.5)));
 
     const P = this.j = {};
     P.pelvis = J(body, 0, 0.98, 0);
@@ -409,9 +438,12 @@ export class Human {
     P.head = J(P.neck, 0, 0.1, 0);
     if (alien) {
       addMesh(P.head, G.alienHead, skin, 0, 0.12, 0.01, shadows);
+      const eyeMat = alienEyeMat();
       for (const sx of [-1, 1]) {
-        const e = addMesh(P.head, G.alienEye, dark, sx * 0.062, 0.1, 0.13, false);
-        e.rotation.set(0, sx * 0.35, sx * -0.35);
+        const e = addMesh(P.head, G.alienEye, eyeMat, sx * 0.068, 0.108, 0.135, false);
+        e.rotation.set(0, sx * 0.38, sx * -0.42);
+        const gl = addMesh(P.head, G.alienGlint, glintMat(), sx * 0.054, 0.122, 0.158, false);
+        gl.scale.set(1, 0.8, 0.6);
       }
     } else {
       // Stylised, faceless head: a smooth sculpted shape reads as cool and calm instead of uncanny.

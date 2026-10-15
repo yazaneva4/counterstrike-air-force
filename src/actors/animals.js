@@ -57,7 +57,7 @@ function cowModel(rnd) {
   const horn = stdMat(0xe6dcc0, { rough: 0.5 });
   const add = (parent, geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
   // Barrel torso: deep chest, slightly sloped back, tapering rump.
-  const body = lathe([[0.1, -1.18], [0.38, -1.08], [0.5, -0.85], [0.52, -0.5], [0.5, -0.1], [0.52, 0.4], [0.55, 0.7], [0.46, 0.95], [0.26, 1.1]], 28, 0.82, 1.1);
+  const body = lathe([[0.001, -1.24], [0.1, -1.18], [0.38, -1.08], [0.5, -0.85], [0.52, -0.5], [0.5, -0.1], [0.52, 0.4], [0.55, 0.7], [0.46, 0.95], [0.3, 1.1], [0.001, 1.16]], 28, 0.82, 1.1);
   body.rotateX(Math.PI / 2);
   add(g, body, hide, 0, 1.22, 0);
   // Udder and teats.
@@ -65,7 +65,7 @@ function cowModel(rnd) {
   add(g, udder, pink, 0, 0.7, -0.72);
   for (const [x, z] of [[-0.07, -0.65], [0.07, -0.65], [-0.07, -0.8], [0.07, -0.8]]) add(g, new THREE.CylinderGeometry(0.018, 0.012, 0.07, 8), pink, x, 0.58, z);
   // Neck and head (smooth, unmarked).
-  const neck = lathe([[0.2, -0.25], [0.24, -0.1], [0.27, 0.1], [0.3, 0.3]], 20);
+  const neck = lathe([[0.001, -0.3], [0.2, -0.25], [0.24, -0.1], [0.27, 0.1], [0.3, 0.3], [0.001, 0.36]], 20);
   neck.rotateX(Math.PI / 2 - 0.35);
   add(g, neck, hide, 0, 1.36, 1.05);
   const dewlap = new THREE.SphereGeometry(0.2, 12, 8); dewlap.scale(0.55, 0.9, 1.3);
@@ -82,6 +82,21 @@ function cowModel(rnd) {
     const ear = new THREE.SphereGeometry(0.09, 10, 8); ear.scale(1.5, 0.4, 0.85);
     const e = add(head, ear, hide, sd * 0.27, 0.1, 0.02); e.rotation.z = sd * -0.25;
   }
+  // Face: glossy eyes under heavy lids with lashes, nostrils, mouth line, inner ears and a forelock.
+  const eyeM = new THREE.MeshPhysicalMaterial({ color: 0x120c08, roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 0.6 });
+  const whiteM = stdMat(0xe9e2d4, { rough: 0.4 });
+  const lidM = hide;
+  for (const sd of [-1, 1]) {
+    const sc = add(head, new THREE.SphereGeometry(0.036, 14, 10), whiteM, sd * 0.178, 0.07, 0.18); sc.scale.set(0.7, 0.9, 1.0);
+    const ey = add(head, new THREE.SphereGeometry(0.03, 14, 10), eyeM, sd * 0.188, 0.07, 0.185); ey.scale.set(0.7, 0.9, 1.0);
+    const gl = add(head, new THREE.SphereGeometry(0.007, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff }), sd * 0.2, 0.082, 0.2);
+    const lid = add(head, new THREE.SphereGeometry(0.044, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), lidM, sd * 0.178, 0.076, 0.18); lid.scale.set(0.7, 0.7, 1.05); lid.rotation.z = sd * 0.25;
+    const lash = add(head, new THREE.TorusGeometry(0.036, 0.003, 4, 14, Math.PI), dark, sd * 0.19, 0.074, 0.185); lash.rotation.set(0, sd * Math.PI / 2 - sd * 0.15, 0); lash.scale.set(1, 1, 0.8);
+    const nos = add(head, new THREE.SphereGeometry(0.026, 10, 8), dark, sd * 0.045, -0.115, 0.58); nos.scale.set(0.7, 1.1, 0.5);
+    const inner = add(head, new THREE.SphereGeometry(0.06, 10, 8), pink, sd * 0.285, 0.1, 0.045); inner.scale.set(0.5, 0.2, 0.6); inner.rotation.z = sd * -0.25;
+  }
+  const mouth = add(head, new THREE.TorusGeometry(0.1, 0.004, 4, 16, Math.PI), dark, 0, -0.205, 0.43); mouth.rotation.set(0.35, 0, Math.PI); mouth.scale.set(1, 0.5, 1);
+  const fore = add(head, new THREE.SphereGeometry(0.1, 12, 8), hide, 0, 0.17, 0.18); fore.scale.set(1, 0.5, 0.8);
   // Legs: thigh / cannon / hoof with a knee joint for the walk cycle.
   const legs = [];
   for (const [x, z, hind] of [[0.26, 0.62, false], [-0.26, 0.62, false], [0.27, -0.78, true], [-0.27, -0.78, true]]) {

@@ -7,27 +7,37 @@ import { mulberry32 } from '../core/noise.js';
 import { PLACES } from '../world/terrain.js';
 import { canvasTexture } from '../core/util.js';
 
-function gullGeometry() {
-  // Body: a tapered cone along +Z. Wings: swept triangles with dark tips.
-  const body = new THREE.ConeGeometry(0.11, 0.62, 6).rotateX(Math.PI / 2).translate(0, 0, 0.05);
-  const wings = [];
-  for (const s of [-1, 1]) {
+export function gullGeometry() {
+  // Streamlined body, head with yellow beak and dark eyes, wedge tail, and long
+  // swept wings (inner + outer panel) with black wing tips.
+  const parts = []; // [geometry, [r, g, b] | tipShade]
+  const body = new THREE.SphereGeometry(0.1, 14, 10); body.scale(0.95, 0.9, 3.0); body.translate(0, 0, -0.02); parts.push([body, [0.96, 0.96, 0.95]]);
+  const head = new THREE.SphereGeometry(0.058, 12, 10); head.translate(0, 0.045, 0.3); parts.push([head, [0.97, 0.97, 0.96]]);
+  const beak = new THREE.ConeGeometry(0.02, 0.1, 6); beak.rotateX(Math.PI / 2); beak.translate(0, 0.035, 0.40); parts.push([beak, [0.95, 0.7, 0.12]]);
+  for (const sx of [-1, 1]) { const e = new THREE.SphereGeometry(0.011, 6, 5); e.translate(sx * 0.046, 0.06, 0.32); parts.push([e, [0.02, 0.02, 0.02]]); }
+  const tail = new THREE.ConeGeometry(0.09, 0.28, 6); tail.rotateX(-Math.PI / 2); tail.scale(1.3, 0.2, 1); tail.translate(0, 0, -0.4); parts.push([tail, [0.93, 0.93, 0.93]]);
+  const wingPart = (pts, color) => {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.22, s * 1.25, 0, -0.08, 0, 0, -0.3], 3));
-    g.setIndex(s > 0 ? [0, 1, 2] : [0, 2, 1]);
-    wings.push(g);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
+    g.setIndex(pts.length === 4 ? [0, 1, 2, 0, 2, 3] : [0, 1, 2]);
+    parts.push([g, color]);
+  };
+  for (const s of [-1, 1]) {
+    const m = (pts) => pts.map(([x, y, z]) => [x * s, y, z]);
+    // Inner panel (soft grey), outer panel (white) and black wing tip form one continuous swept wing.
+    wingPart(m([[0, 0.02, 0.2], [0.65, 0.02, 0.06], [0.5, 0.0, -0.3], [0.12, 0.0, -0.28]]), [0.86, 0.88, 0.9]);
+    wingPart(m([[0.65, 0.02, 0.06], [1.15, 0.0, -0.1], [0.95, 0.0, -0.3], [0.5, 0.0, -0.3]]), [0.97, 0.97, 0.97]);
+    wingPart(m([[1.15, 0.0, -0.1], [1.45, -0.02, -0.36], [0.95, 0.0, -0.3]]), [0.1, 0.1, 0.11]);
   }
-  const parts = [body, ...wings].map((g) => { const n = g.toNonIndexed ? g.toNonIndexed() : g; return n; });
-  const count = parts.reduce((n, g) => n + g.attributes.position.count, 0);
+  const ngs = parts.map(([g, c]) => { const n = g.index ? g.toNonIndexed() : g; return [n, c]; });
+  const count = ngs.reduce((n, [g]) => n + g.attributes.position.count, 0);
   const pos = new Float32Array(count * 3), col = new Float32Array(count * 3);
   let o = 0;
-  for (const g of parts) {
+  for (const [g, c] of ngs) {
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
       pos[o * 3] = p.getX(i); pos[o * 3 + 1] = p.getY(i); pos[o * 3 + 2] = p.getZ(i);
-      const tip = Math.abs(p.getX(i)) > 1.0;
-      const c = tip ? 0.18 : 0.96;
-      col[o * 3] = c; col[o * 3 + 1] = c; col[o * 3 + 2] = c * 0.98; o++;
+      col[o * 3] = c[0]; col[o * 3 + 1] = c[1]; col[o * 3 + 2] = c[2]; o++;
     }
   }
   const geo = new THREE.BufferGeometry();
