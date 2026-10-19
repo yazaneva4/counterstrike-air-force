@@ -30,9 +30,9 @@ export const cloud = {
       }
       // Only the real API answers with JSON; a plain 404 means this host has no API.
       const isApi = (r.headers.get('content-type') || '').includes('application/json');
-      if (!isApi) return null;
+      if (!isApi) { this.online = false; return null; }
       if (r.status === 404) { this.online = true; return null; }
-      if (!r.ok) return null;
+      if (!r.ok) { this.online = false; return null; }
       const s = await r.json();
       this.online = true; this.last = s;
       try {
@@ -44,7 +44,25 @@ export const cloud = {
       if (s.spawn) settings.spawn = s.spawn;
       if (s.time) settings.time = s.time;
       return s;
-    } catch (e) { return null; }
+    } catch (e) { this.online = false; return null; }
+  },
+
+  // Pull on reconnect and while visible; merge progress without moving the pilot.
+  async reconcile(settings, game) {
+    if (this.reconciling) return this.reconciling;
+    this.reconciling = (async () => {
+      const shadow = { ...settings, profile: { ...settings.profile } };
+      const remote = await this.load(shadow);
+      if (!remote) return null;
+      settings.saved = remote;
+      if (game) {
+        for (const mystery of remote.mysteries || []) game.mysteries?.found?.add(mystery);
+        game.score = Math.max(game.score || 0, remote.score || 0);
+        for (const key of ['drones', 'flights']) if (game.stats) game.stats[key] = Math.max(game.stats[key] || 0, remote.stats?.[key] || 0);
+      }
+      return remote;
+    })();
+    try { return await this.reconciling; } finally { this.reconciling = null; }
   },
 
   snapshot(settings, game) {
