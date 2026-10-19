@@ -50,7 +50,8 @@ function limited(ip) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-  const id = String(req.query?.id || '');
+  // Use the standards-based URL parser instead of runtime-specific req.query helpers.
+  const id = new URL(req.url || '/', 'http://localhost').searchParams.get('id') || '';
   if (!ID.test(id)) return res.status(400).json({ error: 'bad id' });
   try {
     if (req.method === 'GET') {
