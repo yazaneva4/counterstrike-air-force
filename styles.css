@@ -252,3 +252,12 @@ body[data-ctx="rocket"] .tbtns [data-for~="rocket"], body[data-ctx="space"] .tbt
   .seg button { font-size: 11px; padding: 7px 2px; }
   #spawnSel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Weapons on touch: five columns on foot, compact ammo, no weapon bar (the WPN button cycles). */
+body[data-ctx="foot"] .tbtns { grid-template-columns: repeat(5, 46px); gap: 6px; }
+body[data-ctx="foot"] .tbtns button { height: 46px; border-radius: 12px; }
+.tbtns [data-btn="wpn"], .tbtns [data-btn="rld"], .tbtns [data-btn="gren"], .tbtns [data-btn="aim"] { font-size: 10px; }
+body.touch #wpnHud { display: none !important; }
+body.touch #ammo { right: auto; left: 150px; bottom: 16px; text-align: left; }
+body.touch #ammo .n { font-size: 24px; }
+body.touch #ammo .nm, body.touch #ammo .g { font-size: 11px; }

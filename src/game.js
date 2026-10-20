@@ -29,6 +29,7 @@ import { Particles, Trail } from './fx/particles.js';
 import { PostFX } from './fx/postfx.js';
 import { HUD } from './ui/hud.js';
 import { Net } from './net/net.js';
+import { Weapons } from './combat/weapons.js';
 import { RemotePlayer } from './net/remote.js';
 import { Space, BODIES } from './space/space.js';
 import { SurfaceWorld } from './space/surface.js';
@@ -209,6 +210,7 @@ export class Game {
     });
     this.player = new Player(this, this.settings.profile);
     this.scene.add(this.player.root);
+    this.weapons = new Weapons(this);
     this.islandWorld = W;
     this.islandVehicles = this.vehicles;
     this.islandNpcs = this.npcs;
@@ -297,6 +299,7 @@ export class Game {
   respawnPlayer() {
     if (this.location !== 'earth') { this._returnHome(); return; }
     this.player.spawnAt({ x: -150 + (Math.random() - 0.5) * 20, z: 590 }, 0);
+    this.weapons?.reset();
     this.player.vehicle = null;
     this.hud.toast('Back at Kestrel Airbase', 3);
     this.fade(0.5);
@@ -780,6 +783,7 @@ export class Game {
   _surfaceFrame(dt, t) {
     const S = this.surface, p = this.player, I = this.input;
     p.update(dt);
+    this.weapons?.update(dt);
     if (this.space.active || this.location !== S.body) { I.endFrame(); return; }
     // The world clock keeps running on other worlds (and stays in step for multiplayer).
     this.sky.advance(dt);
@@ -852,6 +856,7 @@ export class Game {
     }
 
     p.update(dt);
+    this.weapons?.update(dt);
     if (this.location !== 'earth') { I.endFrame(); return; }
     // Vehicles (the player's gets the controls).
     for (const v of this.vehicles) {

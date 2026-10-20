@@ -188,7 +188,7 @@ export class Player {
     } else if (!this.swimming && pos.y > g + 0.25) this.onGround = false;
     if (this.swimming && terrainH > -1.0) { pos.y = g; }
     const hs = Math.hypot(this.vel.x, this.vel.z);
-    if (this.cockpit) this.yaw = this.camYaw;
+    if (this.cockpit || G.weapons?.armed) this.yaw = this.cockpit ? this.camYaw : dampAngle(this.yaw, this.camYaw, 16, dt);
     else if (hs > 0.3) this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), 10, dt);
     this.root.rotation.y = this.yaw;
     const H = this.human;
@@ -428,7 +428,7 @@ export class Player {
       this.camPos.copy(pivot);
       cam.up.set(0, 1, 0);
       cam.lookAt(pivot.x + dx, pivot.y + sp, pivot.z + dz);
-      this.fov = damp(this.fov, 72, 3, dt);
+      this.fov = damp(this.fov, G.weapons?.fovFor(72) ?? 72, 8, dt);
       this._applyShake(cam);
       return;
     }
@@ -452,7 +452,7 @@ export class Player {
     cam.position.copy(this.camPos);
     cam.up.set(0, 1, 0);
     cam.lookAt(pivot.x + rightX * shoulder, pivot.y, pivot.z + rightZ * shoulder);
-    this.fov = damp(this.fov, 62, 3, dt);
+    this.fov = damp(this.fov, G.weapons?.fovFor(62) ?? 62, 8, dt);
     this._applyShake(cam);
   }
 

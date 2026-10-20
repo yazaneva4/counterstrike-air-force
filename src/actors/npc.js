@@ -104,6 +104,13 @@ export class NPC {
 
   get pos() { return this.root.position; }
 
+  // Knocked off their feet (bullet, blade or blast): the same harmless tumble a car hit causes.
+  knock(vx, vz, up = 3.5) {
+    const pos = this.root.position, kl = Math.hypot(vx, vz) || 1;
+    this.tumble = { t: 0, air: true, y: 0.2, vy: up, vx, vz, px: pos.x, pz: pos.z, axis: new THREE.Vector3(vz / kl, 0, -vx / kl) };
+    this.target = null; this.partner = null; this.waveTime = 0;
+  }
+
   _randomSpot(checkPath = true) {
     const W = this.world;
     for (let i = 0; i < 12; i++) {

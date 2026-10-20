@@ -482,7 +482,7 @@ export class Human {
       if (!longSleeve) addMesh(sh, G.sleeve, shirt, 0, 0, 0, false);
       const el = P['elbow' + side] = J(sh, 0, -0.29, 0);
       addMesh(el, suit ? G.suitLimb : G.forearm, longSleeve ? shirt : skin, 0, 0, 0, shadows);
-      const hd = J(el, 0, -0.26, 0);
+      const hd = P['hand' + side] = J(el, 0, -0.26, 0);
       if (suit) addMesh(hd, G.glove, suitGrey, 0, -0.04, 0, false);
       else addMesh(hd, G.hand, skin, 0, 0, 0, false);
       const hip = P['hip' + side] = J(P.pelvis, sx * 0.095, -0.03, 0);
@@ -529,6 +529,22 @@ export class Human {
     this.lookYaw = 0;
     this.lookPitch = 0;
     this.pose = {};
+    this.stance = null;        // 'pistol' | 'rifle' | 'launcher' | 'blade' | 'throw' | null (armed pose layered over locomotion)
+    this.aim = 0;              // aim pitch (radians, + = looking up)
+    this.swing = -1;           // melee / throw progress 0..1, -1 when idle
+    this.kick = 0;             // recoil (0..1) decaying toward 0
+    this.held = null;
+  }
+
+  // Put a weapon model in the right hand (null clears it).
+  hold(model, mount = [Math.PI / 2, 0]) {
+    if (this.held) this.held.parent?.remove(this.held);
+    this.held = model;
+    if (model && this.j.handR) {
+      model.rotation.set(mount[0], 0, mount[1]);
+      model.position.set(0, -0.045 + (model.userData?.back || 0), 0.012);
+      this.j.handR.add(model);
+    }
   }
 
   get position() { return this.root.position; }
@@ -632,8 +648,42 @@ export class Human {
       set('head', -0.15, 0);
     }
 
+    // Armed stances: arms raise toward the aim direction; swings are keyframed.
+    const sw = this.stance;
+    if (sw && !this.alien && st !== 'swim' && st !== 'chute' && st !== 'sit' && st !== 'lie' && st !== 'pilot' && !g) {
+      const a = clamp(this.aim, -1.1, 1.1), k = this.kick;
+      if (sw === 'pistol') {
+        set('shoulderR', -1.5 - a - k * 0.18, 0, 0.1); set('elbowR', -0.12 - k * 0.3);
+        set('shoulderL', -1.42 - a, 0, -0.5); set('elbowL', -0.55);
+        set('spine', 0.02, 0.1);
+      } else if (sw === 'rifle') {
+        set('shoulderR', -1.18 - a - k * 0.12, 0, 0.12); set('elbowR', -0.72 - k * 0.15);
+        set('shoulderL', -1.42 - a, 0, -0.62); set('elbowL', -0.3);
+        set('spine', 0.03, 0.22); set('head', this.lookPitch, this.lookYaw - 0.15);
+      } else if (sw === 'launcher') {
+        set('shoulderR', -1.5 - a - k * 0.15, 0, 0.1); set('elbowR', -0.45);
+        set('shoulderL', -1.4 - a, 0, -0.45); set('elbowL', -0.6);
+        set('spine', 0.02, 0.25);
+      } else if (sw === 'blade' || sw === 'throw') {
+        const u = this.swing;
+        if (u < 0) { set('shoulderR', -0.55, 0, -0.25); set('elbowR', -1.15); set('shoulderL', 0.1, 0, 0.25); set('elbowL', -0.5); }
+        else {
+          // Wind up (0 - 0.3), strike through (0.3 - 0.62), recover (0.62 - 1).
+          const e = (x) => x * x * (3 - 2 * x);
+          let sx, el, yaw;
+          if (u < 0.3) { const f = e(u / 0.3); sx = lerp(-0.55, -2.6, f); el = lerp(-1.15, -1.7, f); yaw = lerp(0, 0.5, f); }
+          else if (u < 0.62) { const f = e((u - 0.3) / 0.32); sx = lerp(-2.6, -0.7, f); el = lerp(-1.7, -0.25, f); yaw = lerp(0.5, -0.65, f); }
+          else { const f = e((u - 0.62) / 0.38); sx = lerp(-0.7, -0.55, f); el = lerp(-0.25, -1.15, f); yaw = lerp(-0.65, 0, f); }
+          set('shoulderR', sx, 0, -0.25 - Math.sin(Math.PI * clamp(u, 0, 1)) * 0.3);
+          set('elbowR', el);
+          set('spine', 0.05, yaw);
+          set('shoulderL', 0.1, 0, 0.3); set('elbowL', -0.6);
+        }
+      }
+    }
+
     // Blend current joint rotations toward the targets.
-    const rate = 12;
+    const rate = this.swing >= 0 ? 30 : 12;
     for (const k in T) {
       const jn = J2[k];
       if (!jn) continue;

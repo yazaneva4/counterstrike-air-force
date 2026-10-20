@@ -241,6 +241,29 @@ export class AudioEngine {
   eject() { this._noise({ peak: 0.35, d: 0.5, freq: 2400, type: 'bandpass' }); this._tone(180, { type: 'sawtooth', peak: 0.08, d: 0.3, slide: 0.4 }); }
   chute() { this._noise({ peak: 0.25, a: 0.02, d: 0.8, freq: 500 }); }
   enter() { this._tone(220, { type: 'triangle', peak: 0.08, d: 0.08 }); this._tone(330, { type: 'triangle', peak: 0.06, d: 0.1, when: 0.07 }); }
+  // Weapon sounds (all synthesised): a noise crack for the blast, a low thump for body, tones for mechanisms.
+  weapon(kind) {
+    switch (kind) {
+      case 'pistol': this._noise({ peak: 0.5, a: 0.002, d: 0.16, freq: 2600 }); this._tone(140, { type: 'sine', peak: 0.3, a: 0.002, d: 0.12, slide: 0.4 }); break;
+      case 'smg': this._noise({ peak: 0.38, a: 0.002, d: 0.1, freq: 3000 }); this._tone(180, { type: 'sine', peak: 0.2, a: 0.002, d: 0.08, slide: 0.5 }); break;
+      case 'rifle': this._noise({ peak: 0.5, a: 0.002, d: 0.2, freq: 1800 }); this._tone(110, { type: 'sine', peak: 0.34, a: 0.002, d: 0.16, slide: 0.4 }); break;
+      case 'shotgun': this._noise({ peak: 0.8, a: 0.003, d: 0.38, freq: 900 }); this._tone(70, { type: 'sine', peak: 0.5, a: 0.003, d: 0.3, slide: 0.4 }); break;
+      case 'sniper': this._noise({ peak: 0.85, a: 0.002, d: 0.7, freq: 1400 }); this._tone(60, { type: 'sine', peak: 0.55, a: 0.002, d: 0.5, slide: 0.4, reverb: true }); break;
+      case 'launcher': this._noise({ peak: 0.6, a: 0.02, d: 0.9, freq: 700 }); this._tone(90, { type: 'sawtooth', peak: 0.18, a: 0.02, d: 0.6, slide: 0.5 }); break;
+      case 'plasma': this._tone(900, { type: 'sawtooth', peak: 0.08, a: 0.004, d: 0.18, slide: 0.25, reverb: true }); this._tone(1800, { type: 'square', peak: 0.03, a: 0.002, d: 0.1, slide: 0.3 }); break;
+      case 'swing': this._noise({ peak: 0.12, a: 0.05, d: 0.18, freq: 2200, type: 'bandpass' }); break;
+      case 'clang': this._tone(2100, { type: 'triangle', peak: 0.1, a: 0.002, d: 0.5, slide: 0.9, reverb: true }); this._tone(3300, { type: 'sine', peak: 0.05, a: 0.002, d: 0.4, reverb: true }); break;
+      case 'ding': this._tone(1760, { type: 'sine', peak: 0.12, a: 0.002, d: 0.6, reverb: true }); this._tone(2640, { type: 'sine', peak: 0.05, a: 0.002, d: 0.4 }); break;
+      case 'reload': this._tone(300, { type: 'square', peak: 0.03, a: 0.002, d: 0.04 }); this._tone(240, { type: 'square', peak: 0.04, a: 0.002, d: 0.05, when: 0.5 }); this._tone(420, { type: 'square', peak: 0.04, a: 0.002, d: 0.04, when: 0.75 }); break;
+      case 'pump': this._tone(200, { type: 'square', peak: 0.04, a: 0.002, d: 0.05 }); this._tone(150, { type: 'square', peak: 0.04, a: 0.002, d: 0.06, when: 0.12 }); break;
+      case 'dry': this._tone(500, { type: 'square', peak: 0.03, a: 0.001, d: 0.03 }); break;
+      case 'draw': this._noise({ peak: 0.06, a: 0.01, d: 0.12, freq: 1800, type: 'highpass' }); this._tone(900, { type: 'triangle', peak: 0.03, a: 0.002, d: 0.1 }); break;
+      case 'hit': this._tone(1200, { type: 'sine', peak: 0.05, a: 0.001, d: 0.05 }); break;
+      case 'boom': this._noise({ peak: 0.95, a: 0.004, d: 1.4, freq: 600 }); this._tone(55, { type: 'sine', peak: 0.7, a: 0.004, d: 1.1, slide: 0.4, reverb: true }); break;
+      case 'ricochet': this._tone(2400, { type: 'sawtooth', peak: 0.03, a: 0.002, d: 0.25, slide: 0.4 }); break;
+      default: break;
+    }
+  }
   zap() { this._tone(1400, { type: 'square', peak: 0.03, d: 0.09, slide: 0.35 }); }
   pop() { this._tone(880, { peak: 0.1, d: 0.2 }); this._tone(1320, { peak: 0.08, d: 0.3, when: 0.06, reverb: true }); this._noise({ peak: 0.12, d: 0.25, freq: 3000, type: 'highpass' }); }
   // Thunder: a sharp crack for near strikes, then a long rolling rumble that lasts longer the farther away it is.
