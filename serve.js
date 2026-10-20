@@ -6,7 +6,7 @@
 
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)));
@@ -33,7 +33,7 @@ const server = http.createServer(async (req, res) => {
 
     // Prevent path traversal outside the project root.
     const filePath = normalize(join(ROOT, urlPath));
-    if (!filePath.startsWith(ROOT)) {
+    if (filePath !== ROOT && !filePath.startsWith(ROOT + sep)) {
       res.writeHead(403).end('Forbidden');
       return;
     }
@@ -43,7 +43,9 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
     res.end(data);
   } catch (err) {
-    if (err && err.code === 'ENOENT') {
+    if (err instanceof URIError) {
+      res.writeHead(400).end('Bad URL');
+    } else if (err && (err.code === 'ENOENT' || err.code === 'EISDIR')) {
       res.writeHead(404).end('Not found');
     } else {
       res.writeHead(500).end('Server error');

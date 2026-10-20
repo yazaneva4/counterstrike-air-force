@@ -355,10 +355,21 @@ addEventListener('resize', () => {
 
 buildMenu();
 bindSettings();
-setInterval(() => cloud.save(settings, game), 60000);
+const syncCloud = async () => {
+  if (document.hidden || !navigator.onLine) return;
+  const remote = await cloud.reconcile(settings, game);
+  if (remote && !game) buildMenu();
+  cloud.save(settings, game);
+};
+setInterval(() => { void syncCloud(); }, 30000);
+addEventListener('online', () => { void syncCloud(); });
+addEventListener('focus', () => { void syncCloud(); });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) cloud.save(settings, game, { keepalive: true });
-  else if (game?.running) game.weather?.refresh();
+  else {
+    if (game?.running) game.weather?.refresh();
+    void syncCloud();
+  }
 });
 // Cloud progress arrives after the title screen is up: refresh the pickers.
 cloudReady.then((s) => { if (s && !game) buildMenu(); });

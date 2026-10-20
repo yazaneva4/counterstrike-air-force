@@ -34,7 +34,8 @@ function clean(b, old = {}) {
 
 async function read(id) {
   const r = await get(`saves/${id}.json`, { access: 'private', useCache: false });
-  if (!r || r.statusCode !== 200) return null;
+  if (!r) return null;
+  if (r.statusCode !== 200 || !r.stream) throw new Error("save read failed");
   return { save: JSON.parse(await new Response(r.stream).text()), etag: r.blob.etag };
 }
 
@@ -49,7 +50,8 @@ function limited(ip) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-  const id = String(req.query?.id || '');
+  // Use the standards-based URL parser instead of runtime-specific req.query helpers.
+  const id = new URL(req.url || '/', 'http://localhost').searchParams.get('id') || '';
   if (!ID.test(id)) return res.status(400).json({ error: 'bad id' });
   try {
     if (req.method === 'GET') {
@@ -65,8 +67,7 @@ export default async function handler(req, res) {
       if (JSON.stringify(body).length > 4096) return res.status(413).json({ error: 'too large' });
       // Merge with the stored save; retry if another device wrote in between.
       for (let attempt = 0; attempt < 4; attempt++) {
-        let cur = null;
-        try { cur = await read(id); } catch (e) { /* first save */ }
+        const cur = await read(id);
         const save = clean(body, cur?.save || {});
         try {
           await put(`saves/${id}.json`, JSON.stringify(save), { access: 'private', allowOverwrite: !!cur, ifMatch: cur?.etag, addRandomSuffix: false, contentType: 'application/json' });
