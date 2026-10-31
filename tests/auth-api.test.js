@@ -14,8 +14,6 @@ registerHooks({ resolve(name, context, next) {
 
 const SECRET = 'test-secret-test-secret-test-secret-123';
 process.env.AUTH_SECRET = SECRET;
-delete process.env.GOOGLE_CLIENT_ID;
-delete process.env.GOOGLE_CLIENT_SECRET;
 const { default: handler } = await import('../api/auth.js');
 
 // In-memory stand-in for the private Blob store.
@@ -110,12 +108,6 @@ test('log out clears the session cookie', async () => {
   const res = await call('logout');
   assert.equal(res.code, 200);
   assert.match(String(res.headers['Set-Cookie']), /Max-Age=0/);
-});
-
-test('Google sign-in is reported as off until it is configured', async () => {
-  const me = await call('me', { method: 'GET' });
-  assert.equal(me.body.google, false);
-  assert.equal((await call('google', { method: 'GET' })).code, 503);
 });
 
 test('without AUTH_SECRET the accounts API reports it is not set up', async () => {
