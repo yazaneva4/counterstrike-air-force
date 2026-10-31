@@ -1,4 +1,4 @@
-// Account card on the title screen: log in, sign up, or continue with Google.
+// Account card on the title screen: log in or sign up.
 // A signed-in player's cloud save id comes from their account, so the same
 // progress loads on every device. On a host without the accounts API (or
 // without AUTH_SECRET) the card stays hidden and the game plays as a guest.
@@ -50,7 +50,7 @@ function showSignedIn(user) {
   card.replaceChildren(el('h3', {}, 'Account'), el('div', { class: 'sub' }, 'Signed in as ' + user.name), note, el('div', { class: 'roomRow' }, out));
 }
 
-function showGuest(google) {
+function showGuest() {
   let mode = 'login';
   const user = el('input', { maxlength: '20', autocomplete: 'username', spellcheck: 'false', autocapitalize: 'none', required: '' });
   const pass = el('input', { type: 'password', maxlength: '128', autocomplete: 'current-password', required: '' });
@@ -89,11 +89,6 @@ function showGuest(google) {
   });
 
   const kids = [el('h3', {}, 'Account'), el('div', { class: 'seg', role: 'group', 'aria-label': 'Account mode' }, tabs.login, tabs.signup), form];
-  if (google) {
-    const g = el('button', { type: 'button', class: 'ghost' }, 'Continue with Google');
-    g.addEventListener('click', () => { location.href = API + '?action=google&adopt=' + encodeURIComponent(store.get(ID_KEY) || ''); });
-    kids.push(el('div', { class: 'roomRow' }, g));
-  }
   kids.push(status);
   card.replaceChildren(...kids);
 }
@@ -105,7 +100,7 @@ async function init() {
   if (!me.configured) return;
   if (me.user) {
     if (store.get(ID_KEY) !== me.user.saveId && !sessionStorage.getItem(SYNCED)) {
-      // Arrived from a Google sign-in or another device: switch to the account's save once.
+      // Signed in elsewhere in this browser: switch to the account's save once.
       store.set(ID_KEY, me.user.saveId); store.set(NAME_KEY, me.user.name);
       sessionStorage.setItem(SYNCED, '1');
       location.reload();
@@ -114,7 +109,7 @@ async function init() {
     showSignedIn(me.user);
   } else {
     store.del(NAME_KEY); // session ended; the save id keeps working as a guest
-    showGuest(me.google);
+    showGuest();
   }
   card.hidden = false;
 }
