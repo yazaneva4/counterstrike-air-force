@@ -110,3 +110,16 @@ Car first-person view uses mouse or gamepad look without holding right-click, ho
 ## Live updates
 
 Existing WebRTC multiplayer remains the live player channel. Visible, online sessions reconcile cloud progress every 30 seconds and on focus/reconnect, merging discoveries and counters without moving the pilot or resetting menu choices. Cloud save identity is still browser-specific; this does not create account-based cross-device login. New deployments offer a reload within 60 seconds without interrupting the running game.
+
+## Accounts and cloud saves
+
+Progress is stored in a private Vercel Blob store through `api/save`. Players can play as a guest, or create an account with a username and password so the same save loads on every device (`api/auth`, shown as the **Account** card on the title screen). Guest progress moves into the account when someone signs up.
+
+Set these in the Vercel project (Settings, Environment Variables) and redeploy:
+
+| Variable | Needed for | Notes |
+| --- | --- | --- |
+| `AUTH_SECRET` | Accounts (username and password) | At least 32 random characters, for example `openssl rand -base64 48`. Without it the Account card stays hidden. |
+| `BLOB_READ_WRITE_TOKEN` | Saves and accounts | Added automatically when a Blob store is connected to the project. |
+
+Passwords are hashed with scrypt and never stored in plain text. Sessions are signed, HttpOnly cookies valid for 30 days. Login guessing is limited per server instance on a best-effort basis; there is no password reset, so a forgotten password cannot be recovered.
